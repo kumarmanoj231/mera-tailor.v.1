@@ -2043,7 +2043,7 @@ export default function Dashboard() {
                       <Tag size={14} className="text-stone-400 shrink-0" />
                       <span>
                         {t("tailorDashboard.startingRate", "Base Starting Rate")}:{" "}
-                        <strong className="text-[#8f2338]">{money(tailorData?.minPrice || 499)}</strong>
+                        <strong className="text-[#8f2338]">{money(tailorData?.minPrice ?? 0)}</strong>
                       </span>
                     </li>
 
@@ -2051,7 +2051,7 @@ export default function Dashboard() {
                       <Clock3 size={14} className="text-stone-400 shrink-0" />
                       <span>
                         {t("dashboardPage.experience", "Experience")}:{" "}
-                        <strong className="text-stone-800">{tailorData?.experience || 5} Years</strong>
+                        <strong className="text-stone-800">{tailorData?.experience !== undefined ? `${tailorData.experience} Years` : "—"}</strong>
                       </span>
                     </li>
 
@@ -2063,7 +2063,7 @@ export default function Dashboard() {
                     <li className="flex items-start gap-2.5">
                       <MapPin size={14} className="text-[#8f2338] shrink-0 mt-0.5" />
                       <span className="line-clamp-2">
-                        {[tailorData?.area, tailorData?.city || "Jaipur", "Rajasthan"].filter(Boolean).join(", ")}
+                        {[tailorData?.area, tailorData?.city, tailorData?.state].filter(Boolean).join(", ") || t("dashboardPage.locationNotSet", "Location not set")}
                       </span>
                     </li>
                   </ul>
@@ -2710,27 +2710,30 @@ export default function Dashboard() {
                                 </p>
                               </div>
                               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs font-bold text-amber-900">
-                                ★ 4.9 <span className="text-stone-400 font-normal">(24)</span>
+                                ★ {tailorData?.rating ? Number(tailorData.rating).toFixed(1) : "New"} {tailorData?.reviews > 0 && <span className="text-stone-400 font-normal">({tailorData.reviews})</span>}
                               </span>
                             </div>
 
                             <p className="mt-2.5 text-xs text-stone-600 line-clamp-2">
-                              {tailorData?.description || "Bespoke handcrafted tailoring, custom festive wear, sherwanis, and precision alteration."}
+                              {tailorData?.description || t("tailorDashboard.defaultBio", "Bespoke handcrafted tailoring, custom garments, and precision alterations.")}
                             </p>
 
                             <div className="mt-3 flex flex-wrap gap-1">
-                              {(tailorData?.categories?.length > 0 ? tailorData.categories : ["Ethnic Wear", "Suits", "Alteration"]).map((cat) => (
+                              {(tailorData?.categories?.length > 0 ? tailorData.categories : []).map((cat) => (
                                 <span key={cat} className="rounded-md bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-700">
                                   {cat}
                                 </span>
                               ))}
+                              {(!tailorData?.categories || tailorData.categories.length === 0) && (
+                                <span className="text-[10px] text-stone-400 italic">No specialties listed</span>
+                              )}
                             </div>
 
                             <div className="mt-4 flex items-center justify-between border-t border-stone-200 pt-3 text-xs">
                               <div>
                                 <span className="text-stone-400 text-[10px] uppercase font-bold block">{t("dashboardPage.startingFrom", "Starting from")}</span>
                                 <strong className="text-sm font-extrabold text-[#8f2338]">
-                                  {money(tailorData?.minPrice || 499)}
+                                  {money(tailorData?.minPrice ?? 0)}
                                 </strong>
                               </div>
                               {tailorData?._id && (
@@ -3230,11 +3233,11 @@ export default function Dashboard() {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                         <div className="bg-[#fdfbf9] p-4 rounded-2xl border border-stone-200">
                           <p className="text-stone-400 uppercase font-bold text-[10px]">{t("dashboardPage.experience", "Craftsmanship Experience")}</p>
-                          <p className="text-base font-bold text-stone-900 mt-1">{tailorData?.experience || 5} {t("dashboardPage.years", "Years")}</p>
+                          <p className="text-base font-bold text-stone-900 mt-1">{tailorData?.experience !== undefined ? `${tailorData.experience} ${t("dashboardPage.years", "Years")}` : "—"}</p>
                         </div>
                         <div className="bg-[#fdfbf9] p-4 rounded-2xl border border-stone-200">
                           <p className="text-stone-400 uppercase font-bold text-[10px]">{t("dashboardPage.startingPrice", "Base Starting Rate")}</p>
-                          <p className="text-base font-bold text-[#8f2338] mt-1">{money(tailorData?.minPrice || 499)}</p>
+                          <p className="text-base font-bold text-[#8f2338] mt-1">{money(tailorData?.minPrice ?? 0)}</p>
                         </div>
                         <div className="bg-[#fdfbf9] p-4 rounded-2xl border border-stone-200">
                           <p className="text-stone-400 uppercase font-bold text-[10px]">{t("dashboardPage.contactPhone", "Studio Phone")}</p>

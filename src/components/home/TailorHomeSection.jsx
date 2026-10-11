@@ -218,25 +218,26 @@ export default function TailorHomeSection() {
   const activeSlots =
     (typeof liveCapacity === "object" ? liveCapacity?.activeSlots : null) ??
     openOrdersCount ??
-    3;
+    0;
   const capacityPct = Math.min(100, Math.round((activeSlots / (capacitySlots || 1)) * 100));
   const avgLeadDays =
-    (typeof liveCapacity === "object" ? liveCapacity?.avgLeadDays : null) ?? 4.2;
+    (typeof liveCapacity === "object" ? liveCapacity?.avgLeadDays : null) ??
+    (tailorProfile?.services?.length
+      ? Math.round((tailorProfile.services.reduce((acc, s) => acc + (s.days || 5), 0) / tailorProfile.services.length) * 10) / 10
+      : 0);
 
-  // Time-window dynamic revenue & trend calculations
+  // Time-window dynamic revenue calculations from database
   const displayedRevenue =
     timeRange === "7d"
-      ? liveEarnings?.earnings7d ?? Math.round(totalRevenue * 0.35)
+      ? (liveEarnings?.earnings7d ?? 0)
       : timeRange === "90d"
-      ? liveEarnings?.earnings90d ?? Math.round(totalRevenue * 2.5)
-      : liveEarnings?.earnings30d ?? totalRevenue;
+      ? (liveEarnings?.earnings90d ?? 0)
+      : (liveEarnings?.earnings30d ?? totalRevenue);
 
   const growthText =
-    timeRange === "7d"
-      ? "+18.2% velocity vs prior 7 days"
-      : timeRange === "90d"
-      ? "+42.5% quarterly demand increase"
-      : "+24.8% vs last month";
+    totalRevenue > 0
+      ? `₹${totalRevenue.toLocaleString("en-IN")} total volume`
+      : "No order volume recorded";
 
   // Dynamic SVG chart shapes based on active timeRange
   const chartPoints =
@@ -281,11 +282,11 @@ export default function TailorHomeSection() {
     setStudioFormData({
       name: tailorProfile?.name || `${tailorName}'s Atelier`,
       owner: tailorProfile?.owner || tailorName,
-      phone: tailorProfile?.phone || "+91 98290 12345",
-      city: tailorProfile?.city || "Jaipur",
-      area: tailorProfile?.area || "Central Market",
-      experience: tailorProfile?.experience || 8,
-      description: tailorProfile?.description || "Master bespoke tailoring, fine embroidery, and precision garment alterations.",
+      phone: tailorProfile?.phone || profile?.phone || "",
+      city: tailorProfile?.city || profile?.locationLabel?.split(",")?.[0]?.trim() || "",
+      area: tailorProfile?.area || profile?.locationLabel?.split(",")?.[1]?.trim() || "",
+      experience: tailorProfile?.experience || 0,
+      description: tailorProfile?.description || "",
     });
     setIsStudioModalOpen(true);
   }
@@ -321,12 +322,7 @@ export default function TailorHomeSection() {
     setRateCardServices(
       Array.isArray(tailorProfile?.services) && tailorProfile.services.length
         ? [...tailorProfile.services]
-        : [
-            { name: "Custom Suit / Blazer", price: 2499, days: 7 },
-            { name: "Designer Kurti / Dress", price: 799, days: 5 },
-            { name: "Formal Shirt & Trouser", price: 999, days: 4 },
-            { name: "Bespoke Alteration & Fit", price: 299, days: 2 },
-          ]
+        : []
     );
     setIsRateCardModalOpen(true);
   }
@@ -730,7 +726,7 @@ export default function TailorHomeSection() {
                       {t("tailorDashboard.experience", "Experience")}
                     </span>
                     <strong className="text-stone-900 font-bold">
-                      {tailorProfile?.experience || 5}+ Years
+                      {tailorProfile?.experience ? `${tailorProfile.experience}+ Years` : "—"}
                     </strong>
                   </li>
 
@@ -740,7 +736,7 @@ export default function TailorHomeSection() {
                       {t("tailorDashboard.specialties", "Specialties")}
                     </span>
                     <strong className="text-stone-900 font-bold">
-                      {tailorProfile?.categories?.length || 4} Categories
+                      {tailorProfile?.categories?.length ? `${tailorProfile.categories.length} Categories` : "None"}
                     </strong>
                   </li>
 
@@ -750,7 +746,7 @@ export default function TailorHomeSection() {
                       {t("tailorDashboard.startingPrice", "Starting Price")}
                     </span>
                     <strong className="text-stone-900 font-bold text-sm">
-                      ₹{tailorProfile?.minPrice || 399}
+                      {tailorProfile?.minPrice ? `₹${tailorProfile.minPrice}` : "—"}
                     </strong>
                   </li>
                 </ul>
@@ -824,10 +820,10 @@ export default function TailorHomeSection() {
                 Client Trust
               </p>
               <p className="font-sans text-base sm:text-lg font-bold text-stone-900 mt-0.5">
-                {tailorProfile?.rating ? `${tailorProfile.rating} ★` : "4.9 ★"}
+                {tailorProfile?.rating ? `${tailorProfile.rating} ★` : "New Atelier"}
               </p>
               <p className="text-[10px] text-stone-400 mt-0.5">
-                {tailorProfile?.reviews ? `${tailorProfile.reviews} reviews` : "Bespoke fit rating"}
+                {tailorProfile?.reviews ? `${tailorProfile.reviews} reviews` : "No reviews yet"}
               </p>
             </div>
 
@@ -866,7 +862,7 @@ export default function TailorHomeSection() {
                 B2B Demands
               </p>
               <p className="font-sans text-base sm:text-lg font-bold text-stone-900 mt-0.5">
-                {bulkList.length > 0 ? bulkList.length : 3}
+                {bulkList.length}
               </p>
               <p className="text-[10px] text-stone-400 mt-0.5">
                 Institutional RFQs
@@ -887,7 +883,7 @@ export default function TailorHomeSection() {
                 Base Pricing
               </p>
               <p className="font-sans text-base sm:text-lg font-bold text-stone-900 mt-0.5">
-                ₹{tailorProfile?.minPrice || 399}
+                {tailorProfile?.minPrice ? `₹${tailorProfile.minPrice}` : "—"}
               </p>
               <p className="text-[10px] text-stone-400 mt-0.5">
                 Public starting card
@@ -1067,7 +1063,7 @@ export default function TailorHomeSection() {
                 {ordersList.length > 0 ? (
                   <div className="mt-4 space-y-3">
                     {ordersList.slice(0, 3).map((order) => {
-                      const priceVal = (order.quotePrice ?? order.price) || tailorProfile?.minPrice || 499;
+                      const priceVal = order.quotePrice ?? order.price ?? tailorProfile?.minPrice ?? 0;
                       return (
                         <div
                           key={order.id || order._id}
@@ -1960,21 +1956,25 @@ export default function TailorHomeSection() {
                 <div>
                   <div className="flex items-center gap-1.5">
                     <span className="font-sans text-2xl font-black text-stone-900">
-                      {tailorProfile?.rating ? tailorProfile.rating.toFixed(1) : "4.9"}
+                      {tailorProfile?.rating ? Number(tailorProfile.rating).toFixed(1) : "New"}
                     </span>
                     <div className="flex text-amber-500">
                       {[1, 2, 3, 4, 5].map((star) => (
-                        <Star key={star} size={15} fill="currentColor" />
+                        <Star
+                          key={star}
+                          size={15}
+                          className={tailorProfile?.rating && star <= Math.round(tailorProfile.rating) ? "fill-amber-400 text-amber-500" : "text-stone-300"}
+                        />
                       ))}
                     </div>
                   </div>
                   <p className="text-xs text-stone-600 mt-0.5">
-                    Based on {tailorProfile?.reviewCount || 48} verified tailoring commissions
+                    Based on {studioReviews.length} verified review{studioReviews.length === 1 ? '' : 's'}
                   </p>
                 </div>
                 <div className="text-right">
                   <span className="rounded-lg bg-emerald-100/80 px-2.5 py-1 text-xs font-bold text-emerald-800">
-                    98.6% Fit Satisfaction
+                    {studioReviews.length > 0 ? "Verified Atelier" : "New Atelier"}
                   </span>
                 </div>
               </div>

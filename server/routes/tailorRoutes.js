@@ -30,7 +30,7 @@ router.post('/tailors/b2b-bid/:requestId', requireAuth, syncAppUser, requireRole
 // Single Tailor Profile & Reviews
 router.get('/tailors/:id', validateObjectId('id'), getTailor);
 router.get('/tailors/:id/reviews', validateObjectId('id'), getTailorReviews);
-router.post('/tailors/:id/reviews', requireAuth, syncAppUser, requireRole('customer', 'admin'), validateObjectId('id'), createTailorReview);
+router.post('/tailors/:id/reviews', requireAuth, syncAppUser, requireRole('customer', 'business', 'admin'), validateObjectId('id'), createTailorReview);
 
 // Tailor save action aliases
 router.post('/tailors/:id/save', requireAuth, syncAppUser, requireRole('customer', 'admin'), validateObjectId('id'), toggleSavedTailor);

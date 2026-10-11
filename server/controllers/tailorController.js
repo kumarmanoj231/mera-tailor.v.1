@@ -476,6 +476,7 @@ export async function getTailorReviews(req, res) {
       return {
         _id: r._id,
         tailorId: r.tailorId,
+        clerkUserId: r.clerkUserId,
         userName: name || 'Verified Customer',
         userAvatar: avatar,
         rating: r.rating,
@@ -502,10 +503,24 @@ export async function createTailorReview(req, res) {
     const tailor = await Tailor.findById(req.params.id);
     if (!tailor) return res.status(404).json({ error: 'Tailor not found' });
 
+    // Disallow tailor from reviewing their own atelier
+    if (tailor.ownerClerkUserId && tailor.ownerClerkUserId === req.authUserId) {
+      return res.status(403).json({ error: 'Tailors cannot review their own atelier' });
+    }
+
+    // Disallow duplicate reviews by the same user
+    const existingReview = await Review.findOne({ tailorId: tailor._id, clerkUserId: req.authUserId });
+    if (existingReview) {
+      return res.status(409).json({ error: 'You have already submitted a review for this tailor' });
+    }
+
     const rating = Math.min(5, Math.max(1, Number(req.body?.rating) || 5));
     const comment = String(req.body?.comment || '').trim();
     if (!comment) {
       return res.status(400).json({ error: 'Review message is required' });
+    }
+    if (comment.length > 1000) {
+      return res.status(400).json({ error: 'Review message cannot exceed 1000 characters' });
     }
 
     const user = req.appUser;

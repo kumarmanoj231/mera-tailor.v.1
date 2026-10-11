@@ -166,14 +166,38 @@ export default function TailorDetail() {
     };
   }, [id]);
 
+  const currentUserId = profile?.clerkUserId || user?.id;
+  const isOwner = Boolean(
+    tailor?.ownerClerkUserId &&
+    currentUserId &&
+    tailor.ownerClerkUserId === currentUserId
+  );
+  const hasAlreadyReviewed = Boolean(
+    currentUserId &&
+    reviewsList.some((r) => r.clerkUserId === currentUserId)
+  );
+
   const handleReviewSubmit = async (e) => {
     e.preventDefault();
     if (!isSignedIn) {
       openSignUp();
       return;
     }
-    if (!reviewComment.trim()) {
+    if (isOwner) {
+      toast.error('Tailors cannot review their own atelier.');
+      return;
+    }
+    if (hasAlreadyReviewed) {
+      toast.error('You have already submitted a review for this tailor.');
+      return;
+    }
+    const trimmedComment = reviewComment.trim();
+    if (!trimmedComment) {
       toast.error('Please write a review message');
+      return;
+    }
+    if (trimmedComment.length > 1000) {
+      toast.error('Review message cannot exceed 1000 characters');
       return;
     }
 
@@ -188,7 +212,7 @@ export default function TailorDetail() {
         },
         body: JSON.stringify({
           rating: Number(reviewRating),
-          comment: reviewComment.trim(),
+          comment: trimmedComment,
         }),
       });
 
@@ -933,12 +957,42 @@ export default function TailorDetail() {
                   </div>
                   <div className="flex items-center gap-1.5 rounded-full bg-amber-50 px-3.5 py-1 text-xs font-bold text-amber-900 border border-amber-200">
                     <Star size={14} className="fill-amber-500 text-amber-500" />
-                    <span>{tailor.rating ? `${Number(tailor.rating).toFixed(1)} / 5.0` : '5.0 ★'}</span>
+                    <span>{tailor.rating ? `${Number(tailor.rating).toFixed(1)} / 5.0` : (reviewsList.length > 0 ? `${(reviewsList.reduce((s, r) => s + r.rating, 0) / reviewsList.length).toFixed(1)} / 5.0` : 'New Atelier')}</span>
                   </div>
                 </div>
 
-                {/* Form to Add Review (Logged in users only) */}
-                {isSignedIn ? (
+                {/* Form to Add Review (Logged in, non-owner, non-duplicate users only) */}
+                {!isSignedIn ? (
+                  <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-dashed border-stone-200 bg-stone-50/70 p-4 text-xs">
+                    <div>
+                      <p className="font-semibold text-stone-800">Everyone can read client reviews.</p>
+                      <p className="text-[11px] text-stone-500 mt-0.5">Sign in to share your personal fit and craftsmanship feedback.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={openSignUp}
+                      className="shrink-0 rounded-xl bg-[#8f2338] px-4 py-2 text-xs font-bold text-white shadow-2xs hover:bg-[#761c30] transition cursor-pointer"
+                    >
+                      Sign In to Review →
+                    </button>
+                  </div>
+                ) : isOwner ? (
+                  <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-4 text-xs text-amber-900 flex items-center gap-3">
+                    <ShieldCheck size={18} className="text-amber-600 shrink-0" />
+                    <div>
+                      <p className="font-bold">Studio Owner View</p>
+                      <p className="text-[11px] text-amber-800 mt-0.5">You are viewing your own atelier listing. Atelier owners cannot post reviews on their own profile.</p>
+                    </div>
+                  </div>
+                ) : hasAlreadyReviewed ? (
+                  <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 text-xs text-emerald-900 flex items-center gap-3">
+                    <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+                    <div>
+                      <p className="font-bold">Review Submitted</p>
+                      <p className="text-[11px] text-emerald-800 mt-0.5">Thank you for sharing your verified review for this tailor.</p>
+                    </div>
+                  </div>
+                ) : (
                   <form onSubmit={handleReviewSubmit} className="mt-5 rounded-2xl border border-stone-200 bg-stone-50/70 p-4.5 sm:p-5">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-stone-800">
                       Write a Review for {tailor.name || 'this Tailor'}
@@ -976,16 +1030,20 @@ export default function TailorDetail() {
                       <textarea
                         rows={3}
                         required
+                        maxLength={1000}
                         value={reviewComment}
                         onChange={(e) => setReviewComment(e.target.value)}
                         placeholder="Tell others about the stitching quality, delivery speed, and overall fit..."
                         className="w-full rounded-xl border border-stone-200 bg-white p-3 text-xs text-stone-900 outline-none focus:border-[#8f2338] transition placeholder:text-stone-400 shadow-2xs"
                       />
+                      <div className="text-right text-[10px] text-stone-400 mt-0.5">
+                        {reviewComment.length}/1000 characters
+                      </div>
                     </div>
 
-                    <div className="mt-2.5 flex items-center justify-between">
+                    <div className="mt-2 flex items-center justify-between">
                       <span className="text-[11px] text-stone-400">
-                        Posting as <strong className="text-stone-700">{profile?.firstName || 'User'}</strong>
+                        Posting as <strong className="text-stone-700">{profile?.firstName || user?.firstName || 'Verified Customer'}</strong>
                       </span>
                       <button
                         type="submit"
@@ -997,17 +1055,6 @@ export default function TailorDetail() {
                       </button>
                     </div>
                   </form>
-                ) : (
-                  <div className="mt-4 flex items-center justify-between rounded-2xl border border-dashed border-stone-200 bg-stone-50/50 p-3.5 text-xs">
-                    <span className="text-stone-600">Want to leave a review for this tailor?</span>
-                    <button
-                      type="button"
-                      onClick={openSignUp}
-                      className="font-bold text-[#8f2338] hover:underline cursor-pointer"
-                    >
-                      Sign In to Review →
-                    </button>
-                  </div>
                 )}
 
                 {/* Reviews List */}
