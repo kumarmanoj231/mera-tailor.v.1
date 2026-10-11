@@ -97,7 +97,7 @@ const orderProgressPercent = {
 
 export default function Dashboard() {
   const { t, i18n } = useTranslation();
-  const { isSignedIn, profile, profileError, getToken, openSignUp, refreshProfile } = useAuth();
+  const { isSignedIn, user, profile, profileError, getToken, openSignUp, refreshProfile } = useAuth();
 
   // For Admin: Combine dashboard and admin portal into one unified command center
   if (isSignedIn && profile?.role === "admin") {
@@ -1134,8 +1134,32 @@ export default function Dashboard() {
             {/* User / Studio Title & Badge */}
             <div className="flex items-center gap-4">
               <div className="relative shrink-0">
-                <div className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-full bg-[#fceeed] text-[#8f2338] text-2xl font-black shadow-xs border border-rose-100">
-                  {role === "tailor" ? <Scissors size={26} /> : role === "business" ? <Building2 size={26} /> : initials}
+                <div className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-full bg-[#fceeed] text-[#8f2338] text-2xl font-black shadow-xs border border-rose-100 overflow-hidden">
+                  {role === "tailor" && tailorData?.image ? (
+                    <img
+                      src={tailorData.image}
+                      alt={tailorData.name || "Tailor Studio"}
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                      }}
+                    />
+                  ) : (profile?.avatar || profile?.imageUrl || user?.imageUrl) ? (
+                    <img
+                      src={profile?.avatar || profile?.imageUrl || user?.imageUrl}
+                      alt={displayName}
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                      }}
+                    />
+                  ) : role === "tailor" ? (
+                    <Scissors size={26} />
+                  ) : role === "business" ? (
+                    <Building2 size={26} />
+                  ) : (
+                    initials
+                  )}
                 </div>
                 <span
                   className="absolute bottom-0 right-0 h-4 w-4 rounded-full border-2 border-white bg-emerald-500"
@@ -1501,11 +1525,14 @@ export default function Dashboard() {
                   {displayOrder ? (
                     <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
                       {/* Garment Swatch / Thumbnail */}
-                      <div className="h-24 w-24 sm:h-28 sm:w-28 rounded-2xl bg-[#fdf2f4] p-2 flex items-center justify-center shrink-0 border border-rose-100">
+                      <div className="h-24 w-24 sm:h-28 sm:w-28 rounded-2xl bg-[#fdf2f4] p-2 flex items-center justify-center shrink-0 border border-rose-100 overflow-hidden">
                         <img
-                          src="/assets/kurta.png"
-                          alt="Garment"
+                          src={displayOrder.image || "/assets/kurta.png"}
+                          alt={displayOrder.garment || "Garment"}
                           className="h-full w-full object-contain"
+                          onError={(e) => {
+                            e.currentTarget.src = "/assets/kurta.png";
+                          }}
                         />
                       </div>
 
@@ -1830,10 +1857,29 @@ export default function Dashboard() {
                     <div className="mt-4 rounded-2xl border border-stone-200 bg-[#fdfbf9] p-3.5 transition hover:border-[#8f2338]/30">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fdf2f4] text-[#8f2338] font-black text-sm shrink-0 border border-rose-100">
-                            {displaySavedStudio.name
-                              ? displaySavedStudio.name.slice(0, 2).toUpperCase()
-                              : "ST"}
+                          <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fdf2f4] text-[#8f2338] font-black text-sm shrink-0 border border-rose-100 overflow-hidden">
+                            {(displaySavedStudio.image || displaySavedStudio.heroImage || displaySavedStudio.avatar) ? (
+                              <img
+                                src={displaySavedStudio.image || displaySavedStudio.heroImage || displaySavedStudio.avatar}
+                                alt={displaySavedStudio.name || "Studio"}
+                                className="h-full w-full object-cover"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                  const fallback = e.currentTarget.nextElementSibling;
+                                  if (fallback) fallback.style.display = "flex";
+                                }}
+                              />
+                            ) : null}
+                            <span
+                              className="items-center justify-center h-full w-full"
+                              style={{
+                                display: (displaySavedStudio.image || displaySavedStudio.heroImage || displaySavedStudio.avatar) ? "none" : "flex",
+                              }}
+                            >
+                              {displaySavedStudio.name
+                                ? displaySavedStudio.name.slice(0, 2).toUpperCase()
+                                : "ST"}
+                            </span>
                           </div>
                           <div>
                             <h4 className="font-bold text-xs sm:text-sm text-stone-900 line-clamp-1">
@@ -2980,28 +3026,40 @@ export default function Dashboard() {
                             className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-4 sm:p-5 transition hover:border-stone-300 shadow-2xs"
                           >
                             <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[11px] font-bold text-[#8f2338]">
-                                    #{req.id}
-                                  </span>
-                                  <span className="h-1 w-1 rounded-full bg-stone-300" />
-                                  <span className="text-xs text-stone-400">
-                                    {new Date(req.createdAt).toLocaleDateString()}
-                                  </span>
+                              <div className="flex items-start gap-3.5">
+                                <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-xl bg-[#fdf2f4] border border-rose-100 overflow-hidden shrink-0 flex items-center justify-center p-1">
+                                  <img
+                                    src={req.image || "/assets/kurta.png"}
+                                    alt={req.garment || req.category || "Order"}
+                                    className="h-full w-full object-contain"
+                                    onError={(e) => {
+                                      e.currentTarget.src = "/assets/kurta.png";
+                                    }}
+                                  />
                                 </div>
-                                <h3 className="font-serif text-base font-bold text-stone-900 mt-0.5">
-                                  {req.quantity || 1} × {req.garment || req.category}
-                                </h3>
-                                <p className="text-xs text-stone-600 mt-1">
-                                  {[req.color ? `Color: ${req.color}` : null, req.fabric ? `Fabric: ${req.fabric}` : null, req.deadline ? `Due: ${req.deadline}` : null].filter(Boolean).join(" · ")}
-                                </p>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-bold text-[#8f2338]">
+                                      #{req.id}
+                                    </span>
+                                    <span className="h-1 w-1 rounded-full bg-stone-300" />
+                                    <span className="text-xs text-stone-400">
+                                      {new Date(req.createdAt).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                  <h3 className="font-serif text-base font-bold text-stone-900 mt-0.5">
+                                    {req.quantity || 1} × {req.garment || req.category}
+                                  </h3>
+                                  <p className="text-xs text-stone-600 mt-1">
+                                    {[req.color ? `Color: ${req.color}` : null, req.fabric ? `Fabric: ${req.fabric}` : null, req.deadline ? `Due: ${req.deadline}` : null].filter(Boolean).join(" · ")}
+                                  </p>
                                 {req.notes && (
                                   <p className="text-xs text-stone-600 mt-2 bg-white p-2.5 rounded-xl border border-stone-100">
                                     <strong className="text-stone-700">{t("dashboardPage.notes", "Customer Notes")}:</strong> {req.notes}
                                   </p>
                                 )}
                               </div>
+                            </div>
 
                               <div className="text-right">
                                 <span className={`rounded-full px-3 py-1 text-xs font-bold ${
@@ -3158,13 +3216,25 @@ export default function Dashboard() {
                     {/* Studio Profile Overview */}
                     <div className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-7 shadow-xs space-y-5">
                       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 pb-4">
-                        <div>
-                          <h2 className="font-serif text-xl font-bold text-[#231b1a]">
-                            {tailorData?.name || "My Tailoring Studio"}
-                          </h2>
-                          <p className="text-xs text-stone-500">
-                            {tailorData?.owner || profile?.firstName} · {tailorData?.city || "Jaipur"}, {tailorData?.area || ""}
-                          </p>
+                        <div className="flex items-center gap-3.5">
+                          {tailorData?.image && (
+                            <img
+                              src={tailorData.image}
+                              alt={tailorData.name || "Studio"}
+                              className="h-14 w-14 rounded-2xl object-cover border border-stone-200 shadow-2xs shrink-0"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                          )}
+                          <div>
+                            <h2 className="font-serif text-xl font-bold text-[#231b1a]">
+                              {tailorData?.name || "My Tailoring Studio"}
+                            </h2>
+                            <p className="text-xs text-stone-500">
+                              {tailorData?.owner || profile?.firstName} · {tailorData?.city || "Jaipur"}, {tailorData?.area || ""}
+                            </p>
+                          </div>
                         </div>
                         <button
                           type="button"
@@ -4035,24 +4105,36 @@ export default function Dashboard() {
                           className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-4 sm:p-5 transition hover:border-[#8f2338]/40 hover:bg-white"
                         >
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-stone-400">
-                                  #{order.id}
-                                </span>
-                                <span className="h-1 w-1 rounded-full bg-stone-300" />
-                                <span className="text-xs text-stone-500">
-                                  {new Date(order.createdAt).toLocaleDateString()}
-                                </span>
+                            <div className="flex items-start gap-3.5">
+                              <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-xl bg-[#fdf2f4] border border-rose-100 overflow-hidden shrink-0 flex items-center justify-center p-1">
+                                <img
+                                  src={order.image || "/assets/kurta.png"}
+                                  alt={order.garment || order.category || "Order"}
+                                  className="h-full w-full object-contain"
+                                  onError={(e) => {
+                                    e.currentTarget.src = "/assets/kurta.png";
+                                  }}
+                                />
                               </div>
-                              <h3 className="mt-1 font-sans text-base font-bold text-stone-900">
-                                {order.quantity || 1} × {order.garment || order.category}
-                              </h3>
-                              <p className="text-xs text-stone-600 mt-0.5">
-                                {t("dashboardPage.studio", "Studio:")} <strong>{order.tailorName || "Master Studio"}</strong>
-                                {order.color ? ` · Color: ${order.color}` : ""}
-                                {order.fabric ? ` · Fabric: ${order.fabric}` : ""}
-                              </p>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-stone-400">
+                                    #{order.id}
+                                  </span>
+                                  <span className="h-1 w-1 rounded-full bg-stone-300" />
+                                  <span className="text-xs text-stone-500">
+                                    {new Date(order.createdAt).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <h3 className="mt-1 font-sans text-base font-bold text-stone-900">
+                                  {order.quantity || 1} × {order.garment || order.category}
+                                </h3>
+                                <p className="text-xs text-stone-600 mt-0.5">
+                                  {t("dashboardPage.studio", "Studio:")} <strong>{order.tailorName || "Master Studio"}</strong>
+                                  {order.color ? ` · Color: ${order.color}` : ""}
+                                  {order.fabric ? ` · Fabric: ${order.fabric}` : ""}
+                                </p>
+                              </div>
                             </div>
 
                             <span className="self-start sm:self-center rounded-full bg-rose-50 border border-rose-200 px-3 py-1 text-xs font-bold text-[#8f2338]">
@@ -4287,24 +4369,49 @@ export default function Dashboard() {
                         >
                           <div>
                             <div className="flex items-start justify-between gap-2">
-                              <h3 className="font-sans text-base font-bold text-stone-900 line-clamp-1">
-                                {tailor.name}
-                              </h3>
+                              <div className="flex items-center gap-3">
+                                <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fdf2f4] text-[#8f2338] font-black text-xs shrink-0 border border-rose-100 overflow-hidden">
+                                  {(tailor.image || tailor.heroImage || tailor.avatar) ? (
+                                    <img
+                                      src={tailor.image || tailor.heroImage || tailor.avatar}
+                                      alt={tailor.name || "Studio"}
+                                      className="h-full w-full object-cover"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = "none";
+                                        const fallback = e.currentTarget.nextElementSibling;
+                                        if (fallback) fallback.style.display = "flex";
+                                      }}
+                                    />
+                                  ) : null}
+                                  <span
+                                    className="items-center justify-center h-full w-full"
+                                    style={{
+                                      display: (tailor.image || tailor.heroImage || tailor.avatar) ? "none" : "flex",
+                                    }}
+                                  >
+                                    {tailor.name ? tailor.name.slice(0, 2).toUpperCase() : "ST"}
+                                  </span>
+                                </div>
+                                <div>
+                                  <h3 className="font-sans text-base font-bold text-stone-900 line-clamp-1">
+                                    {tailor.name}
+                                  </h3>
+                                  <p className="text-xs text-stone-500 mt-0.5">
+                                    {[tailor.area, tailor.city].filter(Boolean).join(", ") ||
+                                      "Jaipur, India"}
+                                  </p>
+                                </div>
+                              </div>
                               <button
                                 type="button"
                                 disabled={actingId === tId}
                                 onClick={() => handleUnsaveTailor(tId)}
-                                className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50"
+                                className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50 shrink-0"
                                 title={t("dashboardPage.delete", "Delete")}
                               >
                                 <Trash2 size={13} />
                               </button>
                             </div>
-
-                            <p className="text-xs text-stone-500 mt-1">
-                              {[tailor.area, tailor.city].filter(Boolean).join(", ") ||
-                                "Jaipur, India"}
-                            </p>
 
                             {/* Categories */}
                             {tailor.categories?.length > 0 && (
@@ -4358,13 +4465,29 @@ export default function Dashboard() {
                 {/* Profile Information Display */}
                 <div className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-7 shadow-xs">
                   <div className="flex items-center justify-between border-b border-stone-100 pb-4">
-                    <div>
-                      <h2 className="font-sans text-xl font-bold text-[#231b1a]">
-                        {t("dashboardPage.personalProfileTitle", "Personal Profile Details")}
-                      </h2>
-                      <p className="text-xs text-stone-500">
-                        {t("dashboardPage.personalProfileSubtitle", "View your registered credentials, contact information, and preferences.")}
-                      </p>
+                    <div className="flex items-center gap-3.5">
+                      <div className="h-14 w-14 rounded-full bg-[#fceeed] border border-rose-100 overflow-hidden shrink-0 flex items-center justify-center text-lg font-bold text-[#8f2338]">
+                        {(profile?.avatar || profile?.imageUrl || user?.imageUrl) ? (
+                          <img
+                            src={profile?.avatar || profile?.imageUrl || user?.imageUrl}
+                            alt={profile?.firstName || "Profile"}
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          (profile?.firstName?.[0] || "U").toUpperCase()
+                        )}
+                      </div>
+                      <div>
+                        <h2 className="font-sans text-xl font-bold text-[#231b1a]">
+                          {t("dashboardPage.personalProfileTitle", "Personal Profile Details")}
+                        </h2>
+                        <p className="text-xs text-stone-500">
+                          {t("dashboardPage.personalProfileSubtitle", "View your registered credentials, contact information, and preferences.")}
+                        </p>
+                      </div>
                     </div>
 
                     <button
