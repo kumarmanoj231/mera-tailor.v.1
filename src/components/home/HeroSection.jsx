@@ -14,8 +14,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../../context/AuthContext";
-import { parseVoiceRequest } from "../../utils/voiceRequest";
-import useGeminiTranscription from "../../hooks/useGeminiTranscription";
+import VoiceSearchModal from "../voice/VoiceSearchModal";
 
 import HeroDashboard from "./HeroDashboard";
 
@@ -28,9 +27,6 @@ const HeroSection = ({ onSignUp }) => {
   const [locationLoading, setLocationLoading] = React.useState(false);
   const [locationError, setLocationError] = React.useState("");
   const [voiceOpen, setVoiceOpen] = React.useState(false);
-  const [voiceText, setVoiceText] = React.useState("");
-  const [voiceError, setVoiceError] = React.useState("");
-  const { startRecording, stopRecording, cancel: cancelVoice, isRecording, isTranscribing, error: transcriptionError } = useGeminiTranscription(setVoiceText);
 
   const [showVoiceHelp, setShowVoiceHelp] = React.useState(false);
   const voiceHelpTimeoutRef = React.useRef(null);
@@ -61,26 +57,10 @@ const HeroSection = ({ onSignUp }) => {
     }, 3000);
   };
 
-  const closeVoiceAssistant = () => { setVoiceOpen(false); cancelVoice(); };
-  React.useEffect(() => {
-    if (!voiceOpen) return undefined;
-    const closeOnEscape = (event) => {
-      if (event.key === "Escape") closeVoiceAssistant();
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [voiceOpen]);
-
-  const parsedPreview = React.useMemo(() => {
-    return voiceText.trim() ? parseVoiceRequest(voiceText) : null;
-  }, [voiceText]);
-
-  const continueWithVoiceRequest = (event) => {
-    if (event) event.preventDefault();
-    const request = parseVoiceRequest(voiceText);
-    if (!request.text) return;
+  const handleApplyVoiceRequest = (request) => {
+    if (!request?.text) return;
     sessionStorage.setItem("meratailor.voice-request", JSON.stringify(request));
-    closeVoiceAssistant();
+    setVoiceOpen(false);
 
     // Construct rich URL params so FindTailors immediately filters & sorts
     const params = new URLSearchParams();
@@ -624,174 +604,12 @@ const HeroSection = ({ onSignUp }) => {
           </div>
         </div>
       </div>
-      {voiceOpen && createPortal((
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs" onMouseDown={(event) => { if (event.target === event.currentTarget) closeVoiceAssistant(); }}>
-          <form onSubmit={continueWithVoiceRequest} role="dialog" aria-modal="true" aria-labelledby="voice-request-title" className="w-full max-w-lg rounded-3xl bg-white p-5 shadow-2xl transition-all sm:p-6">
-            <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-                  <Mic size={18} />
-                </span>
-                <div>
-                  <h2 id="voice-request-title" className="text-lg font-bold text-slate-900">{t("home.voiceTitle")}</h2>
-                  <p className="text-xs text-slate-500">{t("home.voiceAutoLanguage")}</p>
-                </div>
-              </div>
-              <button type="button" onClick={closeVoiceAssistant} aria-label={t("home.voiceClose")} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700">×</button>
-            </div>
-
-            <div className="mt-4">
-              <label className="sr-only" htmlFor="voice-request-text">{t("home.voiceRequestLabel")}</label>
-              <div className="relative">
-                <textarea
-                  id="voice-request-text"
-                  value={voiceText}
-                  onChange={(event) => setVoiceText(event.target.value)}
-                  rows={3}
-                  placeholder={t("home.voicePlaceholder")}
-                  className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50/50 p-3.5 text-sm leading-6 text-slate-900 outline-none transition focus:border-[#8f2338] focus:bg-white focus:ring-2 focus:ring-rose-100"
-                />
-                {voiceText && (
-                  <button
-                    type="button"
-                    onClick={() => setVoiceText("")}
-                    className="absolute right-3 top-3 text-xs font-semibold text-slate-400 hover:text-slate-600"
-                  >
-                    {t("home.voiceClear", "Clear")}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Live Parsed Requirements Preview */}
-            {parsedPreview && parsedPreview.text && (
-              <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">
-                    {t("home.voiceUnderstood", "Understood Requirements:")}
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
-                    {t("home.voiceAiReady", "✓ AI Ready")}
-                  </span>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {parsedPreview.garment && (
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-xs border border-emerald-200/60">
-                      ✨ {parsedPreview.garment}
-                    </span>
-                  )}
-                  {parsedPreview.category && (
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-xs border border-emerald-200/60">
-                      📂 {parsedPreview.category}
-                    </span>
-                  )}
-                  {parsedPreview.color && (
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-xs border border-emerald-200/60">
-                      🎨 {parsedPreview.color}
-                    </span>
-                  )}
-                  {parsedPreview.fabric && (
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-xs border border-emerald-200/60">
-                      🧵 {parsedPreview.fabric}
-                    </span>
-                  )}
-                  {parsedPreview.quantity > 1 && (
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-xs border border-emerald-200/60">
-                      🔢 Qty: {parsedPreview.quantity}
-                    </span>
-                  )}
-                  {parsedPreview.deadlineDays && (
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-emerald-800 shadow-xs border border-emerald-200/60">
-                      ⚡ {parsedPreview.deadlineDays} Day{parsedPreview.deadlineDays > 1 ? "s" : ""}
-                    </span>
-                  )}
-                  {parsedPreview.location && (
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-xs border border-emerald-200/60">
-                      📍 {parsedPreview.location}
-                    </span>
-                  )}
-                  {parsedPreview.radiusKm && (
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-xs border border-emerald-200/60">
-                      🎯 {parsedPreview.radiusKm} km radius
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Quick sample prompt chips if input is empty */}
-            {!voiceText && (
-              <div className="mt-3">
-                <p className="text-[11px] font-semibold text-slate-500">
-                  {t("home.voiceQuickIdeas", "Quick ideas (Hindi / English):")}
-                </p>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {[
-                    "Red bridal lehenga in 5 days",
-                    "Jaipur Raja Park me 2 shirts",
-                    "Urgent blouse alteration today",
-                    "3-piece formal suit within 10 km",
-                  ].map((sample) => (
-                    <button
-                      key={sample}
-                      type="button"
-                      onClick={() => setVoiceText(sample)}
-                      className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:border-[#8f2338] hover:bg-rose-50 hover:text-[#8f2338]"
-                    >
-                      {sample}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {(voiceError || transcriptionError) && (
-              <p role="alert" className="mt-3 rounded-xl bg-rose-50 p-3 text-xs text-rose-800">
-                {voiceError || transcriptionError}
-              </p>
-            )}
-
-            <div className="mt-4 flex gap-3">
-              <button
-                type="button"
-                onClick={isRecording ? stopRecording : startRecording}
-                disabled={isTranscribing}
-                aria-pressed={isRecording}
-                className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold transition disabled:opacity-60 ${
-                  isRecording
-                    ? "border-rose-300 bg-rose-50 text-rose-800 animate-pulse ring-2 ring-rose-200"
-                    : "border-slate-200 bg-slate-50 text-[#8f2338] hover:bg-rose-50/50"
-                }`}
-              >
-                <Mic size={17} className={isRecording ? "animate-bounce" : ""} />
-                {isRecording ? t("home.voiceStop") : isTranscribing ? t("home.voiceTranscribing") : t("home.voiceSpeak")}
-              </button>
-              <button
-                type="submit"
-                disabled={!voiceText.trim() || isRecording || isTranscribing}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#8f2338] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#781c2e] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span>{t("home.voiceContinue")}</span>
-                <ArrowRight size={15} />
-              </button>
-            </div>
-
-            {isRecording && (
-              <div className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-rose-50/80 py-2">
-                <span className="h-2 w-2 rounded-full bg-rose-600 animate-ping" />
-                <p aria-live="polite" className="text-xs font-semibold text-rose-700">
-                  {t("home.voiceRecording")}
-                </p>
-              </div>
-            )}
-
-            <details className="mt-3 text-[11px] text-slate-400">
-              <summary className="cursor-pointer hover:text-slate-600">{t("home.voicePrivacyShort")}</summary>
-              <p className="mt-1 leading-4 text-slate-500">{t("home.voicePrivacy")}</p>
-            </details>
-          </form>
-        </div>
-      ), document.body)}
+      {/* Dedicated Voice Assistant Modal */}
+      <VoiceSearchModal
+        isOpen={voiceOpen}
+        onClose={() => setVoiceOpen(false)}
+        onApply={handleApplyVoiceRequest}
+      />
     </section>
   );
 };

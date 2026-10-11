@@ -61,12 +61,12 @@
 
 /* Minimal subtle custom scrollbar */
 ::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f4eee6;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -76,4 +76,13 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: #bfaea0;
+}
+
+/* Hide scrollbar utility for sleek touch carousels */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

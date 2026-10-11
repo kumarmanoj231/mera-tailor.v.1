@@ -1,5 +1,6 @@
 import { Router, raw } from 'express';
 import { transcribeVoiceRequest } from '../controllers/voiceController.js';
+import { understandCategoryWithGemini } from '../controllers/aiController.js';
 
 const router = Router();
 const parseAudio = raw({ type: 'audio/*', limit: '8mb' });
@@ -10,5 +11,7 @@ router.post('/voice/transcribe', (req, res, next) => {
     next();
   });
 }, transcribeVoiceRequest);
+
+router.post('/voice/understand', understandCategoryWithGemini);
 
 export default router;

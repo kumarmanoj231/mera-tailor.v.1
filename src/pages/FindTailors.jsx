@@ -36,7 +36,7 @@ import { toast } from "react-toastify";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
 import { parseVoiceRequest } from "../utils/voiceRequest";
-import useGeminiTranscription from "../hooks/useGeminiTranscription";
+import VoiceSearchModal from "../components/voice/VoiceSearchModal";
 
 const DEFAULT_CENTER = [26.9124, 75.7873]; // Jaipur Central Discovery
 
@@ -344,6 +344,62 @@ export default function FindTailors() {
     };
   }, [isSignedIn, getToken]);
 
+  // Dedicated Voice Assistant Modal state
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+
+  // Auto-detect user location on mount if center is default
+  useEffect(() => {
+    // 1. Check if user already has saved location in profile or sessionStorage
+    const storedSearchLocation = sessionStorage.getItem("meratailor.search-location");
+    if (storedSearchLocation) {
+      try {
+        const parsedLoc = JSON.parse(storedSearchLocation);
+        if (parsedLoc.latitude && parsedLoc.longitude) {
+          setCenter([parsedLoc.latitude, parsedLoc.longitude]);
+          setPlace(parsedLoc.label || (isHi ? "सहेजा गया स्थान" : "Saved Location"));
+          setLocationSelected(true);
+          searchTailorsWithCoords(parsedLoc.latitude, parsedLoc.longitude);
+          return;
+        }
+      } catch (e) {}
+    }
+
+    // 2. Try browser geolocation
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setCenter([lat, lng]);
+          setLocationSelected(true);
+          try {
+            const rev = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+            );
+            const data = await rev.json();
+            if (data && data.display_name) {
+              setPlace(data.display_name.split(",").slice(0, 3).join(","));
+            } else {
+              setPlace(isHi ? "मेरा वर्तमान स्थान" : "My Current Location");
+            }
+          } catch {
+            setPlace(isHi ? "मेरा वर्तमान स्थान" : "My Current Location");
+          }
+          searchTailorsWithCoords(lat, lng);
+        },
+        (err) => {
+          // If denied or unavailable, show the friendly location prompt banner/modal
+          console.info("User location unavailable:", err.message);
+          setShowLocationPrompt(true);
+        },
+        { timeout: 7000 }
+      );
+    } else {
+      setShowLocationPrompt(true);
+    }
+  }, []);
+
   // Voice Coachmark Hover / Auto-dismiss state
   const [showVoiceHelp, setShowVoiceHelp] = useState(false);
   const voiceHelpTimeoutRef = useRef(null);
@@ -373,41 +429,37 @@ export default function FindTailors() {
     }, 2500);
   };
 
-  // Gemini Voice Search Hook: Speak to Filter & Sort
-  const voice = useGeminiTranscription({
-    onTranscriptionComplete: (transcription) => {
-      const parsed = parseVoiceRequest(transcription);
-      setIntent(parsed);
-      toast.success(isHi ? `आवाज़ पहचान ली गई: "${parsed.summary}"` : `Understood: "${parsed.summary}"`);
-      
-      let nextQuery = query;
-      let nextCategory = category;
-      let nextRadius = radius;
+  // Dedicated Voice Search Apply Handler (Unified with Gemini classification)
+  const handleApplyVoiceModal = (parsed) => {
+    setIntent(parsed);
+    setVoiceOpen(false);
+    toast.success(isHi ? `आवाज़ पहचान ली गई: "${parsed.summary}"` : `Understood: "${parsed.summary}"`);
+    
+    let nextQuery = query;
+    let nextCategory = category;
+    let nextRadius = radius;
 
-      if (parsed.garment) {
-        nextQuery = parsed.garment;
-        setQuery(parsed.garment);
-      }
-      if (parsed.category) {
-        nextCategory = parsed.category;
-        setCategory(parsed.category);
-        // Automatically switch sort mode to Category Relevance
-        setSort("category");
-      }
-      if (parsed.radiusKm) {
-        nextRadius = parsed.radiusKm;
-        setRadius(parsed.radiusKm);
-      }
+    if (parsed.garment) {
+      nextQuery = parsed.garment;
+      setQuery(parsed.garment);
+    }
+    if (parsed.category) {
+      nextCategory = parsed.category;
+      setCategory(parsed.category);
+      setSort("category");
+    }
+    if (parsed.radiusKm) {
+      nextRadius = parsed.radiusKm;
+      setRadius(parsed.radiusKm);
+    }
 
-      if (parsed.location) {
-        setLocationQuery(parsed.location);
-        geocodeLocation(parsed.location);
-      } else {
-        // Trigger immediate search with fresh voice inputs
-        searchTailorsDirect(nextQuery, nextCategory, nextRadius);
-      }
-    },
-  });
+    if (parsed.location) {
+      setLocationQuery(parsed.location);
+      geocodeLocation(parsed.location);
+    } else {
+      searchTailorsDirect(nextQuery, nextCategory, nextRadius);
+    }
+  };
 
   async function searchTailorsDirect(q, cat, rad) {
     setBusy(true);
@@ -876,18 +928,16 @@ export default function FindTailors() {
               <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center">
                 <button
                   type="button"
-                  onClick={voice.isRecording ? voice.stopRecording : voice.startRecording}
+                  onClick={() => {
+                    setShowVoiceHelp(false);
+                    setVoiceOpen(true);
+                  }}
                   onMouseEnter={handleVoiceHoverEnter}
                   onMouseLeave={handleVoiceHoverLeave}
-                  disabled={voice.isTranscribing}
-                  title={voice.isRecording ? "Stop recording" : "Search by voice"}
-                  className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${
-                    voice.isRecording
-                      ? "animate-pulse bg-rose-100 text-[#8f2338] ring-2 ring-rose-300"
-                      : "text-[#8f2338] hover:bg-rose-50"
-                  }`}
+                  title="Search by voice"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-[#8f2338] hover:bg-rose-50 transition active:scale-95"
                 >
-                  <Mic size={15} className={voice.isRecording ? "animate-bounce" : ""} />
+                  <Mic size={15} />
                 </button>
 
                 {/* Floating Coachmark Modal/Tooltip */}
@@ -931,17 +981,47 @@ export default function FindTailors() {
             </button>
           </div>
 
-          {/* Voice State Notification */}
-          {voice.isRecording && (
-            <div className="mt-3 flex items-center gap-2 rounded-xl bg-rose-50 border border-rose-200 px-4 py-2 text-xs font-semibold text-[#8f2338]">
-              <span className="h-2 w-2 rounded-full bg-[#8f2338] animate-ping" />
-              <span>{isHi ? "सुन रहे हैं… समाप्त करने के लिए माइक पुनः दबाएं" : "Listening… tap mic again to finish"}</span>
+          {/* Location Permission / Set Center Banner when location is not determined */}
+          {showLocationPrompt && (
+            <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl bg-amber-50 border border-amber-200/80 p-3.5 text-xs text-amber-900 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-amber-800 shrink-0">
+                  <MapPin size={16} />
+                </span>
+                <div>
+                  <p className="font-bold">
+                    {isHi ? "खोज केंद्र सेट करें" : "Set Your Search Center"}
+                  </p>
+                  <p className="text-amber-800/80 text-[11px] mt-0.5">
+                    {isHi
+                      ? "सटीक दर्जी परिणाम पाने के लिए अपना वर्तमान स्थान साझा करें या ऊपर अपना शहर दर्ज करें।"
+                      : "Allow location access to view verified ateliers nearest to you, or type your city above."}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={useMyLocation}
+                  className="inline-flex items-center gap-1 rounded-xl bg-[#8f2338] px-3.5 py-1.5 text-xs font-bold text-white shadow-2xs hover:bg-[#781c2e] transition"
+                >
+                  <Navigation size={12} />
+                  <span>{isHi ? "मेरी लोकेशन उपयोग करें" : "Use My Location"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowLocationPrompt(false)}
+                  className="rounded-xl border border-amber-300/80 bg-white px-2.5 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100/50"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
           )}
 
           {/* Row 5: Category Filter Pills */}
           <div className="mt-5 border-t border-stone-100 pt-4">
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar scroll-smooth">
               {CATEGORIES_LIST.map((cat) => {
                 const isActive = category === cat.id;
                 return (
@@ -1577,6 +1657,13 @@ export default function FindTailors() {
           )}
         </div>
       </main>
+
+      {/* Dedicated Voice Search Assistant Modal */}
+      <VoiceSearchModal
+        isOpen={voiceOpen}
+        onClose={() => setVoiceOpen(false)}
+        onApply={handleApplyVoiceModal}
+      />
 
       <Footer />
     </div>
