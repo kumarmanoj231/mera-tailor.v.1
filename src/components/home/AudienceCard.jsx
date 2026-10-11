@@ -10,6 +10,7 @@ const AudienceCard = ({
   points = [],
   ctaText,
   ctaLink,
+  onCtaClick,
   popular,
 }) => {
   return (
@@ -52,17 +53,32 @@ const AudienceCard = ({
       </div>
 
       <div className="mt-7 pt-4 border-t border-stone-100">
-        <Link
-          to={ctaLink || "/find-tailors"}
-          className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all ${
-            popular
-              ? "bg-[#8f2338] text-white hover:bg-[#781c2e] shadow-xs"
-              : "border border-stone-200 bg-stone-50 text-stone-800 hover:bg-stone-100 hover:border-stone-300"
-          }`}
-        >
-          <span>{ctaText || "Learn More"}</span>
-          <ArrowRight size={13} />
-        </Link>
+        {onCtaClick ? (
+          <button
+            type="button"
+            onClick={onCtaClick}
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer ${
+              popular
+                ? "bg-[#8f2338] text-white hover:bg-[#781c2e] shadow-xs active:scale-98"
+                : "border border-stone-200 bg-stone-50 text-stone-800 hover:bg-stone-100 hover:border-stone-300 active:scale-98"
+            }`}
+          >
+            <span>{ctaText || "Learn More"}</span>
+            <ArrowRight size={13} />
+          </button>
+        ) : (
+          <Link
+            to={ctaLink || "/find-tailors"}
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all ${
+              popular
+                ? "bg-[#8f2338] text-white hover:bg-[#781c2e] shadow-xs"
+                : "border border-stone-200 bg-stone-50 text-stone-800 hover:bg-stone-100 hover:border-stone-300"
+            }`}
+          >
+            <span>{ctaText || "Learn More"}</span>
+            <ArrowRight size={13} />
+          </Link>
+        )}
       </div>
     </div>
   );

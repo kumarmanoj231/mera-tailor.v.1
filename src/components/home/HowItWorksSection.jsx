@@ -296,7 +296,7 @@ export default function HowItWorksSection({ isPage = false }) {
                   ) : (
                     <button
                       type="button"
-                      onClick={isSignedIn ? () => {} : openSignUp}
+                      onClick={isSignedIn ? () => {} : () => openSignUp('tailor')}
                       className="inline-flex items-center gap-2 rounded-xl bg-[#8f2338] px-5 py-3 text-sm font-bold text-white shadow-md shadow-[#8f2338]/20 transition hover:bg-[#781b2e]"
                     >
                       <Scissors size={16} />

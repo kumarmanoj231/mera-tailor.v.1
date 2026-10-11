@@ -1,10 +1,12 @@
 import React from "react";
 import { UserCheck, Scissors, Building2, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "../../context/AuthContext";
 import AudienceCard from "./AudienceCard";
 
 const AudienceSection = () => {
   const { t } = useTranslation();
+  const { openSignUp, isSignedIn } = useAuth();
 
   const customerPoints = t("home.audience.customerPoints", { returnObjects: true });
   const tailorPoints = t("home.audience.tailorPoints", { returnObjects: true });
@@ -29,6 +31,7 @@ const AudienceSection = () => {
         </div>
 
         <div className="mt-12 grid gap-6 md:grid-cols-3">
+          {/* 1. CUSTOMER CARD */}
           <AudienceCard
             icon={<UserCheck size={24} />}
             badge={t("home.audience.customerBadge", "For Individuals")}
@@ -41,10 +44,12 @@ const AudienceSection = () => {
               "Real-time progress updates from cutting to delivery",
             ]}
             ctaText={t("home.audience.customerCta", "Find a Tailor Near You")}
-            ctaLink="/find-tailors"
+            ctaLink={isSignedIn ? "/find-tailors" : undefined}
+            onCtaClick={!isSignedIn ? () => openSignUp("customer") : undefined}
             popular={false}
           />
 
+          {/* 2. TAILOR CARD */}
           <AudienceCard
             icon={<Scissors size={24} />}
             badge={t("home.audience.tailorBadge", "Dual Role for Tailors")}
@@ -57,10 +62,12 @@ const AudienceSection = () => {
               "Get verified studio badge to build trust in your city",
             ]}
             ctaText={t("home.audience.tailorCta", "Join as a Tailor")}
-            ctaLink="/dashboard"
+            ctaLink={isSignedIn ? "/dashboard" : undefined}
+            onCtaClick={!isSignedIn ? () => openSignUp("tailor") : undefined}
             popular={true}
           />
 
+          {/* 3. BUSINESS CARD */}
           <AudienceCard
             icon={<Building2 size={24} />}
             badge={t("home.audience.bulkBadge", "Bulk & Corporate")}
@@ -73,7 +80,8 @@ const AudienceSection = () => {
               "GST invoices and dedicated procurement support",
             ]}
             ctaText={t("home.audience.bulkCta", "Post Bulk Requirement")}
-            ctaLink="/bulk"
+            ctaLink={isSignedIn ? "/bulk" : undefined}
+            onCtaClick={!isSignedIn ? () => openSignUp("business") : undefined}
             popular={false}
           />
         </div>

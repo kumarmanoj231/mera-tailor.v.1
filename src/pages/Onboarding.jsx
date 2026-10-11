@@ -49,9 +49,14 @@ export default function Onboarding() {
   if (!isLoaded) return <div className="grid min-h-screen place-items-center">{t('authFlow.loading')}</div>;
   return <div className="min-h-screen bg-stone-50"><Navbar/><main className="mx-auto max-w-2xl px-5 py-12 sm:px-6">
     <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm sm:p-9">
-      <p className="text-xs font-bold uppercase tracking-[.2em] text-rose-800">{t('authFlow.step')}</p>
-      <h1 className="mt-3 text-3xl font-bold">{t('authFlow.welcome')}</h1>
-      <p className="mt-2 text-slate-600">{t('authFlow.roleSelected', { role: t(`navbar.${role}`) })}</p>
+      <p className="text-xs font-bold uppercase tracking-[.2em] text-rose-800">{t('authFlow.step', 'Step 2: Profile Setup')}</p>
+      <h1 className="mt-3 text-3xl font-bold">{t('authFlow.welcome', 'Welcome to MeraTailor')}</h1>
+      <p className="mt-2 text-slate-600">
+        {t('authFlow.roleSelected', { role: t(`navbar.${role}`, role), defaultValue: `Your account is registered as ${role}.` })}
+      </p>
+      <div className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50/80 px-3 py-1.5 text-xs font-bold text-[#8f2338]">
+        <span>Account Role: <span className="capitalize">{role}</span> (Permanent)</span>
+      </div>
       <div className="mt-7 rounded-2xl bg-stone-50 p-5"><div className="flex gap-3"><MapPin className="mt-1 text-rose-800"/><div><h2 className="font-semibold">{t('authFlow.locationTitle')}</h2><p className="mt-1 text-sm text-slate-600">{t('authFlow.locationIntro')}</p></div></div>
         {profile?.location?.label && !saved ? <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm">{t('authFlow.currentLocation')}: {profile.location.label}</p> : null}
         <button type="button" disabled={busy} onClick={useCurrentLocation} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 font-semibold text-white disabled:opacity-50"><Navigation size={17}/>{busy ? t('authFlow.working') : t('authFlow.useCurrent')}</button>
