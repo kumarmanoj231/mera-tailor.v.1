@@ -380,18 +380,40 @@ export async function deleteAdminTailor(req, res) {
  */
 export async function getAdminDashboardSummary(_req, res) {
   try {
-    const [tailors, users, bulkRequests, orders] = await Promise.all([
+    const [tailors, users, bulkRequests, orders, businesses] = await Promise.all([
       Tailor.find().sort({ createdAt: -1 }).lean(),
       User.find().sort({ createdAt: -1 }).lean(),
       BusinessRequest.find().sort({ createdAt: -1 }).lean(),
-      Order.find().sort({ createdAt: -1 }).limit(10).lean(),
+      Order.find().sort({ createdAt: -1 }).lean(),
+      Business.find().sort({ createdAt: -1 }).lean(),
     ]);
 
-    const pendingAudits = tailors.filter(
-      (t) => !t.verified || t.verificationStatus === 'pending'
+    const pendingTailorAudits = tailors.filter(
+      (t) => !t.verified && t.verificationStatus !== 'rejected'
     );
     const verifiedStudios = tailors.filter(
       (t) => t.verified || t.verificationStatus === 'verified'
+    );
+
+    const pendingBusinessAudits = businesses.filter(
+      (b) => !b.verified && b.verificationStatus === 'pending'
+    );
+    const verifiedBusinesses = businesses.filter(
+      (b) => b.verified || b.verificationStatus === 'verified'
+    );
+
+    const openBulkRequests = bulkRequests.filter(
+      (b) => ['open', 'submitted', 'reviewing', 'quoted'].includes(b.status)
+    );
+    const awardedBulkRequests = bulkRequests.filter(
+      (b) => b.status === 'awarded'
+    );
+
+    const activeOrders = orders.filter(
+      (o) => !['Completed', 'Cancelled'].includes(o.status)
+    );
+    const completedOrders = orders.filter(
+      (o) => o.status === 'Completed'
     );
 
     const rolesBreakdown = { customer: 0, tailor: 0, business: 0, admin: 0 };
@@ -400,56 +422,78 @@ export async function getAdminDashboardSummary(_req, res) {
       else rolesBreakdown.customer++;
     });
 
-    // Synthesize platform activity stream
+    // Synthesize real platform activity stream from actual records
     const activities = [
-      ...tailors.filter(t => t.verified).slice(0, 2).map(t => ({
-        id: `t-${t._id}`,
-        type: 'studio_verified',
-        title: 'Studio verification completed',
+      ...businesses.filter(b => b.verificationStatus === 'pending').slice(0, 2).map(b => ({
+        id: `b-ver-${b._id}`,
+        type: 'business_verification',
+        title: 'GSTIN Verification Pending',
+        subtitle: `${b.companyName} • GSTIN: ${b.gstin || 'Tax Audit'}`,
+        timestamp: 'Requires audit',
+        rawDate: b.updatedAt || b.createdAt,
+      })),
+      ...tailors.filter(t => !t.verified).slice(0, 2).map(t => ({
+        id: `t-ver-${t._id}`,
+        type: 'studio_verification',
+        title: 'Studio Verification Pending',
         subtitle: `${t.name} • ${t.area || t.city || 'Jaipur'}`,
-        timestamp: '2 hours ago',
-        rawDate: t.verifiedAt || t.createdAt,
+        timestamp: 'Requires audit',
+        rawDate: t.createdAt,
       })),
-      ...users.slice(0, 3).map(u => ({
-        id: `u-${u._id}`,
-        type: 'user_registered',
-        title: 'New user registered',
-        subtitle: `${u.firstName || 'User'} ${u.lastName || ''} (${(u.role || 'customer').charAt(0).toUpperCase() + (u.role || 'customer').slice(1)})`,
-        timestamp: '5 hours ago',
-        rawDate: u.createdAt,
-      })),
-      ...bulkRequests.slice(0, 2).map(b => ({
-        id: `b-${b._id}`,
+      ...bulkRequests.slice(0, 3).map(b => ({
+        id: `b-rfq-${b._id}`,
         type: 'b2b_inquiry',
-        title: 'B2B inquiry submitted',
-        subtitle: `${b.requirement || 'Bulk Uniform'} (${b.quantity || 20} pcs)`,
-        timestamp: '8 hours ago',
+        title: b.status === 'awarded' ? 'Tender Contract Awarded' : 'B2B RFQ Demand Submitted',
+        subtitle: `${b.organisation || 'Enterprise'}: ${b.title || b.requirement} (${b.quantity} units)`,
+        timestamp: b.status === 'awarded' ? 'Awarded' : 'Active bidding',
         rawDate: b.createdAt,
       })),
-      ...tailors.slice(0, 1).map(t => ({
-        id: `tu-${t._id}`,
-        type: 'studio_updated',
-        title: 'Studio profile updated',
-        subtitle: `${t.name}`,
-        timestamp: '1 day ago',
-        rawDate: t.updatedAt || t.createdAt,
+      ...orders.slice(0, 2).map(o => ({
+        id: `o-${o._id}`,
+        type: 'order_update',
+        title: `Order #${String(o.orderId || o._id).slice(-6).toUpperCase()}`,
+        subtitle: `${o.garment || 'Garment'} • Status: ${o.status}`,
+        timestamp: o.status,
+        rawDate: o.createdAt,
       })),
-    ].slice(0, 4);
+      ...users.slice(0, 2).map(u => ({
+        id: `u-${u._id}`,
+        type: 'user_registered',
+        title: 'New User Registered',
+        subtitle: `${u.firstName || 'User'} ${u.lastName || ''} (${(u.role || 'customer').toUpperCase()})`,
+        timestamp: 'Active account',
+        rawDate: u.createdAt,
+      })),
+    ]
+      .sort((a, b) => new Date(b.rawDate || 0) - new Date(a.rawDate || 0))
+      .slice(0, 6);
 
     res.json({
       snapshot: {
-        pendingStudioAudits: pendingAudits.length,
+        pendingTailorAudits: pendingTailorAudits.length,
+        pendingBusinessAudits: pendingBusinessAudits.length,
+        totalPendingVerifications: pendingTailorAudits.length + pendingBusinessAudits.length,
         activeStudios: tailors.length,
+        verifiedStudios: verifiedStudios.length,
         totalRegisteredUsers: users.length,
+        totalBusinesses: businesses.length,
+        verifiedBusinesses: verifiedBusinesses.length,
         enterpriseRfqs: bulkRequests.length,
-        platformHealth: 'Healthy',
+        openRfqs: openBulkRequests.length,
+        awardedTenders: awardedBulkRequests.length,
+        activeOrders: activeOrders.length,
+        completedOrders: completedOrders.length,
+        platformHealth: 'Operational',
       },
       rolesBreakdown,
       tailors,
-      users: users.slice(0, 20).map(publicUser),
-      pendingAudits,
+      users: users.slice(0, 50).map(publicUser),
+      businesses,
+      pendingTailorAudits,
+      pendingBusinessAudits,
       verifiedStudios,
-      bulkRequests: bulkRequests.slice(0, 10),
+      bulkRequests: bulkRequests.slice(0, 20),
+      recentOrders: orders.slice(0, 10),
       recentActivity: activities,
     });
   } catch (error) {

@@ -1,5 +1,5 @@
 import { Business, BusinessRequest, Tailor, User } from '../models.js';
-import { createNotification } from './notificationController.js';
+import { createNotification, notifyAdmins } from './notificationController.js';
 import { getOrSyncBusinessProfile } from '../utils/businessProfileMigration.js';
 
 const escapeRegex = value => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -86,6 +86,22 @@ export async function createBusinessRequest(req, res) {
       metadata: { requestId: saved._id },
     }).catch(() => {});
 
+    // Notify administrators of new commercial tender
+    notifyAdmins({
+      title: `New Bulk Tender: ${saved.organisation}`,
+      message: `New tender posted: '${saved.title}' for ${saved.quantity} units (${saved.category}) by ${saved.creatorName || saved.organisation}.`,
+      type: 'bid',
+      link: '/admin?tab=bulk',
+      metadata: {
+        requestId: saved._id,
+        organisation: saved.organisation,
+        quantity: saved.quantity,
+        category: saved.category,
+        eventType: 'new_business_request',
+        createdAt: saved.createdAt,
+      },
+    }).catch(() => {});
+
     res.status(201).json({
       message: 'Bulk requirement published to artisan marketplace.',
       request: saved,
@@ -119,9 +135,32 @@ export async function listBusinessRequests(req, res) {
     if (req.query.mine === 'true' || (isBusiness && req.query.scope === 'mine')) {
       query.clerkUserId = req.authUserId;
     } else if (isTailor) {
-      // Tailors ONLY see tenders posted by verified businesses or admin
-      query.isVerifiedBusiness = true;
-      query.status = { $in: ['open', 'submitted', 'reviewing', 'quoted', 'awarded'] };
+      if (req.query.tab === 'mine' || req.query.tab === 'bids') {
+        query = {
+          $or: [
+            { 'quotes.tailorClerkUserId': req.authUserId },
+            ...(tailorProfile ? [{ 'quotes.tailorId': tailorProfile._id }] : []),
+            ...(tailorProfile ? [{ awardedTailorId: tailorProfile._id }] : []),
+          ],
+        };
+      } else if (req.query.tab === 'awarded') {
+        query = {
+          $or: [
+            ...(tailorProfile ? [{ awardedTailorId: tailorProfile._id }] : []),
+            { 'quotes.tailorClerkUserId': req.authUserId, 'quotes.status': 'accepted' },
+          ],
+        };
+      } else {
+        // Active marketplace feed: verified open tenders + any tenders this tailor quoted or was awarded
+        query = {
+          $or: [
+            { isVerifiedBusiness: true, status: { $in: ['open', 'submitted', 'reviewing', 'quoted'] } },
+            { 'quotes.tailorClerkUserId': req.authUserId },
+            ...(tailorProfile ? [{ 'quotes.tailorId': tailorProfile._id }] : []),
+            ...(tailorProfile ? [{ awardedTailorId: tailorProfile._id }] : []),
+          ],
+        };
+      }
     } else if (isBusiness) {
       // In marketplace feed, show only verified tenders
       query.isVerifiedBusiness = true;
@@ -184,6 +223,14 @@ export async function listBusinessRequests(req, res) {
         ) || null;
       }
 
+      // Check if tender is awarded to this tailor
+      const isAwardedToMe = Boolean(
+        r.status === 'awarded' && (
+          (r.awardedTailorId && tailorProfile && String(r.awardedTailorId) === String(tailorProfile._id)) ||
+          (myQuote && (String(r.awardedQuoteId) === String(myQuote._id) || myQuote.status === 'accepted'))
+        )
+      );
+
       // If user is neither owner nor admin, mask competitor quotes list but provide stats
       let visibleQuotes = enrichedQuotes;
       if (!isOwner && !isAdmin) {
@@ -198,6 +245,8 @@ export async function listBusinessRequests(req, res) {
         quotesCount,
         quotes: visibleQuotes,
         myQuote,
+        isAwardedToMe,
+        hasMyQuote: Boolean(myQuote),
         lowestQuote: enrichedQuotes.length ? Math.min(...enrichedQuotes.map((q) => q.pricePerUnit || q.totalAmount / r.quantity)) : null,
       };
     });
@@ -429,11 +478,18 @@ export async function updateQuoteStatus(req, res) {
     quote.status = status;
 
     if (status === 'accepted') {
+      if (item.status === 'awarded' && item.awardedQuoteId && String(item.awardedQuoteId) !== String(quote._id)) {
+        return res.status(409).json({
+          error: 'This tender has already been awarded to another quotation.',
+          awardedQuoteId: item.awardedQuoteId,
+        });
+      }
+
       item.awardedQuoteId = quote._id;
       item.awardedTailorId = quote.tailorId;
       item.status = 'awarded';
 
-      // Mark other quotes as rejected if desired or keep pending
+      // Mark other pending quotes on this tender as rejected
       item.quotes.forEach((q) => {
         if (String(q._id) !== String(quote._id) && q.status === 'pending') {
           q.status = 'rejected';
@@ -443,19 +499,57 @@ export async function updateQuoteStatus(req, res) {
 
     await item.save();
 
-    // Notify tailor of quote status change (awarded, shortlisted, rejected)
-    Tailor.findById(quote.tailorId).select('ownerClerkUserId').lean().then(t => {
-      if (t?.ownerClerkUserId) {
+    // 1. Notify tailor of quote status change (awarded, shortlisted, rejected)
+    const quoteAmount = quote.totalAmount || (quote.pricePerUnit * item.quantity);
+    const sendTailorNotification = (targetClerkId) => {
+      if (!targetClerkId) return;
+      createNotification({
+        recipientClerkUserId: targetClerkId,
+        title: status === 'accepted' ? 'Tender Contract Awarded! 🎉' : `Tender Quote ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+        message: status === 'accepted'
+          ? `Congratulations! Your quote of ₹${quoteAmount} for '${item.organisation || item.requirement}' has been accepted and awarded.`
+          : `Your quote for '${item.organisation || item.requirement}' has been updated to ${status}.`,
+        type: 'bid',
+        link: '/bulk',
+        metadata: { requestId: item._id, quoteId: quote._id, status, awardedAt: new Date() },
+      }).catch(() => {});
+    };
+
+    if (quote.tailorClerkUserId) {
+      sendTailorNotification(quote.tailorClerkUserId);
+    } else if (quote.tailorId) {
+      Tailor.findById(quote.tailorId).select('ownerClerkUserId').lean().then(t => {
+        if (t?.ownerClerkUserId) sendTailorNotification(t.ownerClerkUserId);
+      }).catch(() => {});
+    }
+
+    // 2. If awarded, also notify the business owner and platform administrators
+    if (status === 'accepted') {
+      if (item.clerkUserId) {
         createNotification({
-          recipientClerkUserId: t.ownerClerkUserId,
-          title: `Tender Quote ${status === 'accepted' ? 'Awarded! 🎉' : status.charAt(0).toUpperCase() + status.slice(1)}`,
-          message: `Your quote for '${item.organisation || item.requirement}' has been ${status} by the client.`,
+          recipientClerkUserId: item.clerkUserId,
+          title: 'Tender Award Confirmed',
+          message: `You have successfully awarded '${item.title || item.requirement}' to ${quote.tailorName || 'artisan studio'} (Contract: ₹${quoteAmount}).`,
           type: 'bid',
           link: '/bulk',
-          metadata: { requestId: item._id, quoteId: quote._id, status },
+          metadata: { requestId: item._id, quoteId: quote._id, status: 'awarded', tailorId: quote.tailorId },
         }).catch(() => {});
       }
-    }).catch(() => {});
+
+      notifyAdmins({
+        title: `Tender Awarded: ${item.organisation}`,
+        message: `Tender '${item.title || item.requirement}' awarded to ${quote.tailorName || 'artisan studio'} for ₹${quoteAmount}.`,
+        type: 'bid',
+        link: '/admin?tab=bulk',
+        metadata: {
+          requestId: item._id,
+          quoteId: quote._id,
+          awardedTailorId: quote.tailorId,
+          eventType: 'tender_awarded',
+          createdAt: new Date(),
+        },
+      }).catch(() => {});
+    }
 
     res.json({
       message: `Quotation status updated to ${status}.`,

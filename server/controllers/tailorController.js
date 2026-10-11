@@ -1,8 +1,31 @@
+import { getAuth } from '@clerk/express';
 import { BusinessRequest, Order, Tailor, User, Review } from '../models.js';
 import { createNotification } from './notificationController.js';
 
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const publicTailor = ({ verifiedBy, __v, ...tailor }) => tailor;
+
+export const sanitizeTailor = (tailor, isAuthenticated = false) => {
+  if (!tailor) return null;
+  const { verifiedBy, verificationNotes, __v, ...rest } = tailor;
+
+  if (isAuthenticated) {
+    return {
+      ...rest,
+      isLocked: false,
+    };
+  }
+
+  // Unauthenticated guests:
+  // Mask/omit private phone and sensitive identifiers, but keep public business info intact
+  return {
+    ...rest,
+    phone: null,
+    ownerClerkUserId: undefined,
+    isLocked: true,
+  };
+};
+
+export const publicTailor = tailor => sanitizeTailor(tailor, false);
 
 function haversineKm(lat1, lon1, lat2, lon2) {
   if (!Number.isFinite(lat1) || !Number.isFinite(lon1) || !Number.isFinite(lat2) || !Number.isFinite(lon2)) return null;
@@ -117,7 +140,17 @@ export async function listTailors(req, res) {
       return (b.rating || 0) - (a.rating || 0);
     });
 
-    res.json(rows.map(publicTailor));
+    let isAuthenticated = false;
+    try {
+      if (process.env.CLERK_SECRET_KEY) {
+        const auth = getAuth(req);
+        isAuthenticated = Boolean(auth?.isAuthenticated && auth?.userId);
+      }
+    } catch {
+      isAuthenticated = false;
+    }
+
+    res.json(rows.map(t => sanitizeTailor(t, isAuthenticated)));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -150,7 +183,17 @@ export async function getTailor(req, res) {
       }
     }
 
-    res.json(publicTailor(tailor));
+    let isAuthenticated = false;
+    try {
+      if (process.env.CLERK_SECRET_KEY) {
+        const auth = getAuth(req);
+        isAuthenticated = Boolean(auth?.isAuthenticated && auth?.userId);
+      }
+    } catch {
+      isAuthenticated = false;
+    }
+
+    res.json(sanitizeTailor(tailor, isAuthenticated));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -183,6 +183,16 @@ export default function Bulk() {
     [requests]
   );
 
+  const awardedRequests = useMemo(
+    () => requests.filter((r) => r.isAwardedToMe || r.status === "awarded"),
+    [requests]
+  );
+
+  const myBidsRequests = useMemo(
+    () => requests.filter((r) => r.hasMyQuote || Boolean(r.myQuote)),
+    [requests]
+  );
+
   const pendingBusinesses = useMemo(
     () => allBusinesses.filter((b) => b.verificationStatus === "pending"),
     [allBusinesses]
@@ -194,6 +204,10 @@ export default function Bulk() {
       list = myRequests;
     } else if (activeTab === "market") {
       list = marketRequests;
+    } else if (activeTab === "awarded") {
+      list = awardedRequests;
+    } else if (activeTab === "mybids") {
+      list = myBidsRequests;
     }
 
     if (selectedCategory !== "all") {
@@ -213,7 +227,7 @@ export default function Bulk() {
       );
     }
     return list;
-  }, [requests, activeTab, myRequests, marketRequests, selectedCategory, selectedStatus, searchQuery]);
+  }, [requests, activeTab, myRequests, marketRequests, awardedRequests, myBidsRequests, selectedCategory, selectedStatus, searchQuery]);
 
   // Handlers for Requirements
   const handleOpenPostModal = (reqToEdit = null) => {
@@ -664,6 +678,33 @@ export default function Bulk() {
             >
               Active Market Tenders ({marketRequests.length})
             </button>
+            {isTailor && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("mybids")}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === "mybids"
+                      ? "bg-white text-stone-900 shadow-2xs"
+                      : "text-stone-600 hover:text-stone-950"
+                  }`}
+                >
+                  My Bids ({myBidsRequests.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("awarded")}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    activeTab === "awarded"
+                      ? "bg-emerald-600 text-white shadow-2xs"
+                      : "text-emerald-800 hover:text-emerald-950"
+                  }`}
+                >
+                  <Award size={13} />
+                  <span>Awarded Contracts ({awardedRequests.length})</span>
+                </button>
+              </>
+            )}
             {isAdmin && (
               <button
                 type="button"
@@ -778,6 +819,24 @@ export default function Bulk() {
                       </span>
                     </div>
 
+                    {/* Awarded / Winner Banner */}
+                    {item.isAwardedToMe && (
+                      <div className="mb-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 p-3 text-white shadow-sm flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Award size={18} className="text-amber-300 shrink-0" />
+                          <div>
+                            <span className="block text-[10px] font-black uppercase tracking-wider text-emerald-100">
+                              Official Contract Awarded
+                            </span>
+                            <span className="text-xs font-bold">You Won This Tender!</span>
+                          </div>
+                        </div>
+                        <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold">
+                          Confirmed
+                        </span>
+                      </div>
+                    )}
+
                     {/* Title & Organisation */}
                     <h3 className="text-base font-bold text-stone-900 leading-snug line-clamp-2">
                       {item.title || `${item.quantity} Units ${item.category}`}
@@ -848,14 +907,25 @@ export default function Bulk() {
                     <div className="flex items-center gap-1.5">
                       {/* Tailor Action: Quote or Edit Quote */}
                       {isTailor && (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenQuotationModal(item)}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] hover:bg-[#761c30] text-white px-3.5 py-1.5 text-xs font-bold shadow-2xs transition cursor-pointer"
-                        >
-                          <Send size={12} />
-                          <span>{hasMyQuote ? "Update Bid" : "Quote"}</span>
-                        </button>
+                        item.isAwardedToMe ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 text-xs font-bold">
+                            <CheckCircle2 size={13} className="text-emerald-600" />
+                            <span>Contract Won</span>
+                          </span>
+                        ) : item.status === "awarded" ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-xl bg-stone-100 text-stone-500 px-3 py-1.5 text-xs font-medium">
+                            <span>Tender Closed</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenQuotationModal(item)}
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] hover:bg-[#761c30] text-white px-3.5 py-1.5 text-xs font-bold shadow-2xs transition cursor-pointer"
+                          >
+                            <Send size={12} />
+                            <span>{hasMyQuote ? "Update Bid" : "Quote"}</span>
+                          </button>
+                        )
                       )}
 
                       {/* Business Owner / Admin Actions */}

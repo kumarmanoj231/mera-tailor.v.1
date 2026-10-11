@@ -55,6 +55,8 @@ import Footer from "../components/Footer";
 import { getRoleMeta } from "../components/Navbar/RoleAvatarWithBadge";
 import AdminAnnouncementBroadcaster from "../components/admin/AdminAnnouncementBroadcaster";
 import TailorAvatar from "../components/common/TailorAvatar";
+import AdminSidebar from "../components/admin/layout/AdminSidebar";
+import AdminTopBar from "../components/admin/layout/AdminTopBar";
 
 // Custom Leaflet Pin Icons
 const verifiedIcon = L.divIcon({
@@ -325,8 +327,25 @@ export default function AdminPortal() {
   const initialTab = validTabs.includes(urlTab) ? (urlTab === "profile" ? "settings" : urlTab) : "dashboard";
   const [tab, setTab] = useState(initialTab);
 
-  // Mobile sidebar drawer state
+  // Sidebar state with local storage persistence
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("meraTailor.adminSidebarCollapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleSidebarCollapse = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("meraTailor.adminSidebarCollapsed", String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   useEffect(() => {
     const currentTab = searchParams.get("tab");
@@ -347,13 +366,17 @@ export default function AdminPortal() {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
   const [tailors, setTailors] = useState([]);
+  const [businesses, setBusinesses] = useState([]);
   const [bulkOrders, setBulkOrders] = useState([]);
+  const [dashboardSummary, setDashboardSummary] = useState(null);
   const [error, setError] = useState("");
   const [actingId, setActingId] = useState("");
 
   // Verification filter & search
+  const [verificationSubTab, setVerificationSubTab] = useState("tailors"); // 'tailors' | 'businesses'
   const [verificationFilter, setVerificationFilter] = useState("pending");
   const [searchQuery, setSearchQuery] = useState("");
+  const [businessSearchQuery, setBusinessSearchQuery] = useState("");
 
   // Users filter & search
   const [userRoleFilter, setUserRoleFilter] = useState("all");
@@ -551,19 +574,24 @@ export default function AdminPortal() {
     setLoading(true);
     try {
       setError("");
-      const [u, ta, bulk, notifs] = await Promise.all([
+      const [u, ta, biz, bulk, summary, notifs] = await Promise.all([
         request("/admin/users").catch(() => []),
         request("/admin/tailors").catch(() => []),
-        request("/bulk-orders").catch(() => []),
+        request("/admin/businesses").catch(() => []),
+        request("/business-requests?status=all").catch(() => request("/bulk-orders").catch(() => [])),
+        request("/admin/dashboard-summary").catch(() => null),
         request("/admin/notifications").catch(() => []),
       ]);
       const validUsers = Array.isArray(u) ? u : [];
       const validTailors = Array.isArray(ta) ? ta : [];
-      const validBulk = Array.isArray(bulk) ? bulk : bulk?.bulkOrders || [];
+      const validBusinesses = Array.isArray(biz) ? biz : [];
+      const validBulk = Array.isArray(bulk) ? bulk : bulk?.bulkOrders || bulk?.requests || [];
 
       setUsers(validUsers);
       setTailors(validTailors);
+      setBusinesses(validBusinesses);
       setBulkOrders(validBulk);
+      if (summary) setDashboardSummary(summary);
 
       if (Array.isArray(notifs) && notifs.length > 0) {
         setNotifications(notifs);
@@ -645,10 +673,50 @@ export default function AdminPortal() {
     }
   }
 
+  async function handleVerifyBusiness(businessId, approve = true) {
+    setActingId(businessId);
+    try {
+      let body = {};
+      if (!approve) {
+        const reason = window.prompt("Please state the reason for rejecting business verification (e.g. Invalid GSTIN):");
+        if (reason === null) {
+          setActingId("");
+          return;
+        }
+        body.reason = reason || "Business verification rejected by administrator";
+      }
+
+      const endpoint = approve
+        ? `/admin/businesses/${businessId}/verify`
+        : `/admin/businesses/${businessId}/reject`;
+
+      await request(endpoint, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+
+      if (approve) {
+        confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } });
+        toast.success("Business account & GSTIN verified successfully!");
+      } else {
+        toast.info("Business verification application rejected.");
+      }
+      await loadData();
+    } catch (e) {
+      toast.error(e.message || "Failed to update business verification.");
+    } finally {
+      setActingId("");
+    }
+  }
+
   /* =========================================================
      USER ACTIONS
   ========================================================== */
   async function handleChangeUserRole(targetUser, newRole) {
+    if (targetUser.id === profile?.id || targetUser.clerkUserId === profile?.clerkUserId) {
+      toast.error("You cannot modify your own administrator role.");
+      return;
+    }
     try {
       await request(`/admin/users/${targetUser.id}`, {
         method: "PATCH",
@@ -662,6 +730,10 @@ export default function AdminPortal() {
   }
 
   async function handleToggleUserDisabled(targetUser) {
+    if (targetUser.id === profile?.id || targetUser.clerkUserId === profile?.clerkUserId) {
+      toast.error("You cannot disable your own administrator account.");
+      return;
+    }
     try {
       await request(`/admin/users/${targetUser.id}`, {
         method: "PATCH",
@@ -675,6 +747,10 @@ export default function AdminPortal() {
   }
 
   async function handleRemoveUser(targetUser) {
+    if (targetUser.id === profile?.id || targetUser.clerkUserId === profile?.clerkUserId) {
+      toast.error("You cannot delete your own administrator account.");
+      return;
+    }
     if (!window.confirm(`Permanently remove ${targetUser.email} from system?`)) return;
     try {
       await request(`/admin/users/${targetUser.id}`, { method: "DELETE" });
@@ -837,7 +913,7 @@ export default function AdminPortal() {
     }
   }
 
-  // Filtered lists
+  // Filtered lists - Tailors
   const pendingVerifications = useMemo(() => {
     return tailors.filter(
       (t) => !t.verified || t.verificationStatus === "pending"
@@ -847,6 +923,34 @@ export default function AdminPortal() {
   const verifiedTailors = useMemo(() => {
     return tailors.filter((t) => t.verified || t.verificationStatus === "verified");
   }, [tailors]);
+
+  // Filtered lists - Businesses (GSTIN Compliance)
+  const pendingBusinessVerifications = useMemo(() => {
+    return businesses.filter(
+      (b) => !b.verified || b.verificationStatus === "pending" || b.businessProfile?.verificationStatus === "pending"
+    );
+  }, [businesses]);
+
+  const verifiedBusinesses = useMemo(() => {
+    return businesses.filter((b) => b.verified || b.verificationStatus === "verified" || b.businessProfile?.verificationStatus === "verified");
+  }, [businesses]);
+
+  const filteredBusinesses = useMemo(() => {
+    return businesses.filter((item) => {
+      const isVer = item.verified || item.verificationStatus === "verified" || item.businessProfile?.verificationStatus === "verified";
+      if (verificationFilter === "pending" && isVer) return false;
+      if (verificationFilter === "verified" && !isVer) return false;
+      if (businessSearchQuery.trim()) {
+        const q = businessSearchQuery.toLowerCase();
+        const matchesComp = String(item.companyName || "").toLowerCase().includes(q);
+        const matchesName = String(item.name || "").toLowerCase().includes(q);
+        const matchesGstin = String(item.businessProfile?.gstin || item.gstin || "").toLowerCase().includes(q);
+        const matchesEmail = String(item.email || "").toLowerCase().includes(q);
+        if (!matchesComp && !matchesName && !matchesGstin && !matchesEmail) return false;
+      }
+      return true;
+    });
+  }, [businesses, verificationFilter, businessSearchQuery]);
 
   const filteredTailors = useMemo(() => {
     return tailors.filter((item) => {
@@ -965,14 +1069,18 @@ export default function AdminPortal() {
     });
 
     return {
-      totalUsers: users.length || 4,
+      totalUsers: users.length,
       roles,
-      totalTailors: tailors.length || 1,
-      verifiedCount: verifiedTailors.length || 1,
-      pendingCount: pendingVerifications.length,
-      totalBulk: (bulkOrders.length || 3),
+      totalTailors: tailors.length,
+      verifiedCount: verifiedTailors.length,
+      pendingCount: pendingVerifications.length + pendingBusinessVerifications.length,
+      pendingTailorsCount: pendingVerifications.length,
+      pendingBusinessesCount: pendingBusinessVerifications.length,
+      totalBusinesses: businesses.length,
+      verifiedBusinessesCount: verifiedBusinesses.length,
+      totalBulk: bulkOrders.length,
     };
-  }, [users, tailors, verifiedTailors, pendingVerifications, bulkOrders]);
+  }, [users, tailors, verifiedTailors, pendingVerifications, businesses, pendingBusinessVerifications, verifiedBusinesses, bulkOrders]);
 
   const adminDisplayName =
     profile?.name ||
@@ -1055,618 +1163,921 @@ export default function AdminPortal() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-[#faf9f6] text-[#172033] flex flex-col font-sans antialiased">
-      {/* 1. ORIGINAL APP NAVBAR */}
-      <Navbar />
+  // Tab Metadata for TopBar
+  const currentTabMeta = useMemo(() => {
+    const titles = {
+      dashboard: {
+        title: isHi ? "व्यवस्थापक डैशबोर्ड" : "Admin Dashboard",
+        subtitle: isHi ? "सिस्टम संचालन, समीक्षा एवं डेटा विश्लेषण" : "System operations, verification backlog & live metrics",
+      },
+      verifications: {
+        title: isHi ? "सत्यापन एवं अनुपालन" : "Verification & Compliance",
+        subtitle: isHi ? "कारीगर स्टूडियो एवं व्यावसायिक GSTIN समीक्षा" : "Atelier studios & commercial enterprise GSTIN audits",
+      },
+      users: {
+        title: isHi ? "उपयोगकर्ता एवं अनुमतियाँ" : "Users & Access Control",
+        subtitle: isHi ? "ग्राहक, टेलर, बिज़नेस एवं व्यवस्थापक खाते" : "Customers, tailors, enterprises & administrator privileges",
+      },
+      tailors: {
+        title: isHi ? "टेलर स्टूडियो डायरेक्टरी" : "Tailor Studios Directory",
+        subtitle: isHi ? "सूचीबद्ध कार्यशालाएं, भौगोलिक मानचित्र एवं संपर्क" : "Artisan ateliers directory, geospatial GPS pins & coverage",
+      },
+      bulk: {
+        title: isHi ? "B2B थोक ऑर्डर एवं RFQ" : "B2B Bulk Orders & RFQs",
+        subtitle: isHi ? "संस्थागत परिधान निविदाएं एवं कोटेशन प्रबंधन" : "Institutional uniform demand tenders & enterprise quotations",
+      },
+      announcements: {
+        title: isHi ? "प्लेटफ़ॉर्म घोषणाएं" : "Platform Broadcasts",
+        subtitle: isHi ? "सिस्टम-व्यापी अलर्ट एवं आवश्यक सूचनाएं" : "System-wide announcements & high-priority alert dispatcher",
+      },
+      settings: {
+        title: isHi ? "व्यवस्थापक सेटिंग्स" : "Administration Settings",
+        subtitle: isHi ? "प्रोफ़ाइल, सुरक्षा प्रोटोकॉल, अलर्ट प्राथमिकताएं" : "Profile, security protocols, alert channels & system preferences",
+      },
+    };
+    return titles[tab] || titles.dashboard;
+  }, [tab, isHi]);
 
-      {/* 2. ADMIN CONTROL SUB-HEADER & MODULE TABS BAR */}
-      <div className="sticky top-[72px] z-30 border-b border-stone-200/80 bg-white/95 backdrop-blur-md shadow-2xs">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 py-3">
-            {/* Left: Portal Title & Live Badge */}
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl bg-emerald-50 text-[#16a34a] flex items-center justify-center font-bold">
-                <ShieldCheck size={20} strokeWidth={2.4} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-base font-bold text-stone-900 leading-tight">
-                    Admin Portal
-                  </h1>
-                  <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold">
-                    Live Platform
+  return (
+    <div className="min-h-screen bg-[#faf9f6] text-[#172033] flex font-sans antialiased">
+      {/* 1. PERSISTENT RESPONSIVE ADMIN SIDEBAR */}
+      <AdminSidebar
+        currentTab={tab}
+        onTabChange={handleTabChange}
+        badgeCounts={{
+          pendingVerifications: stats.pendingCount,
+          totalUsers: stats.totalUsers,
+          totalTailors: stats.totalTailors,
+          totalBulk: stats.totalBulk,
+          openRfqs: stats.totalBulk,
+        }}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={handleToggleSidebarCollapse}
+        adminUser={{
+          name: adminDisplayName,
+          fullName: adminFullName,
+          email: profile?.email || user?.primaryEmailAddress?.emailAddress || "admin@meratailor.com",
+          role: "admin",
+          avatar: profile?.avatar || profile?.imageUrl || user?.imageUrl,
+        }}
+        onSignOut={() => signOut ? signOut() : navigate("/")}
+        mobileOpen={mobileMenuOpen}
+        onMobileClose={() => setMobileMenuOpen(false)}
+      />
+
+      {/* 2. MAIN CONSOLE WORKSPACE COLUMN */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* TOP BAR */}
+        <AdminTopBar
+          title={currentTabMeta.title}
+          subtitle={currentTabMeta.subtitle}
+          onMobileMenuToggle={() => setMobileMenuOpen(true)}
+          onRefresh={loadData}
+          refreshing={loading}
+          notificationsCount={unreadCount}
+          onNotificationsToggle={() => setNotificationsOpen(!notificationsOpen)}
+          notificationsOpen={notificationsOpen}
+          notificationPopover={
+            <AdminNotificationPopover
+              notifications={notifications}
+              readNotifIds={readNotifIds}
+              unreadCount={unreadCount}
+              onClose={() => setNotificationsOpen(false)}
+              onMarkAllRead={handleMarkAllRead}
+              onNotificationClick={handleNotificationClick}
+              onOpenSettings={() => {
+                setNotificationsOpen(false);
+                setSettingsActiveSubTab("notifications");
+                handleTabChange("settings");
+              }}
+            />
+          }
+        />
+
+        {/* 3. MAIN WORKSPACE CONTENT */}
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        {tab === "dashboard" && (
+          <div className="space-y-8 animate-fadeIn">
+            {/* Executive Operations Overview & Real KPI Metrics */}
+            <div className="relative overflow-hidden rounded-3xl border border-stone-200/80 bg-white p-6 sm:p-8 shadow-2xs">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-stone-400">
+                    {greeting}
                   </span>
+                  <h1 className="text-2xl sm:text-3xl font-black text-stone-900 mt-1">
+                    {adminFullName} <span className="inline-block">👋</span>
+                  </h1>
+                  <p className="mt-1 text-xs sm:text-sm text-stone-500 max-w-xl leading-relaxed">
+                    MeraTailor central administration console. Monitor bespoke artisan verifications, commercial buyer GSTIN filings, and institutional tenders in real-time.
+                  </p>
                 </div>
-                <p className="text-[11px] text-stone-500">
-                  Master Atelier, User Management & System Oversight
-                </p>
+
+                <div className="flex items-center gap-2 self-start lg:self-center">
+                  <button
+                    type="button"
+                    onClick={loadData}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 text-xs font-bold text-stone-700 bg-stone-50 hover:bg-stone-100 transition cursor-pointer"
+                  >
+                    <RefreshCw size={13} className={loading ? "animate-spin text-[#8f2338]" : ""} />
+                    <span>Sync Database</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("verifications")}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#8f2338] hover:bg-[#761c30] text-xs font-bold text-white shadow-xs transition cursor-pointer"
+                  >
+                    <ShieldCheck size={14} />
+                    <span>Audit Queue ({stats.pendingCount})</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 5 Core Database KPI Metrics */}
+              <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+                {/* 1. Pending Verifications */}
+                <div
+                  onClick={() => handleTabChange("verifications")}
+                  className="rounded-2xl border border-rose-100 bg-rose-50/40 p-4 transition hover:bg-rose-50 hover:border-rose-200 cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider">Pending Audits</span>
+                    <ShieldCheck size={16} className="text-[#8f2338]" />
+                  </div>
+                  <div className="mt-3 text-2xl font-black text-stone-900 leading-none">
+                    {dashboardSummary?.snapshot?.pendingVerificationsTotal ?? stats.pendingCount}
+                  </div>
+                  <div className="mt-2 text-[10px] text-stone-500 font-medium">
+                    {stats.pendingTailorsCount} studios • {stats.pendingBusinessesCount} GSTIN
+                  </div>
+                </div>
+
+                {/* 2. Registered Tailors */}
+                <div
+                  onClick={() => handleTabChange("tailors")}
+                  className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4 transition hover:bg-emerald-50 hover:border-emerald-200 cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Active Studios</span>
+                    <Store size={16} className="text-emerald-600" />
+                  </div>
+                  <div className="mt-3 text-2xl font-black text-stone-900 leading-none">
+                    {dashboardSummary?.snapshot?.activeStudios ?? stats.totalTailors}
+                  </div>
+                  <div className="mt-2 text-[10px] text-stone-500 font-medium">
+                    {stats.verifiedCount} verified ateliers
+                  </div>
+                </div>
+
+                {/* 3. Total Users */}
+                <div
+                  onClick={() => handleTabChange("users")}
+                  className="rounded-2xl border border-purple-100 bg-purple-50/40 p-4 transition hover:bg-purple-50 hover:border-purple-200 cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-purple-800 uppercase tracking-wider">Total Accounts</span>
+                    <Users size={16} className="text-purple-600" />
+                  </div>
+                  <div className="mt-3 text-2xl font-black text-stone-900 leading-none">
+                    {dashboardSummary?.snapshot?.totalRegisteredUsers ?? stats.totalUsers}
+                  </div>
+                  <div className="mt-2 text-[10px] text-stone-500 font-medium">
+                    {stats.roles.customer} customers • {stats.roles.tailor} tailors
+                  </div>
+                </div>
+
+                {/* 4. Commercial Businesses */}
+                <div
+                  onClick={() => {
+                    setVerificationSubTab("businesses");
+                    handleTabChange("verifications");
+                  }}
+                  className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4 transition hover:bg-blue-50 hover:border-blue-200 cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wider">Enterprises</span>
+                    <Building2 size={16} className="text-blue-600" />
+                  </div>
+                  <div className="mt-3 text-2xl font-black text-stone-900 leading-none">
+                    {dashboardSummary?.snapshot?.totalBusinesses ?? stats.totalBusinesses}
+                  </div>
+                  <div className="mt-2 text-[10px] text-stone-500 font-medium">
+                    {stats.verifiedBusinessesCount} GSTIN compliant
+                  </div>
+                </div>
+
+                {/* 5. Bulk Demands & RFQs */}
+                <div
+                  onClick={() => handleTabChange("bulk")}
+                  className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4 transition hover:bg-amber-50 hover:border-amber-200 cursor-pointer col-span-2 sm:col-span-1"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">B2B RFQs</span>
+                    <Layers size={16} className="text-amber-600" />
+                  </div>
+                  <div className="mt-3 text-2xl font-black text-stone-900 leading-none">
+                    {dashboardSummary?.snapshot?.openRfqs ?? stats.totalBulk}
+                  </div>
+                  <div className="mt-2 text-[10px] text-stone-500 font-medium">
+                    {dashboardSummary?.snapshot?.awardedTenders ?? 0} tenders awarded
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Right: Module Tabs & Notification Bell */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
-              {sidebarNavItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = tab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleTabChange(item.id)}
-                    className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
-                      isActive
-                        ? "bg-[#8f2338] text-white shadow-2xs"
-                        : "text-stone-600 hover:text-stone-950 hover:bg-stone-100"
-                    }`}
-                  >
-                    <Icon size={14} />
-                    <span>{item.label}</span>
-                    {item.count !== undefined && item.count > 0 && item.id !== "dashboard" && (
-                      <span
-                        className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
-                          isActive
-                            ? "bg-white/20 text-white"
-                            : "bg-stone-200 text-stone-700"
-                        }`}
-                      >
-                        {item.count}
-                      </span>
+            {/* Split Row: Pending Action Center & Recent Real Activity Log */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* 1. Pending Action Center */}
+              <div className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-2xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between pb-4 border-b border-stone-100">
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-8 w-8 rounded-xl bg-rose-50 text-[#8f2338] flex items-center justify-center font-bold">
+                        <AlertCircle size={16} />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-bold text-stone-900">
+                          Pending Compliance Actions
+                        </h2>
+                        <p className="text-[11px] text-stone-400">
+                          Applications waiting for administrative review
+                        </p>
+                      </div>
+                    </div>
+                    <span className="rounded-full bg-rose-100 text-rose-800 px-2 py-0.5 text-xs font-black">
+                      {stats.pendingCount}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {stats.pendingCount === 0 ? (
+                      <div className="py-10 text-center">
+                        <CheckCircle2 size={32} className="mx-auto text-emerald-500 mb-2" />
+                        <p className="text-xs font-bold text-stone-800">All Queues Clear</p>
+                        <p className="text-[11px] text-stone-400 mt-0.5">
+                          Every atelier and commercial applicant has been reviewed.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Pending Tailors List */}
+                        {pendingVerifications.slice(0, 3).map((t) => (
+                          <div
+                            key={t._id}
+                            className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-stone-50/70 border border-stone-100 hover:bg-stone-100/60 transition"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <TailorAvatar
+                                image={t.image}
+                                name={t.name}
+                                size="sm"
+                                alt={t.name}
+                              />
+                              <div className="min-w-0">
+                                <h4 className="text-xs font-bold text-stone-900 truncate">
+                                  {t.name}
+                                </h4>
+                                <p className="text-[11px] text-stone-500 truncate">
+                                  Studio in {t.area ? `${t.area}, ` : ""}{t.city || "Jaipur"}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleVerifyTailor(t._id, true)}
+                                className="h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-2xs transition cursor-pointer"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setVerificationSubTab("tailors");
+                                  handleTabChange("verifications");
+                                }}
+                                className="h-7 px-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-white text-[11px] font-medium transition cursor-pointer"
+                              >
+                                Review
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Pending Businesses List */}
+                        {pendingBusinessVerifications.slice(0, 3).map((b) => (
+                          <div
+                            key={b.id || b.businessId || b._id}
+                            className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-amber-50/40 border border-amber-100 hover:bg-amber-50/80 transition"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="h-8 w-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                                <Building2 size={16} />
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="text-xs font-bold text-stone-900 truncate">
+                                  {b.companyName || b.businessProfile?.companyName || "Commercial Client"}
+                                </h4>
+                                <p className="text-[11px] text-stone-500 truncate font-mono">
+                                  GSTIN: {b.businessProfile?.gstin || b.gstin || "Pending"}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleVerifyBusiness(b.id || b.businessId || b._id, true)}
+                                className="h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-2xs transition cursor-pointer"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setVerificationSubTab("businesses");
+                                  handleTabChange("verifications");
+                                }}
+                                className="h-7 px-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-white text-[11px] font-medium transition cursor-pointer"
+                              >
+                                Review
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </>
                     )}
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between text-xs">
+                  <span className="text-stone-400">Detailed compliance audits</span>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("verifications")}
+                    className="font-bold text-[#8f2338] hover:underline cursor-pointer"
+                  >
+                    Open All Verifications →
                   </button>
-                );
-              })}
+                </div>
+              </div>
 
-              {/* Notifications Flyout Popover */}
-              <div className="relative pl-1.5 border-l border-stone-200 ml-1">
-                <button
-                  type="button"
-                  onClick={() => setNotificationsOpen(!notificationsOpen)}
-                  className="relative p-2 rounded-xl text-stone-600 hover:text-stone-950 hover:bg-stone-100 transition cursor-pointer"
-                  title="Administrator Notifications"
-                >
-                  <Bell size={16} />
-                  {unreadCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-[#8f2338] animate-pulse" />
-                  )}
-                </button>
+              {/* 2. Real Database Activity Stream */}
+              <div className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-2xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between pb-4 border-b border-stone-100">
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-8 w-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                        <Clock3 size={16} />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-bold text-stone-900">
+                          Live Platform Activity
+                        </h2>
+                        <p className="text-[11px] text-stone-400">
+                          Real records and status events from database
+                        </p>
+                      </div>
+                    </div>
+                    <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold">
+                      Live Feed
+                    </span>
+                  </div>
 
-                {notificationsOpen && (
-                  <AdminNotificationPopover
-                    notifications={notifications}
-                    readNotifIds={readNotifIds}
-                    unreadCount={unreadCount}
-                    onClose={() => setNotificationsOpen(false)}
-                    onMarkAllRead={handleMarkAllRead}
-                    onNotificationClick={handleNotificationClick}
-                    onOpenSettings={() => {
-                      setNotificationsOpen(false);
+                  <div className="mt-4 space-y-3">
+                    {(dashboardSummary?.recentActivity?.length > 0
+                      ? dashboardSummary.recentActivity.slice(0, 5)
+                      : notifications.slice(0, 5)
+                    ).map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-start gap-3 p-3 rounded-2xl bg-stone-50/50 hover:bg-stone-50 transition"
+                      >
+                        <div className="h-8 w-8 rounded-xl bg-white border border-stone-200 flex items-center justify-center text-stone-600 shrink-0 mt-0.5 shadow-2xs">
+                          {item.type?.includes("business") ? (
+                            <Building2 size={14} className="text-blue-600" />
+                          ) : item.type?.includes("studio") ? (
+                            <Store size={14} className="text-emerald-600" />
+                          ) : item.type?.includes("bulk") || item.type?.includes("inquiry") ? (
+                            <Layers size={14} className="text-amber-600" />
+                          ) : item.type?.includes("user") ? (
+                            <Users size={14} className="text-purple-600" />
+                          ) : (
+                            <CheckCircle2 size={14} className="text-stone-600" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-bold text-stone-900 truncate">
+                              {item.title}
+                            </span>
+                            <span className="text-[10px] text-stone-400 shrink-0">
+                              {item.timestamp || item.time || "Recent"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-stone-500 mt-0.5 line-clamp-1">
+                            {item.subtitle || item.message}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between text-xs">
+                  <span className="text-stone-400">Notification and alert logs</span>
+                  <button
+                    type="button"
+                    onClick={() => {
                       setSettingsActiveSubTab("notifications");
                       handleTabChange("settings");
                     }}
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. MAIN WORKSPACE CONTENT */}
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {tab === "dashboard" && (
-          <div className="space-y-8 animate-fadeIn">
-            {/* Top Greeting Hero Banner */}
-            <div className="relative overflow-hidden rounded-3xl border border-stone-200/70 bg-[#fdfbf9] p-6 sm:p-8 lg:p-9 shadow-2xs">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 lg:gap-8">
-                {/* Left: Greetings & 4 KPI Pills */}
-                <div className="flex-1 max-w-2xl">
-                  <span className="text-xs sm:text-sm text-stone-400 font-medium">
-                    {greeting}
-                  </span>
-                  <h1 className="text-2xl sm:text-3xl lg:text-[32px] font-extrabold tracking-tight text-stone-900 mt-1">
-                    {adminFullName} <span className="inline-block">👋</span>
-                  </h1>
-                  <p className="mt-1.5 text-xs sm:text-sm text-stone-500 leading-relaxed">
-                    {isHi
-                      ? "यहाँ आपकी प्लेटफ़ॉर्म गतिविधियों का अवलोकन है।"
-                      : "Here's an overview of your platform activities."}
-                  </p>
-
-                  {/* 4 KPI Metric Pills */}
-                  <div className="mt-6 flex flex-wrap items-center gap-3">
-                    {/* Stat 1: Pending Audits */}
-                    <div
-                      onClick={() => handleTabChange("verifications")}
-                      className="group flex items-center gap-3 bg-white hover:border-rose-300 rounded-2xl border border-stone-200/80 px-4 py-2.5 shadow-2xs cursor-pointer transition min-w-[130px]"
-                    >
-                      <div className="h-10 w-10 rounded-xl bg-[#fef2f2] flex items-center justify-center text-[#ef4444] shrink-0 group-hover:scale-105 transition">
-                        <Shield size={18} />
-                      </div>
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-lg font-bold text-stone-900 leading-none">
-                            {stats.pendingCount}
-                          </span>
-                          <span className="text-xs text-[#ef4444] font-bold group-hover:translate-x-0.5 transition-transform">→</span>
-                        </div>
-                        <span className="text-[11px] font-medium text-stone-400 mt-1 whitespace-nowrap">
-                          Pending Audits
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Stat 2: Active Studios */}
-                    <div
-                      onClick={() => handleTabChange("tailors")}
-                      className="group flex items-center gap-3 bg-white hover:border-emerald-300 rounded-2xl border border-stone-200/80 px-4 py-2.5 shadow-2xs cursor-pointer transition min-w-[130px]"
-                    >
-                      <div className="h-10 w-10 rounded-xl bg-[#ecfdf5] flex items-center justify-center text-[#10b981] shrink-0 group-hover:scale-105 transition">
-                        <Store size={18} />
-                      </div>
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-lg font-bold text-stone-900 leading-none">
-                            {stats.totalTailors}
-                          </span>
-                          <span className="text-xs text-[#10b981] font-bold group-hover:translate-x-0.5 transition-transform">→</span>
-                        </div>
-                        <span className="text-[11px] font-medium text-stone-400 mt-1 whitespace-nowrap">
-                          Active Studios
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Stat 3: Total Users */}
-                    <div
-                      onClick={() => handleTabChange("users")}
-                      className="group flex items-center gap-3 bg-white hover:border-purple-300 rounded-2xl border border-stone-200/80 px-4 py-2.5 shadow-2xs cursor-pointer transition min-w-[130px]"
-                    >
-                      <div className="h-10 w-10 rounded-xl bg-[#f5f3ff] flex items-center justify-center text-[#8b5cf6] shrink-0 group-hover:scale-105 transition">
-                        <Users size={18} />
-                      </div>
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-lg font-bold text-stone-900 leading-none">
-                            {stats.totalUsers}
-                          </span>
-                          <span className="text-xs text-[#8b5cf6] font-bold group-hover:translate-x-0.5 transition-transform">→</span>
-                        </div>
-                        <span className="text-[11px] font-medium text-stone-400 mt-1 whitespace-nowrap">
-                          Total Users
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Stat 4: B2B Demands */}
-                    <div
-                      onClick={() => handleTabChange("bulk")}
-                      className="group flex items-center gap-3 bg-white hover:border-amber-300 rounded-2xl border border-stone-200/80 px-4 py-2.5 shadow-2xs cursor-pointer transition min-w-[130px]"
-                    >
-                      <div className="h-10 w-10 rounded-xl bg-[#fffbeb] flex items-center justify-center text-[#f59e0b] shrink-0 group-hover:scale-105 transition">
-                        <Layers size={18} />
-                      </div>
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-lg font-bold text-stone-900 leading-none">
-                            {stats.totalBulk}
-                          </span>
-                          <span className="text-xs text-[#f59e0b] font-bold group-hover:translate-x-0.5 transition-transform">→</span>
-                        </div>
-                        <span className="text-[11px] font-medium text-stone-400 mt-1 whitespace-nowrap">
-                          B2B Demands
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right: Desk Illustration */}
-                <div className="shrink-0 flex items-center justify-center lg:justify-end">
-                  <img
-                    src="/assets/admin_home/hero_illustration.png"
-                    alt="Platform Overview"
-                    className="w-full max-w-[340px] sm:max-w-[400px] lg:max-w-[440px] h-auto object-contain select-none pointer-events-none drop-shadow-2xs"
-                  />
+                    className="font-bold text-[#8f2338] hover:underline cursor-pointer"
+                  >
+                    View System Alerts →
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Platform Overview Modules Section */}
-            <div>
-              <div>
-                <h2 className="text-base sm:text-lg font-bold text-stone-900">
-                  Platform Overview
-                </h2>
-                <p className="text-xs text-stone-500 mt-0.5">
-                  Quick access to manage key modules of Mera Tailor.
-                </p>
-              </div>
-
-              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {/* Module 1: Tailor Verifications */}
-                <div
-                  onClick={() => handleTabChange("verifications")}
-                  className="group relative flex flex-col justify-between rounded-3xl border border-stone-200/80 bg-white p-6 shadow-2xs hover:shadow-md hover:border-stone-300 transition cursor-pointer"
+            {/* Quick Actions Shortcuts Bar */}
+            <div className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-2xs">
+              <h3 className="text-sm font-bold text-stone-900 mb-4">
+                Operational Management Shortcuts
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateUserModalOpen(true)}
+                  className="p-3.5 rounded-2xl border border-stone-200 bg-stone-50/50 hover:bg-stone-50 hover:border-purple-200 transition text-left cursor-pointer group"
                 >
-                  <div>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="h-11 w-11 rounded-2xl flex items-center justify-center bg-[#fef2f2] text-[#ef4444] shadow-2xs group-hover:scale-105 transition">
-                        <ShieldCheck size={22} />
-                      </div>
-                      <img
-                        src="/assets/admin_home/card_verification.png"
-                        alt="Tailor Verifications"
-                        className="h-14 w-auto object-contain"
-                      />
-                    </div>
-                    <h3 className="mt-4 text-base font-bold text-stone-900 group-hover:text-stone-950">
-                      Tailor Verifications
-                    </h3>
-                    <p className="mt-1.5 text-xs text-stone-500 leading-relaxed">
-                      Review pending atelier registration applications and approve or reject verified badges.
-                    </p>
+                  <div className="h-8 w-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-2 group-hover:scale-105 transition">
+                    <Plus size={16} />
                   </div>
-                  <div className="mt-6 pt-3 border-t border-stone-100 flex justify-end">
-                    <span className="h-8 w-8 rounded-full bg-stone-50 group-hover:bg-[#8f2338] text-stone-400 group-hover:text-white flex items-center justify-center transition">
-                      <ArrowRight size={14} />
-                    </span>
-                  </div>
-                </div>
+                  <span className="text-xs font-bold text-stone-900 block">Create User</span>
+                  <span className="text-[11px] text-stone-400 block mt-0.5">Add account credentials</span>
+                </button>
 
-                {/* Module 2: User Accounts & Roles */}
-                <div
-                  onClick={() => handleTabChange("users")}
-                  className="group relative flex flex-col justify-between rounded-3xl border border-stone-200/80 bg-white p-6 shadow-2xs hover:shadow-md hover:border-stone-300 transition cursor-pointer"
+                <button
+                  type="button"
+                  onClick={handleOpenCreateTailor}
+                  className="p-3.5 rounded-2xl border border-stone-200 bg-stone-50/50 hover:bg-stone-50 hover:border-emerald-200 transition text-left cursor-pointer group"
                 >
-                  <div>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="h-11 w-11 rounded-2xl flex items-center justify-center bg-[#f5f3ff] text-[#8b5cf6] shadow-2xs group-hover:scale-105 transition">
-                        <Users size={22} />
-                      </div>
-                      <img
-                        src="/assets/admin_home/card_users.png"
-                        alt="User Accounts"
-                        className="h-14 w-auto object-contain"
-                      />
-                    </div>
-                    <h3 className="mt-4 text-base font-bold text-stone-900 group-hover:text-stone-950">
-                      User Accounts & Roles
-                    </h3>
-                    <p className="mt-1.5 text-xs text-stone-500 leading-relaxed">
-                      Manage customers, tailors, businesses, and admins.
-                    </p>
+                  <div className="h-8 w-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2 group-hover:scale-105 transition">
+                    <Store size={16} />
                   </div>
-                  <div className="mt-6 pt-3 border-t border-stone-100 flex justify-end">
-                    <span className="h-8 w-8 rounded-full bg-stone-50 group-hover:bg-purple-600 text-stone-400 group-hover:text-white flex items-center justify-center transition">
-                      <ArrowRight size={14} />
-                    </span>
-                  </div>
-                </div>
+                  <span className="text-xs font-bold text-stone-900 block">Add Atelier</span>
+                  <span className="text-[11px] text-stone-400 block mt-0.5">List tailor workshop</span>
+                </button>
 
-                {/* Module 3: Tailor Studios Directory */}
-                <div
-                  onClick={() => handleTabChange("tailors")}
-                  className="group relative flex flex-col justify-between rounded-3xl border border-stone-200/80 bg-white p-6 shadow-2xs hover:shadow-md hover:border-stone-300 transition cursor-pointer"
+                <button
+                  type="button"
+                  onClick={() => setIsAddBulkModalOpen(true)}
+                  className="p-3.5 rounded-2xl border border-stone-200 bg-stone-50/50 hover:bg-stone-50 hover:border-amber-200 transition text-left cursor-pointer group"
                 >
-                  <div>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="h-11 w-11 rounded-2xl flex items-center justify-center bg-[#ecfdf5] text-[#10b981] shadow-2xs group-hover:scale-105 transition">
-                        <Store size={22} />
-                      </div>
-                      <img
-                        src="/assets/admin_home/card_studios.png"
-                        alt="Studios"
-                        className="h-14 w-auto object-contain"
-                      />
-                    </div>
-                    <h3 className="mt-4 text-base font-bold text-stone-900 group-hover:text-stone-950">
-                      Tailor Studios Directory
-                    </h3>
-                    <p className="mt-1.5 text-xs text-stone-500 leading-relaxed">
-                      Explore and manage listed artisan workshops with map view.
-                    </p>
+                  <div className="h-8 w-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-2 group-hover:scale-105 transition">
+                    <Layers size={16} />
                   </div>
-                  <div className="mt-6 pt-3 border-t border-stone-100 flex justify-end">
-                    <span className="h-8 w-8 rounded-full bg-stone-50 group-hover:bg-emerald-600 text-stone-400 group-hover:text-white flex items-center justify-center transition">
-                      <ArrowRight size={14} />
-                    </span>
-                  </div>
-                </div>
+                  <span className="text-xs font-bold text-stone-900 block">Post B2B RFQ</span>
+                  <span className="text-[11px] text-stone-400 block mt-0.5">Uniform tender request</span>
+                </button>
 
-                {/* Module 4: B2B Bulk Orders & RFQs */}
-                <div
-                  onClick={() => handleTabChange("bulk")}
-                  className="group relative flex flex-col justify-between rounded-3xl border border-stone-200/80 bg-white p-6 shadow-2xs hover:shadow-md hover:border-stone-300 transition cursor-pointer"
+                <button
+                  type="button"
+                  onClick={() => handleTabChange("announcements")}
+                  className="p-3.5 rounded-2xl border border-stone-200 bg-stone-50/50 hover:bg-stone-50 hover:border-rose-200 transition text-left cursor-pointer group"
                 >
-                  <div>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="h-11 w-11 rounded-2xl flex items-center justify-center bg-[#fffbeb] text-[#f59e0b] shadow-2xs group-hover:scale-105 transition">
-                        <Layers size={22} />
-                      </div>
-                      <img
-                        src="/assets/admin_home/card_bulk.png"
-                        alt="Bulk RFQ"
-                        className="h-14 w-auto object-contain"
-                      />
-                    </div>
-                    <h3 className="mt-4 text-base font-bold text-stone-900 group-hover:text-stone-950">
-                      B2B Bulk Orders & RFQs
-                    </h3>
-                    <p className="mt-1.5 text-xs text-stone-500 leading-relaxed">
-                      Moderate bulk requests and enterprise quotation demands.
-                    </p>
+                  <div className="h-8 w-8 rounded-xl bg-rose-50 text-[#8f2338] flex items-center justify-center mb-2 group-hover:scale-105 transition">
+                    <Megaphone size={16} />
                   </div>
-                  <div className="mt-6 pt-3 border-t border-stone-100 flex justify-end">
-                    <span className="h-8 w-8 rounded-full bg-stone-50 group-hover:bg-amber-600 text-stone-400 group-hover:text-white flex items-center justify-center transition">
-                      <ArrowRight size={14} />
-                    </span>
-                  </div>
-                </div>
-
-                {/* Module 5: System Console */}
-                <div
-                  onClick={() => handleTabChange("verifications")}
-                  className="group relative flex flex-col justify-between rounded-3xl border border-stone-200/80 bg-white p-6 shadow-2xs hover:shadow-md hover:border-stone-300 transition cursor-pointer"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="h-11 w-11 rounded-2xl flex items-center justify-center bg-[#eff6ff] text-[#3b82f6] shadow-2xs group-hover:scale-105 transition">
-                        <LayoutDashboard size={22} />
-                      </div>
-                      <img
-                        src="/assets/admin_home/card_console.png"
-                        alt="Console"
-                        className="h-14 w-auto object-contain"
-                      />
-                    </div>
-                    <h3 className="mt-4 text-base font-bold text-stone-900 group-hover:text-stone-950">
-                      System Console
-                    </h3>
-                    <p className="mt-1.5 text-xs text-stone-500 leading-relaxed">
-                      View logs, monitor system health and background jobs.
-                    </p>
-                  </div>
-                  <div className="mt-6 pt-3 border-t border-stone-100 flex justify-end">
-                    <span className="h-8 w-8 rounded-full bg-stone-50 group-hover:bg-blue-600 text-stone-400 group-hover:text-white flex items-center justify-center transition">
-                      <ArrowRight size={14} />
-                    </span>
-                  </div>
-                </div>
-
-                {/* Module 6: Admin Settings */}
-                <div
-                  onClick={() => handleTabChange("settings")}
-                  className="group relative flex flex-col justify-between rounded-3xl border border-stone-200/80 bg-white p-6 shadow-2xs hover:shadow-md hover:border-stone-300 transition cursor-pointer"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="h-11 w-11 rounded-2xl flex items-center justify-center bg-[#f1f5f9] text-[#475569] shadow-2xs group-hover:scale-105 transition">
-                        <Settings size={22} />
-                      </div>
-                      <img
-                        src="/assets/admin_home/card_settings.png"
-                        alt="Admin Settings"
-                        className="h-14 w-auto object-contain"
-                      />
-                    </div>
-                    <h3 className="mt-4 text-base font-bold text-stone-900 group-hover:text-stone-950">
-                      Admin Settings
-                    </h3>
-                    <p className="mt-1.5 text-xs text-stone-500 leading-relaxed">
-                      Manage your profile, preferences and security settings.
-                    </p>
-                  </div>
-                  <div className="mt-6 pt-3 border-t border-stone-100 flex justify-end">
-                    <span className="h-8 w-8 rounded-full bg-stone-50 group-hover:bg-stone-800 text-stone-400 group-hover:text-white flex items-center justify-center transition">
-                      <ArrowRight size={14} />
-                    </span>
-                  </div>
-                </div>
+                  <span className="text-xs font-bold text-stone-900 block">Broadcast Alert</span>
+                  <span className="text-[11px] text-stone-400 block mt-0.5">Platform announcement</span>
+                </button>
               </div>
             </div>
           </div>
         )}
 
         {/* =========================================================
-            TAB 2: TAILOR VERIFICATIONS
+            TAB 2: VERIFICATIONS (TAILOR STUDIOS & BUSINESS GSTIN)
         ========================================================== */}
         {tab === "verifications" && (
           <div className="space-y-6 animate-fadeIn">
             {/* Header */}
-            <div className="flex items-center gap-3">
-              <div className="h-11 w-11 rounded-2xl bg-rose-50 text-[#8f2338] flex items-center justify-center shrink-0">
-                <ShieldCheck size={22} />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-11 w-11 rounded-2xl bg-rose-50 text-[#8f2338] flex items-center justify-center shrink-0">
+                  <ShieldCheck size={22} />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-stone-900">
+                    Verification & Compliance Center
+                  </h1>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    Audit atelier registration applications and commercial enterprise GSTIN filings.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-stone-900">
-                  Tailor Studio Verifications
-                </h1>
-                <p className="text-xs text-stone-500 mt-0.5">
-                  Review and manage atelier registration applications.
-                </p>
+
+              {/* Sub-tab Switcher: Tailors vs Businesses */}
+              <div className="inline-flex rounded-2xl bg-stone-100 p-1 border border-stone-200/80 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setVerificationSubTab("tailors")}
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition cursor-pointer ${
+                    verificationSubTab === "tailors"
+                      ? "bg-white text-stone-900 shadow-xs"
+                      : "text-stone-600 hover:text-stone-950"
+                  }`}
+                >
+                  <Store size={14} />
+                  <span>Tailor Studios</span>
+                  {stats.pendingTailorsCount > 0 && (
+                    <span className="rounded-full bg-rose-500 px-1.5 py-0.2 text-[10px] font-extrabold text-white">
+                      {stats.pendingTailorsCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVerificationSubTab("businesses")}
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition cursor-pointer ${
+                    verificationSubTab === "businesses"
+                      ? "bg-white text-stone-900 shadow-xs"
+                      : "text-stone-600 hover:text-stone-950"
+                  }`}
+                >
+                  <Building2 size={14} />
+                  <span>Business GSTIN</span>
+                  {stats.pendingBusinessesCount > 0 && (
+                    <span className="rounded-full bg-amber-500 px-1.5 py-0.2 text-[10px] font-extrabold text-white">
+                      {stats.pendingBusinessesCount}
+                    </span>
+                  )}
+                </button>
               </div>
             </div>
 
-            {/* Filter Pills & Search */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setVerificationFilter("pending")}
-                  className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-                    verificationFilter === "pending"
-                      ? "bg-stone-900 text-white"
-                      : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-                  }`}
-                >
-                  Pending ({stats.pendingCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setVerificationFilter("verified")}
-                  className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-                    verificationFilter === "verified"
-                      ? "bg-stone-900 text-white"
-                      : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-                  }`}
-                >
-                  Verified ({stats.verifiedCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setVerificationFilter("under_review")}
-                  className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-                    verificationFilter === "under_review"
-                      ? "bg-stone-900 text-white"
-                      : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-                  }`}
-                >
-                  Under Review (0)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setVerificationFilter("all")}
-                  className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-                    verificationFilter === "all"
-                      ? "bg-stone-900 text-white"
-                      : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-                  }`}
-                >
-                  All Studios ({stats.totalTailors})
-                </button>
-              </div>
-
-              <div className="relative w-full sm:w-64">
-                <Search size={14} className="absolute left-3.5 top-2.5 text-stone-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search studio, owner or location..."
-                  className="w-full rounded-xl border border-stone-200/90 bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-stone-400"
-                />
-              </div>
-            </div>
-
-            {/* Empty State matching image when pending is 0 */}
-            {filteredTailors.length === 0 ? (
-              <div className="rounded-3xl border border-stone-200/80 bg-white p-12 text-center shadow-2xs my-4 max-w-2xl mx-auto">
-                <div className="relative mx-auto w-24 h-24 mb-4 flex items-center justify-center">
-                  <div className="w-16 h-20 bg-blue-50 border border-blue-200 rounded-xl flex flex-col justify-center items-center gap-1.5 shadow-xs">
-                    <div className="w-8 h-1 bg-blue-200 rounded-full" />
-                    <div className="w-10 h-1 bg-blue-200 rounded-full" />
-                    <div className="w-7 h-1 bg-blue-200 rounded-full" />
+            {verificationSubTab === "tailors" ? (
+              <>
+                {/* Filter Pills & Search for Tailors */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setVerificationFilter("pending")}
+                      className={`rounded-full px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                        verificationFilter === "pending"
+                          ? "bg-stone-900 text-white"
+                          : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                      }`}
+                    >
+                      Pending ({stats.pendingTailorsCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVerificationFilter("verified")}
+                      className={`rounded-full px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                        verificationFilter === "verified"
+                          ? "bg-stone-900 text-white"
+                          : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                      }`}
+                    >
+                      Verified ({stats.verifiedCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVerificationFilter("all")}
+                      className={`rounded-full px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                        verificationFilter === "all"
+                          ? "bg-stone-900 text-white"
+                          : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                      }`}
+                    >
+                      All Studios ({stats.totalTailors})
+                    </button>
                   </div>
-                  <div className="absolute -top-1 -right-1 h-9 w-9 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md border-2 border-white">
-                    <Check size={18} strokeWidth={3} />
+
+                  <div className="relative w-full sm:w-64">
+                    <Search size={14} className="absolute left-3.5 top-2.5 text-stone-400" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search studio, owner or location..."
+                      className="w-full rounded-xl border border-stone-200/90 bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-stone-400"
+                    />
                   </div>
                 </div>
 
-                <h3 className="text-base font-bold text-stone-900">
-                  No unverified tailor profiles.
-                </h3>
-                <p className="text-xs text-stone-500 mt-1">
-                  All active tailor studios are reviewed and verified.
-                </p>
-
-                <div className="mt-5">
-                  <button
-                    onClick={() => setVerificationFilter("all")}
-                    className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50"
-                  >
-                    View All Listed Studios
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredTailors.map((item) => (
-                  <div
-                    key={item._id}
-                    className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-2xs flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-base font-bold text-stone-900">{item.name}</h3>
-                            {item.verified || item.verificationStatus === "verified" ? (
-                              <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold">
-                                ✓ Verified
-                              </span>
-                            ) : (
-                              <span className="rounded-full bg-rose-50 text-[#8f2338] border border-rose-200 px-2.5 py-0.5 text-[10px] font-bold">
-                                ⏳ Under Review
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-stone-500 mt-0.5">
-                            {item.owner || "Artisan Master"} • {item.experience || 5}y experience
-                          </p>
-                        </div>
-                        <span className="text-xs font-bold text-[#8f2338]">
-                          From ₹{item.minPrice || 499}
-                        </span>
+                {/* Empty State when filteredTailors is 0 */}
+                {filteredTailors.length === 0 ? (
+                  <div className="rounded-3xl border border-stone-200/80 bg-white p-12 text-center shadow-2xs my-4 max-w-2xl mx-auto">
+                    <div className="relative mx-auto w-24 h-24 mb-4 flex items-center justify-center">
+                      <div className="w-16 h-20 bg-blue-50 border border-blue-200 rounded-xl flex flex-col justify-center items-center gap-1.5 shadow-xs">
+                        <div className="w-8 h-1 bg-blue-200 rounded-full" />
+                        <div className="w-10 h-1 bg-blue-200 rounded-full" />
+                        <div className="w-7 h-1 bg-blue-200 rounded-full" />
                       </div>
-
-                      <div className="mt-3 bg-[#fdfbf9] p-3 rounded-2xl border border-stone-100 text-xs text-stone-600 flex flex-wrap gap-x-4 gap-y-1">
-                        <span className="flex items-center gap-1.5">
-                          <MapPin size={13} className="text-[#8f2338]" />
-                          {item.area ? `${item.area}, ` : ""}{item.city || "Jaipur"}
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <Phone size={13} className="text-stone-400" />
-                          {item.phone || "—"}
-                        </span>
+                      <div className="absolute -top-1 -right-1 h-9 w-9 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md border-2 border-white">
+                        <Check size={18} strokeWidth={3} />
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditTailor(item)}
-                        title="Edit Studio Details"
-                        className="h-8 w-8 rounded-xl border border-stone-200 bg-white text-stone-600 hover:text-stone-900 hover:bg-stone-50 flex items-center justify-center transition cursor-pointer"
-                      >
-                        <Pencil size={14} />
-                      </button>
+                    <h3 className="text-base font-bold text-stone-900">
+                      No unverified tailor profiles found.
+                    </h3>
+                    <p className="text-xs text-stone-500 mt-1">
+                      All active tailor studios in this filter are reviewed and verified.
+                    </p>
 
-                      <div className="flex items-center gap-1.5">
-                        {item.verified || item.verificationStatus === "verified" ? (
+                    <div className="mt-5">
+                      <button
+                        onClick={() => setVerificationFilter("all")}
+                        className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 cursor-pointer"
+                      >
+                        View All Listed Studios
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {filteredTailors.map((item) => (
+                      <div
+                        key={item._id}
+                        className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-2xs flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <TailorAvatar
+                                image={item.image}
+                                name={item.name}
+                                size="md"
+                                alt={item.name}
+                              />
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h3 className="text-base font-bold text-stone-900">{item.name}</h3>
+                                  {item.verified || item.verificationStatus === "verified" ? (
+                                    <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold">
+                                      ✓ Verified
+                                    </span>
+                                  ) : (
+                                    <span className="rounded-full bg-rose-50 text-[#8f2338] border border-rose-200 px-2.5 py-0.5 text-[10px] font-bold">
+                                      ⏳ Under Review
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-stone-500 mt-0.5">
+                                  {item.owner || "Artisan Master"} • {item.experience || 5}y experience
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-xs font-bold text-[#8f2338]">
+                              From ₹{item.minPrice || 499}
+                            </span>
+                          </div>
+
+                          <div className="mt-3 bg-[#fdfbf9] p-3 rounded-2xl border border-stone-100 text-xs text-stone-600 flex flex-wrap gap-x-4 gap-y-1">
+                            <span className="flex items-center gap-1.5">
+                              <MapPin size={13} className="text-[#8f2338]" />
+                              {item.area ? `${item.area}, ` : ""}{item.city || "Jaipur"}
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              <Phone size={13} className="text-stone-400" />
+                              {item.phone || "—"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between">
                           <button
                             type="button"
-                            onClick={() => handleVerifyTailor(item._id, false)}
-                            title="Revoke Verification"
-                            className="h-8 w-8 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center transition cursor-pointer"
+                            onClick={() => handleOpenEditTailor(item)}
+                            title="Edit Studio Details"
+                            className="h-8 w-8 rounded-xl border border-stone-200 bg-white text-stone-600 hover:text-stone-900 hover:bg-stone-50 flex items-center justify-center transition cursor-pointer"
                           >
-                            <X size={15} strokeWidth={2.4} />
+                            <Pencil size={14} />
                           </button>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleVerifyTailor(item._id, false)}
-                              title="Reject Verification"
-                              className="h-8 w-8 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-100 hover:text-stone-900 flex items-center justify-center transition cursor-pointer"
-                            >
-                              <X size={15} strokeWidth={2.4} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleVerifyTailor(item._id, true)}
-                              title="Approve Studio"
-                              className="h-8 w-8 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-2xs transition cursor-pointer"
-                            >
-                              <Check size={15} strokeWidth={2.6} />
-                            </button>
-                          </>
-                        )}
+
+                          <div className="flex items-center gap-1.5">
+                            {item.verified || item.verificationStatus === "verified" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleVerifyTailor(item._id, false)}
+                                title="Revoke Verification"
+                                disabled={actingId === item._id}
+                                className="h-8 px-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center gap-1.5 text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                              >
+                                <X size={14} strokeWidth={2.4} />
+                                <span>Revoke</span>
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerifyTailor(item._id, false)}
+                                  title="Reject Verification"
+                                  disabled={actingId === item._id}
+                                  className="h-8 px-3 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-100 hover:text-stone-900 flex items-center gap-1.5 text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                                >
+                                  <X size={14} strokeWidth={2.4} />
+                                  <span>Reject</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerifyTailor(item._id, true)}
+                                  title="Approve Studio"
+                                  disabled={actingId === item._id}
+                                  className="h-8 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 text-xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
+                                >
+                                  <Check size={14} strokeWidth={2.6} />
+                                  <span>Approve Studio</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Business GSTIN Compliance Sub-Tab */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setVerificationFilter("pending")}
+                      className={`rounded-full px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                        verificationFilter === "pending"
+                          ? "bg-stone-900 text-white"
+                          : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                      }`}
+                    >
+                      Pending GSTIN ({stats.pendingBusinessesCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVerificationFilter("verified")}
+                      className={`rounded-full px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                        verificationFilter === "verified"
+                          ? "bg-stone-900 text-white"
+                          : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                      }`}
+                    >
+                      Verified ({stats.verifiedBusinessesCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVerificationFilter("all")}
+                      className={`rounded-full px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                        verificationFilter === "all"
+                          ? "bg-stone-900 text-white"
+                          : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                      }`}
+                    >
+                      All Enterprises ({stats.totalBusinesses})
+                    </button>
+                  </div>
+
+                  <div className="relative w-full sm:w-64">
+                    <Search size={14} className="absolute left-3.5 top-2.5 text-stone-400" />
+                    <input
+                      type="text"
+                      value={businessSearchQuery}
+                      onChange={(e) => setBusinessSearchQuery(e.target.value)}
+                      placeholder="Search company, GSTIN, person..."
+                      className="w-full rounded-xl border border-stone-200/90 bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-stone-400"
+                    />
+                  </div>
+                </div>
+
+                {filteredBusinesses.length === 0 ? (
+                  <div className="rounded-3xl border border-stone-200/80 bg-white p-12 text-center shadow-2xs my-4 max-w-2xl mx-auto">
+                    <div className="h-14 w-14 rounded-2xl bg-amber-50 text-[#f59e0b] mx-auto flex items-center justify-center mb-3">
+                      <Building2 size={28} />
+                    </div>
+                    <h3 className="text-base font-bold text-stone-900">
+                      No business verification records.
+                    </h3>
+                    <p className="text-xs text-stone-500 mt-1">
+                      No corporate accounts match this verification filter.
+                    </p>
+                    <div className="mt-5">
+                      <button
+                        onClick={() => setVerificationFilter("all")}
+                        className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 cursor-pointer"
+                      >
+                        View All Registered Businesses
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {filteredBusinesses.map((b) => {
+                      const isVer = b.verified || b.verificationStatus === "verified" || b.businessProfile?.verificationStatus === "verified";
+                      const gstin = b.businessProfile?.gstin || b.gstin || "Not Submitted";
+                      const company = b.companyName || b.businessProfile?.companyName || "Commercial Client";
+                      const contact = b.name || b.contactPerson || "Authorized Representative";
+                      const bId = b.id || b.businessId || b._id;
+
+                      return (
+                        <div
+                          key={bId}
+                          className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-2xs flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-2xl bg-[#eff6ff] text-[#3b82f6] flex items-center justify-center shrink-0 font-bold">
+                                  <Building2 size={20} />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="text-base font-bold text-stone-900">{company}</h3>
+                                    {isVer ? (
+                                      <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold">
+                                        ✓ GSTIN Verified
+                                      </span>
+                                    ) : (
+                                      <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-0.5 text-[10px] font-bold">
+                                        ⏳ Audit Required
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-stone-500 mt-0.5">
+                                    Contact: {contact} • {b.email || "No email"}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-3 bg-[#fdfbf9] p-3 rounded-2xl border border-stone-100 text-xs text-stone-600 space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] text-stone-400 font-semibold uppercase">GSTIN / Tax ID:</span>
+                                <span className="font-mono font-bold text-stone-800 bg-white px-2 py-0.5 rounded-lg border border-stone-200 text-[11px]">
+                                  {gstin}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] text-stone-400 font-semibold uppercase">Phone:</span>
+                                <span>{b.phone || b.contactPhone || "—"}</span>
+                              </div>
+                              {b.businessProfile?.address && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] text-stone-400 font-semibold uppercase">Registered Office:</span>
+                                  <span className="truncate max-w-[200px]">{b.businessProfile.address}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-end gap-2">
+                            {isVer ? (
+                              <button
+                                type="button"
+                                onClick={() => handleVerifyBusiness(bId, false)}
+                                title="Revoke Verification"
+                                disabled={actingId === bId}
+                                className="h-8 px-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center gap-1.5 text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                              >
+                                <X size={14} strokeWidth={2.4} />
+                                <span>Revoke Verification</span>
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerifyBusiness(bId, false)}
+                                  title="Reject Application"
+                                  disabled={actingId === bId}
+                                  className="h-8 px-3 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-100 hover:text-stone-900 flex items-center gap-1.5 text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                                >
+                                  <X size={14} strokeWidth={2.4} />
+                                  <span>Reject</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerifyBusiness(bId, true)}
+                                  title="Approve Business GSTIN"
+                                  disabled={actingId === bId}
+                                  className="h-8 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 text-xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
+                                >
+                                  <Check size={14} strokeWidth={2.6} />
+                                  <span>Approve GSTIN</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -1771,55 +2182,69 @@ export default function AdminPortal() {
                         </td>
 
                         <td className="py-3.5 px-2">
-                          <select
-                            value={u.role}
-                            onChange={(e) => handleChangeUserRole(u, e.target.value)}
-                            className="rounded-lg border border-stone-200 bg-stone-50/80 px-2.5 py-1 text-xs font-semibold capitalize outline-none focus:border-stone-400 cursor-pointer"
-                          >
-                            {["customer", "tailor", "business", "admin"].map((r) => (
-                              <option key={r} value={r}>
-                                {r.charAt(0).toUpperCase() + r.slice(1)}
-                              </option>
-                            ))}
-                          </select>
+                          {isSelf ? (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-stone-100 text-stone-700 text-xs font-bold border border-stone-200">
+                              Admin (Locked)
+                            </span>
+                          ) : (
+                            <select
+                              value={u.role}
+                              onChange={(e) => handleChangeUserRole(u, e.target.value)}
+                              className="rounded-lg border border-stone-200 bg-stone-50/80 px-2.5 py-1 text-xs font-semibold capitalize outline-none focus:border-stone-400 cursor-pointer"
+                            >
+                              {["customer", "tailor", "business", "admin"].map((r) => (
+                                <option key={r} value={r}>
+                                  {r.charAt(0).toUpperCase() + r.slice(1)}
+                                </option>
+                              ))}
+                            </select>
+                          )}
                         </td>
 
                         <td className="py-3.5 px-2">
-                          <span className="rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 px-2.5 py-0.5 text-[10px] font-bold">
-                            Active
+                          <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${
+                            u.disabled
+                              ? "bg-rose-50 border-rose-200 text-rose-700"
+                              : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                          }`}>
+                            {u.disabled ? "Suspended" : "Active"}
                           </span>
                         </td>
 
                         <td className="py-3.5 px-2 text-right">
-                          <div className="inline-flex items-center gap-1.5 justify-end">
-                            {u.disabled ? (
+                          {isSelf ? (
+                            <span className="text-[11px] text-stone-400 font-medium italic pr-2">Current Session</span>
+                          ) : (
+                            <div className="inline-flex items-center gap-1.5 justify-end">
+                              {u.disabled ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleUserDisabled(u)}
+                                  title="Enable User Account"
+                                  className="h-8 w-8 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 flex items-center justify-center transition cursor-pointer"
+                                >
+                                  <UserCheck size={14} />
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleUserDisabled(u)}
+                                  title="Disable User Account"
+                                  className="h-8 w-8 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-100 hover:text-stone-900 flex items-center justify-center transition cursor-pointer"
+                                >
+                                  <UserX size={14} />
+                                </button>
+                              )}
                               <button
                                 type="button"
-                                onClick={() => handleToggleUserDisabled(u)}
-                                title="Enable User Account"
-                                className="h-8 w-8 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 flex items-center justify-center transition cursor-pointer"
+                                onClick={() => handleRemoveUser(u)}
+                                title="Delete User"
+                                className="h-8 w-8 rounded-xl border border-rose-200 bg-rose-50/50 text-rose-600 hover:bg-rose-100 flex items-center justify-center transition cursor-pointer"
                               >
-                                <UserCheck size={14} />
+                                <Trash2 size={14} />
                               </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleToggleUserDisabled(u)}
-                                title="Disable User Account"
-                                className="h-8 w-8 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-100 hover:text-stone-900 flex items-center justify-center transition cursor-pointer"
-                              >
-                                <UserX size={14} />
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveUser(u)}
-                              title="Delete User"
-                              className="h-8 w-8 rounded-xl border border-rose-200 bg-rose-50/50 text-rose-600 hover:bg-rose-100 flex items-center justify-center transition cursor-pointer"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
@@ -2972,8 +3397,9 @@ export default function AdminPortal() {
         </div>
       )}
 
-      {/* Footer */}
-      <Footer />
+        {/* Footer */}
+        <Footer />
+      </div>
     </div>
   );
 }

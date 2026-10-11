@@ -18,23 +18,60 @@ import Onboarding from './pages/Onboarding';
 import TailorDetail from './pages/TailorDetail';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 function RoleAccess({ roles, children }) {
-  const { isSignedIn, isLoaded, profile, profileError } = useAuth();
+  const { isSignedIn, isLoaded, isProfileLoaded, profile, profileError } = useAuth();
   const { t } = useTranslation();
-  if (!isLoaded || isSignedIn && !profile && !profileError) return <div className="grid min-h-[50vh] place-items-center text-slate-600">Loading account permissions…</div>;
-  if (isSignedIn && !profile && profileError) return <div role="alert" className="m-6 rounded-xl bg-amber-50 p-5 text-amber-950">{t('authFlow.accountLoadError', { error: profileError })}</div>;
-  if (!roles.includes(isSignedIn ? profile.role : 'guest')) return <Navigate to={isSignedIn ? '/dashboard' : '/'} replace/>;
+
+  if (!isLoaded || (isSignedIn && !isProfileLoaded)) {
+    return (
+      <div className="grid min-h-[50vh] place-items-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-9 w-9 animate-spin rounded-full border-3 border-stone-200 border-t-[#8f2338]" />
+          <span className="text-xs font-semibold text-stone-600">
+            {t('authFlow.loadingPermissions', 'Loading account permissions…')}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (isSignedIn && !profile && profileError) {
+    return (
+      <div role="alert" className="m-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950 max-w-lg mx-auto shadow-xs">
+        <p className="font-bold text-sm mb-1">{t('common.error', 'Error')}</p>
+        <p className="text-xs text-amber-800 leading-relaxed">{t('authFlow.accountLoadError', { error: profileError })}</p>
+      </div>
+    );
+  }
+
+  const userRole = isSignedIn ? profile?.role : 'guest';
+  if (!roles.includes(userRole)) {
+    if (isSignedIn) {
+      const fallbackUrl = profile?.role === 'admin' ? '/admin' : '/dashboard';
+      return <Navigate to={fallbackUrl} replace />;
+    }
+    return <Navigate to="/" replace />;
+  }
+
   return children;
 }
 
 function AuthFlowGuard() {
-  const { isSignedIn, isLoaded, profile } = useAuth();
+  const { isSignedIn, isLoaded, isProfileLoaded, profile } = useAuth();
   const { t } = useTranslation();
-  const location = useLocation(); const navigate = useNavigate();
+  const location = useLocation();
+  const navigate = useNavigate();
+
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || !profile) return;
-    if (!profile.onboardingCompleted && location.pathname !== '/onboarding') navigate('/onboarding', { replace: true });
+    if (!isLoaded || !isSignedIn || !isProfileLoaded || !profile) return;
+
+    if (!profile.onboardingCompleted && location.pathname !== '/onboarding') {
+      navigate('/onboarding', { replace: true });
+      return;
+    }
+
     if (profile.onboardingCompleted && location.pathname === '/onboarding') {
       try {
         const pendingOrder = JSON.parse(sessionStorage.getItem('meraTailor.pending-order') || 'null');
@@ -42,24 +79,38 @@ function AuthFlowGuard() {
           navigate(`/tailors/${encodeURIComponent(pendingOrder.tailorId)}?checkout=resume`, { replace: true });
           return;
         }
-      } catch { sessionStorage.removeItem('meraTailor.pending-order'); }
-      navigate('/dashboard', { replace: true });
+      } catch {
+        sessionStorage.removeItem('meraTailor.pending-order');
+      }
+
+      const dest = profile.role === 'admin' ? '/admin' : '/dashboard';
+      navigate(dest, { replace: true });
     }
-  }, [isLoaded, isSignedIn, profile, location.pathname, navigate]);
+  }, [isLoaded, isSignedIn, isProfileLoaded, profile, location.pathname, navigate]);
+
   useEffect(() => {
     if (!isSignedIn || !profile?.onboardingCompleted || profile.location || !profile.id) return;
     const key = `meraTailor.locationPrompt.${profile.id}`;
     if (!sessionStorage.getItem(key)) {
-      toast.info(<span>{t('authFlow.locationPrompt')} <a href="/dashboard" className="font-semibold underline">{t('authFlow.openProfile')}</a></span>, { autoClose: 7500 });
+      toast.info(
+        <span>
+          {t('authFlow.locationPrompt')}{' '}
+          <a href="/dashboard" className="font-semibold underline">
+            {t('authFlow.openProfile')}
+          </a>
+        </span>,
+        { autoClose: 7500 }
+      );
       sessionStorage.setItem(key, 'shown');
     }
-  }, [isSignedIn, profile]);
+  }, [isSignedIn, profile, t]);
+
   return null;
 }
 
 const App = () => {
   return (
-    <div>
+    <ErrorBoundary>
       <AppMeta />
       <AuthFlowGuard />
       <ToastContainer position="top-right" newestOnTop closeOnClick pauseOnFocusLoss theme="light" />
@@ -78,10 +129,10 @@ const App = () => {
         <Route path="/contact" element={<Contact />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
         <Route path="/admin" element={<RoleAccess roles={['admin']}><AdminPortal /></RoleAccess>} />
       </Routes>
-    </div>
+    </ErrorBoundary>
   );
 };
 

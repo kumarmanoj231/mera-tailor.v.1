@@ -1444,9 +1444,10 @@ export default function FindTailors() {
                                 <div className="mt-2.5 pt-2 border-t border-stone-100 flex items-center justify-end">
                                   <Link
                                     to={`/tailors/${encodeURIComponent(tailor._id)}`}
-                                    className="w-full rounded-lg bg-[#8f2338] py-1.5 px-3 text-center text-xs font-bold text-white shadow-xs hover:bg-[#761c30] transition"
+                                    className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#8f2338] py-1.5 px-3 text-center text-xs font-bold text-white shadow-xs hover:bg-[#761c30] transition"
                                   >
-                                    {t("tailorView.viewInfo") || (isHi ? "विवरण देखें" : "View Details")} →
+                                    {!isSignedIn && <Lock size={11} className="text-rose-200" />}
+                                    <span>{t("tailorView.viewInfo") || (isHi ? "विवरण देखें" : "View Details")} →</span>
                                   </Link>
                                 </div>
                               </div>
@@ -1704,11 +1705,11 @@ export default function FindTailors() {
                               ) : (
                                 <button
                                   type="button"
-                                  onClick={openSignUp}
-                                  className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-semibold text-stone-600 hover:bg-rose-50 hover:text-[#8f2338] transition"
-                                  title="Sign in to call this studio"
+                                  onClick={() => openSignUp()}
+                                  className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-100 transition"
+                                  title="Sign in to unlock contact number"
                                 >
-                                  <Lock size={12} className="text-stone-400" />
+                                  <Lock size={12} className="text-amber-700" />
                                   <span>Call</span>
                                 </button>
                               )}
@@ -1717,7 +1718,9 @@ export default function FindTailors() {
                               <Link
                                 to={`/tailors/${encodeURIComponent(tailor._id)}`}
                                 className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] px-4 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] transition active:scale-95"
+                                title={isSignedIn ? "View complete atelier profile" : "View studio details (Guest Mode)"}
                               >
+                                {!isSignedIn && <Lock size={12} className="text-rose-200" />}
                                 <span>View information</span>
                                 <ArrowRight size={13} />
                               </Link>

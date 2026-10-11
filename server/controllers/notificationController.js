@@ -250,3 +250,49 @@ export async function broadcastAnnouncement(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
+
+/**
+ * Server-side helper to notify all administrators of platform events
+ * Deduplicates and creates persistent notifications for each admin.
+ */
+export async function notifyAdmins({
+  title,
+  message,
+  type = 'bid',
+  link = '/admin?tab=bulk',
+  metadata = {},
+}) {
+  try {
+    const adminIds = (process.env.CLERK_ADMIN_IDS || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+    const adminUsers = await User.find({ role: 'admin' }).select('clerkUserId').lean();
+    const recipientIds = new Set([
+      ...adminIds,
+      ...adminUsers.map((u) => u.clerkUserId).filter(Boolean),
+    ]);
+
+    if (!recipientIds.size) return [];
+
+    const notifications = await Promise.all(
+      Array.from(recipientIds).map((adminId) =>
+        createNotification({
+          recipientClerkUserId: adminId,
+          title,
+          message,
+          type,
+          link,
+          metadata,
+        })
+      )
+    );
+
+    return notifications.filter(Boolean);
+  } catch (error) {
+    console.error('Failed to notify admins:', error.message);
+    return [];
+  }
+}
+

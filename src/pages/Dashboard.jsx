@@ -100,10 +100,6 @@ export default function Dashboard() {
   const { t, i18n } = useTranslation();
   const { isSignedIn, user, profile, profileError, getToken, openSignUp, refreshProfile } = useAuth();
 
-  // For Admin: Combine dashboard and admin portal into one unified command center
-  if (isSignedIn && profile?.role === "admin") {
-    return <AdminPortal />;
-  }
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Active Tab:
@@ -139,6 +135,7 @@ export default function Dashboard() {
   const [tailorData, setTailorData] = useState(null);
   const [tailorRequests, setTailorRequests] = useState([]);
   const [tailorBulkFeed, setTailorBulkFeed] = useState([]);
+  const [tailorAwardedTenders, setTailorAwardedTenders] = useState([]);
   const [tailorOrdersFilter, setTailorOrdersFilter] = useState("all");
   const [tailorOrdersSearch, setTailorOrdersSearch] = useState("");
   const [globalError, setGlobalError] = useState("");
@@ -283,6 +280,7 @@ export default function Dashboard() {
               setTailorData(tData.tailor || null);
               setTailorRequests(tData.requests || []);
               setTailorBulkFeed(tData.bulkRequirements || []);
+              setTailorAwardedTenders(tData.awardedTenders || []);
             }
           }
         } else if (role === "business") {
@@ -1061,6 +1059,13 @@ export default function Dashboard() {
   // Clean real data bindings - zero mock or dummy fallbacks
   const displayOrder = orders.length > 0 ? orders[0] : null;
   const displaySavedStudio = savedTailors.length > 0 ? savedTailors[0] : null;
+
+  /* =========================================================
+     ADMIN AUTO-REDIRECT TO ADMIN PORTAL
+  ========================================================== */
+  if (isSignedIn && profile?.role === "admin") {
+    return <Navigate to="/admin" replace />;
+  }
 
   /* =========================================================
      AUTH / GUEST VIEW
@@ -3410,6 +3415,83 @@ export default function Dashboard() {
                 -------------------------------------------------- */}
                 {activeTab === "bulk" && (
                   <div className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-7 shadow-xs space-y-5">
+                    {/* 1. CONTRACTS WON / AWARDED TENDERS SECTION */}
+                    {tailorAwardedTenders.length > 0 && (
+                      <div className="rounded-3xl border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-50/70 via-teal-50/40 to-white p-5 sm:p-6 shadow-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-100 pb-3">
+                          <div className="flex items-center gap-2.5">
+                            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-emerald-600 text-white shadow-xs">
+                              <Award size={20} />
+                            </span>
+                            <div>
+                              <h3 className="font-serif text-lg font-bold text-emerald-950">
+                                Won Tender Contracts ({tailorAwardedTenders.length})
+                              </h3>
+                              <p className="text-xs text-emerald-700">
+                                Institutional supply agreements awarded directly to your bespoke atelier.
+                              </p>
+                            </div>
+                          </div>
+                          <Link
+                            to="/bulk"
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-800 transition"
+                          >
+                            <span>Manage in B2B Hub</span>
+                            <ArrowRight size={13} />
+                          </Link>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          {tailorAwardedTenders.map((contract) => (
+                            <div
+                              key={contract._id}
+                              className="rounded-2xl border border-emerald-200/90 bg-white p-4 shadow-2xs hover:shadow-md transition"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-emerald-900 uppercase">
+                                    <CheckCircle2 size={11} />
+                                    <span>Awarded & Locked</span>
+                                  </span>
+                                  <h4 className="mt-2 font-serif text-base font-bold text-stone-900">
+                                    {contract.title || `${contract.quantity} Units ${contract.category}`}
+                                  </h4>
+                                  <p className="text-xs text-stone-600 font-medium mt-0.5 flex items-center gap-1.5">
+                                    <Building2 size={13} className="text-stone-400" />
+                                    <span>{contract.organisation}</span>
+                                  </p>
+                                </div>
+
+                                <div className="text-right">
+                                  <span className="font-mono text-base font-black text-emerald-800 block">
+                                    {contract.quantity?.toLocaleString()} pcs
+                                  </span>
+                                  <span className="text-[11px] text-stone-500 font-medium">
+                                    Timeline: {contract.timeline || "30 Days"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <p className="mt-2.5 text-xs text-stone-600 line-clamp-2 leading-relaxed bg-stone-50/80 p-2.5 rounded-xl border border-stone-100">
+                                {contract.requirement}
+                              </p>
+
+                              <div className="mt-3 pt-2.5 border-t border-stone-100 flex items-center justify-between text-xs text-stone-500">
+                                <span>City: <strong className="text-stone-800">{contract.city || "Jaipur"}</strong></span>
+                                <Link
+                                  to="/bulk"
+                                  className="text-[#8f2338] font-bold hover:underline inline-flex items-center gap-1"
+                                >
+                                  <span>View RFP</span>
+                                  <ChevronRight size={12} />
+                                </Link>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 pb-4">
                       <div>
                         <h2 className="font-serif text-xl font-bold text-stone-900">
@@ -3419,9 +3501,18 @@ export default function Dashboard() {
                           {t("dashboardPage.bulkFeedSubtitle", "Browse live uniform, corporate apparel, and batch tailoring requirements posted by verified businesses.")}
                         </p>
                       </div>
-                      <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-700">
-                        {tailorBulkFeed.length} {t("dashboardPage.liveJobs", "Live Jobs")}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to="/bulk"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3.5 py-1.5 text-xs font-bold text-stone-700 hover:bg-stone-50 transition"
+                        >
+                          <span>Explore All in B2B Hub</span>
+                          <ArrowRight size={13} />
+                        </Link>
+                        <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-700">
+                          {tailorBulkFeed.length} {t("dashboardPage.liveJobs", "Live Jobs")}
+                        </span>
+                      </div>
                     </div>
 
                     {tailorBulkFeed.length === 0 ? (

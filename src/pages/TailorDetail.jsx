@@ -1171,6 +1171,25 @@ export default function TailorDetail() {
                   />
                 </div>
 
+                {/* Guest Sign-in Alert banner */}
+                {!isSignedIn && (
+                  <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-3.5 text-xs text-amber-950">
+                    <div className="flex items-center gap-2">
+                      <Lock size={15} className="shrink-0 text-amber-700" />
+                      <span className="font-medium">
+                        {t('tailorView.guestOrderNotice', 'Sign in as a customer to place an order or book fitting.')}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openSignUp()}
+                      className="shrink-0 rounded-xl bg-[#8f2338] px-3 py-1.5 text-xs font-bold text-white shadow-2xs hover:bg-[#781c2e] transition"
+                    >
+                      Sign In
+                    </button>
+                  </div>
+                )}
+
                 {/* STEP 1: CONFIGURE FIT & GARMENT */}
                 {step === 'details' ? (
                   <form onSubmit={goToReview} className="mt-6 space-y-4">

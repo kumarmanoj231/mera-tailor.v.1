@@ -201,6 +201,7 @@ function ClerkSession({ children }) {
   const clerk = useClerk();
   const [profile, setProfile] = useState(null);
   const [profileError, setProfileError] = useState('');
+  const [isProfileLoaded, setIsProfileLoaded] = useState(false);
   const [authMode, setAuthMode] = useState(null);
   const [pendingRole, setPendingRole] = useState(null);
 
@@ -208,6 +209,7 @@ function ClerkSession({ children }) {
     if (!isSignedIn) {
       setProfile(null);
       setProfileError('');
+      setIsProfileLoaded(true);
       return;
     }
 
@@ -223,7 +225,10 @@ function ClerkSession({ children }) {
 
         if (!response.ok) {
           const body = await response.json().catch(() => ({}));
-          if (active) setProfileError(body.error || 'Could not verify your app profile.');
+          if (active) {
+            setProfileError(body.error || 'Could not verify your app profile.');
+            setIsProfileLoaded(true);
+          }
           return;
         }
 
@@ -238,9 +243,13 @@ function ClerkSession({ children }) {
         if (active) {
           setProfile(nextProfile);
           setProfileError('');
+          setIsProfileLoaded(true);
         }
       } catch {
-        if (active) setProfileError('Could not connect to the account service.');
+        if (active) {
+          setProfileError('Could not connect to the account service.');
+          setIsProfileLoaded(true);
+        }
       }
     };
 
@@ -327,6 +336,7 @@ function ClerkSession({ children }) {
   const value = {
     isSignedIn: Boolean(isSignedIn),
     isLoaded,
+    isProfileLoaded,
     user,
     profile,
     profileError,
@@ -382,6 +392,7 @@ function MissingClerkSession({ children }) {
   const value = {
     isSignedIn: false,
     isLoaded: true,
+    isProfileLoaded: true,
     user: null,
     profile: null,
     profileError: '',

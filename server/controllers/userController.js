@@ -377,8 +377,31 @@ export async function getTailorDashboard(req, res) {
     const requests = await Order.find({ tailorId: tailor._id }).sort({ createdAt: -1 }).lean();
 
     // Fetch authentic B2B Bulk Requirements
+    // 1. Open market demands available for bidding
     const bulkRequirements = await BusinessRequest.find({
       status: { $in: ['open', 'submitted', 'reviewing', 'quoted'] },
+      isVerifiedBusiness: true,
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // 2. Awarded Tenders won by this tailor
+    const awardedTenders = await BusinessRequest.find({
+      $or: [
+        { awardedTailorId: tailor._id },
+        { 'quotes.tailorClerkUserId': req.authUserId, 'quotes.status': 'accepted' },
+        { status: 'awarded', 'quotes.tailorClerkUserId': req.authUserId, 'quotes.status': 'accepted' },
+      ],
+    })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .lean();
+
+    // 3. Tenders this tailor submitted quotes for
+    const myQuotedTenders = await BusinessRequest.find({
+      $or: [
+        { 'quotes.tailorClerkUserId': req.authUserId },
+        { 'quotes.tailorId': tailor._id },
+      ],
     })
       .sort({ createdAt: -1 })
       .lean();
@@ -455,6 +478,8 @@ export async function getTailorDashboard(req, res) {
       user: publicUser(req.appUser || {}),
       requests,
       bulkRequirements,
+      awardedTenders,
+      myQuotedTenders,
       earnings: {
         totalEarnings: totalRevenue,
         completedEarnings,
