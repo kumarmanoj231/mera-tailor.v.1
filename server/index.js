@@ -25,9 +25,16 @@ if (process.env.NODE_ENV === 'production' || fs.existsSync(path.resolve(distDir,
   app.get('*', (_req, res) => res.sendFile(path.resolve(distDir, 'index.html')));
 }
 
-const port = process.env.PORT || 5000;
+// Render requires binding to 0.0.0.0 and expects port 10000
+const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID);
+let port = process.env.PORT ? parseInt(process.env.PORT, 10) : (isRender ? 10000 : 5000);
+if (isRender && port === 5000) {
+  console.log('Notice: Detected Render with PORT=5000. Setting port to 10000 for Render proxy.');
+  port = 10000;
+}
+
 connectDatabase(process.env.MONGO_URI).then(() => {
-  app.listen(port, () => console.log(`MeraTailor API listening on ${port}`));
+  app.listen(port, '0.0.0.0', () => console.log(`MeraTailor API listening on 0.0.0.0:${port}`));
 }).catch(error => {
   console.error(`Startup blocked: ${error.message}`);
   process.exitCode = 1;
