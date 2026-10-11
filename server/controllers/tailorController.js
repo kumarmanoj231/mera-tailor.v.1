@@ -1,4 +1,4 @@
-import { BusinessRequest, Order, Tailor, User } from '../models.js';
+import { BusinessRequest, Order, Tailor, User, Review } from '../models.js';
 import { createNotification } from './notificationController.js';
 
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -437,6 +437,121 @@ export async function getPlatformStats(_req, res) {
       verifiedTailors: verifiedCount,
       totalOrders: orderCount,
       totalUsers: userCount,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * GET /api/tailors/:id/reviews
+ * Fetch verified client reviews for a tailor from the database
+ */
+export async function getTailorReviews(req, res) {
+  try {
+    if (!/^[a-f\d]{24}$/i.test(req.params.id)) {
+      return res.status(404).json({ error: 'Tailor not found' });
+    }
+    const reviews = await Review.find({ tailorId: req.params.id })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    // Map author avatars from User table if missing or updated
+    const userIds = [...new Set(reviews.map((r) => r.clerkUserId).filter(Boolean))];
+    let userMap = {};
+    if (userIds.length > 0) {
+      const users = await User.find({ clerkUserId: { $in: userIds } })
+        .select('clerkUserId avatar imageUrl firstName lastName')
+        .lean();
+      users.forEach((u) => {
+        userMap[u.clerkUserId] = u;
+      });
+    }
+
+    const formatted = reviews.map((r) => {
+      const u = userMap[r.clerkUserId];
+      const avatar = u?.avatar || u?.imageUrl || r.userAvatar || '';
+      const name = r.userName || (u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : 'Verified Customer');
+      return {
+        _id: r._id,
+        tailorId: r.tailorId,
+        userName: name || 'Verified Customer',
+        userAvatar: avatar,
+        rating: r.rating,
+        comment: r.comment,
+        createdAt: r.createdAt,
+      };
+    });
+
+    res.json(formatted);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * POST /api/tailors/:id/reviews
+ * Authenticated customer posts a review for a tailor
+ */
+export async function createTailorReview(req, res) {
+  try {
+    if (!/^[a-f\d]{24}$/i.test(req.params.id)) {
+      return res.status(404).json({ error: 'Tailor not found' });
+    }
+    const tailor = await Tailor.findById(req.params.id);
+    if (!tailor) return res.status(404).json({ error: 'Tailor not found' });
+
+    const rating = Math.min(5, Math.max(1, Number(req.body?.rating) || 5));
+    const comment = String(req.body?.comment || '').trim();
+    if (!comment) {
+      return res.status(400).json({ error: 'Review message is required' });
+    }
+
+    const user = req.appUser;
+    const authorName =
+      [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Verified Customer';
+    const authorAvatar = user?.avatar || user?.imageUrl || '';
+
+    const review = await Review.create({
+      tailorId: tailor._id,
+      clerkUserId: req.authUserId,
+      userName: authorName,
+      userAvatar: authorAvatar,
+      rating,
+      comment,
+    });
+
+    // Update tailor's live average rating and review count
+    const allReviews = await Review.find({ tailorId: tailor._id }).select('rating').lean();
+    const count = allReviews.length;
+    const avg = count > 0 ? Number((allReviews.reduce((sum, r) => sum + r.rating, 0) / count).toFixed(1)) : rating;
+
+    tailor.rating = avg;
+    tailor.reviews = count;
+    await tailor.save();
+
+    // Notify tailor if owner is mapped
+    if (tailor.ownerClerkUserId) {
+      createNotification({
+        recipientClerkUserId: tailor.ownerClerkUserId,
+        title: 'New Client Review',
+        message: `${authorName} rated your atelier ${rating}★: "${comment.slice(0, 100)}${comment.length > 100 ? '...' : ''}"`,
+        type: 'profile',
+        link: `/tailors/${tailor._id}`,
+      }).catch(() => {});
+    }
+
+    res.status(201).json({
+      _id: review._id,
+      tailorId: review.tailorId,
+      userName: authorName,
+      userAvatar: authorAvatar,
+      rating: review.rating,
+      comment: review.comment,
+      createdAt: review.createdAt,
+      newRating: avg,
+      newReviewCount: count,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

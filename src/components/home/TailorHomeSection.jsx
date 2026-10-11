@@ -102,6 +102,8 @@ export default function TailorHomeSection() {
 
   // Quick Action 3: Reviews modal
   const [isReviewsModalOpen, setIsReviewsModalOpen] = useState(false);
+  const [studioReviews, setStudioReviews] = useState([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
 
   // Workshop Capacity adjustment modal
   const [isCapacityModalOpen, setIsCapacityModalOpen] = useState(false);
@@ -128,7 +130,18 @@ export default function TailorHomeSection() {
         if (res.ok) {
           const data = await res.json();
           if (isMounted) {
-            if (data.tailor) setTailorProfile(data.tailor);
+            if (data.tailor) {
+              setTailorProfile(data.tailor);
+              // Fetch database reviews for this tailor
+              if (data.tailor._id) {
+                fetch(`/api/tailors/${data.tailor._id}/reviews`)
+                  .then((r) => (r.ok ? r.json() : []))
+                  .then((revs) => {
+                    if (isMounted && Array.isArray(revs)) setStudioReviews(revs);
+                  })
+                  .catch(() => {});
+              }
+            }
             if (Array.isArray(data.requests)) setOrdersList(data.requests);
             if (Array.isArray(data.bulkRequirements)) setBulkList(data.bulkRequirements);
             if (data.earnings) setLiveEarnings(data.earnings);
@@ -480,41 +493,7 @@ export default function TailorHomeSection() {
     }
   }
 
-  // Sample fallback B2B bulk feeds if none in database
-  const sampleBulkDemands = [
-    {
-      _id: "bulk-1",
-      title: "School Uniform Batch (250 sets)",
-      organisation: "St. Xavier's Academy",
-      requirement: "Complete summer uniform sets with embroidery crest. Boys shirts, trousers, and girls pleated skirts.",
-      quantity: 250,
-      city: "Jaipur, Rajasthan",
-      timeline: "30 days",
-      estBudget: "₹62,500",
-    },
-    {
-      _id: "bulk-2",
-      title: "Corporate Blazers & Trousers (80 pcs)",
-      organisation: "Meridian Hospitality Group",
-      requirement: "Poly-viscose corporate blazers with customized lining and matching slim-fit formal trousers.",
-      quantity: 80,
-      city: "Delhi NCR",
-      timeline: "20 days",
-      estBudget: "₹96,000",
-    },
-    {
-      _id: "bulk-3",
-      title: "Boutique Kurti & Palazzo Run (150 pcs)",
-      organisation: "Ananya Designer Boutique",
-      requirement: "Chanderi silk festive kurtis with gota-patti border hemming and matching elasticated palazzos.",
-      quantity: 150,
-      city: "Jaipur, Rajasthan",
-      timeline: "15 days",
-      estBudget: "₹45,000",
-    },
-  ];
-
-  const displayBulkList = bulkList.length > 0 ? bulkList.slice(0, 3) : sampleBulkDemands;
+  const displayBulkList = bulkList.slice(0, 3);
 
   const sidebarNavItems = [
     { id: "home", label: t("tailorDashboard.navHome", "Home"), icon: Home, route: "/" },
@@ -1187,51 +1166,63 @@ export default function TailorHomeSection() {
               </div>
 
               {/* Feed Items */}
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                {displayBulkList.map((job, idx) => (
-                  <div
-                    key={job._id || job.id || idx}
-                    className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-4 flex flex-col justify-between hover:border-[#8f2338]/40 hover:bg-white transition shadow-2xs"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="rounded-md bg-rose-50 border border-rose-100 px-2 py-0.5 text-[10px] font-bold text-[#8f2338]">
-                          {job.quantity || 100} units
-                        </span>
-                        {job.estBudget ? (
-                          <span className="text-[10px] font-semibold text-stone-500">
-                            Est. ₹{Number(job.estBudget).toLocaleString("en-IN")}
+              {displayBulkList.length > 0 ? (
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  {displayBulkList.map((job, idx) => (
+                    <div
+                      key={job._id || job.id || idx}
+                      className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-4 flex flex-col justify-between hover:border-[#8f2338]/40 hover:bg-white transition shadow-2xs"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="rounded-md bg-rose-50 border border-rose-100 px-2 py-0.5 text-[10px] font-bold text-[#8f2338]">
+                            {job.quantity || 100} units
                           </span>
-                        ) : null}
+                          {job.estBudget ? (
+                            <span className="text-[10px] font-semibold text-stone-500">
+                              Est. ₹{Number(job.estBudget).toLocaleString("en-IN")}
+                            </span>
+                          ) : null}
+                        </div>
+                        <h4 className="mt-2 font-sans text-xs font-bold text-stone-900 line-clamp-1">
+                          {job.requirement || job.title || "Bulk Batch Order"}
+                        </h4>
+                        <p className="text-[11px] text-stone-500 mt-0.5 line-clamp-1">
+                          {job.organisation || "Corporate / Institutional Buyer"} {job.city ? `• ${job.city}` : ""}
+                        </p>
+                        <p className="mt-2 text-xs text-stone-600 line-clamp-2 leading-relaxed">
+                          {job.requirement || job.notes || "Workshop tailoring batch order."}
+                        </p>
                       </div>
-                      <h4 className="mt-2 font-sans text-xs font-bold text-stone-900 line-clamp-1">
-                        {job.requirement || job.title || "Bulk Batch Order"}
-                      </h4>
-                      <p className="text-[11px] text-stone-500 mt-0.5 line-clamp-1">
-                        {job.organisation || "Corporate / Institutional Buyer"} {job.city ? `• ${job.city}` : ""}
-                      </p>
-                      <p className="mt-2 text-xs text-stone-600 line-clamp-2 leading-relaxed">
-                        {job.requirement || job.notes || "Workshop tailoring batch order."}
-                      </p>
-                    </div>
 
-                    <div className="mt-4 pt-2 border-t border-stone-100 flex items-center justify-between text-xs">
-                      <span className="text-stone-500 text-[11px]">{job.timeline || "30 days"}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenB2BModal(job)}
-                        className={`font-bold text-xs flex items-center gap-1 transition px-2.5 py-1 rounded-lg cursor-pointer ${
-                          job.hasMyBid
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            : "bg-[#8f2338] text-white hover:bg-[#761c30] shadow-2xs"
-                        }`}
-                      >
-                        <span>{job.hasMyBid ? "Bid Placed ✓" : "Submit Quote"}</span> →
-                      </button>
+                      <div className="mt-4 pt-2 border-t border-stone-100 flex items-center justify-between text-xs">
+                        <span className="text-stone-500 text-[11px]">{job.timeline || "30 days"}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenB2BModal(job)}
+                          className={`font-bold text-xs flex items-center gap-1 transition px-2.5 py-1 rounded-lg cursor-pointer ${
+                            job.hasMyBid
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-[#8f2338] text-white hover:bg-[#761c30] shadow-2xs"
+                          }`}
+                        >
+                          <span>{job.hasMyBid ? "Bid Placed ✓" : "Submit Quote"}</span> →
+                        </button>
+                      </div>
                     </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-4 rounded-2xl border border-dashed border-stone-200 bg-stone-50/50 p-8 text-center text-xs text-stone-500">
+                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-600 mb-2">
+                    <Layers size={18} />
                   </div>
-                ))}
-              </div>
+                  <p className="font-bold text-stone-800">No open B2B requirements currently</p>
+                  <p className="mt-1 text-[11px] text-stone-400">
+                    Institutional school uniform and corporate RFQs will show here when posted by businesses.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Right: Quick Actions (4 cols) */}
@@ -1990,41 +1981,59 @@ export default function TailorHomeSection() {
 
               {/* Reviews List */}
               <div className="space-y-3">
-                <div className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-3.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-stone-900">Rohit S.</span>
-                    <span className="text-[10px] text-stone-400">3 days ago</span>
+                {studioReviews.length > 0 ? (
+                  studioReviews.map((rev, idx) => (
+                    <div
+                      key={rev._id || idx}
+                      className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-3.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {rev.userAvatar ? (
+                            <img
+                              src={rev.userAvatar}
+                              alt={rev.userName}
+                              className="h-6 w-6 rounded-full object-cover border border-stone-200"
+                            />
+                          ) : (
+                            <div className="h-6 w-6 rounded-full bg-[#8f2338] text-white flex items-center justify-center font-bold text-[10px]">
+                              {(rev.userName || 'C').charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <span className="font-bold text-xs text-stone-900">{rev.userName}</span>
+                        </div>
+                        <span className="text-[10px] text-stone-400">
+                          {rev.createdAt
+                            ? new Date(rev.createdAt).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                              })
+                            : 'Verified'}
+                        </span>
+                      </div>
+                      <div className="flex text-amber-500 my-1">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star
+                            key={s}
+                            size={12}
+                            className={s <= rev.rating ? 'fill-amber-400 text-amber-400' : 'text-stone-300'}
+                          />
+                        ))}
+                      </div>
+                      <p className="text-xs text-stone-600">"{rev.comment}"</p>
+                      <span className="inline-block mt-2 rounded-md bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-600">
+                        Verified Bespoke Fit
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50/50 p-6 text-center text-xs text-stone-400">
+                    <p className="font-semibold text-stone-700">No client reviews yet</p>
+                    <p className="mt-1 text-[11px] text-stone-400">
+                      When customers submit feedback from your public profile, reviews will display here.
+                    </p>
                   </div>
-                  <div className="flex text-amber-500 my-1">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Star key={s} size={12} fill="currentColor" />
-                    ))}
-                  </div>
-                  <p className="text-xs text-stone-600">
-                    "Exceptional precision on my bandhgala suit. The armhole curve and shoulder pitch were tailored to exact millimeter measurement."
-                  </p>
-                  <span className="inline-block mt-2 rounded-md bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-600">
-                    Verified Bespoke Fit
-                  </span>
-                </div>
-
-                <div className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-3.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-stone-900">Ananya Verma</span>
-                    <span className="text-[10px] text-stone-400">1 week ago</span>
-                  </div>
-                  <div className="flex text-amber-500 my-1">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Star key={s} size={12} fill="currentColor" />
-                    ))}
-                  </div>
-                  <p className="text-xs text-stone-600">
-                    "Finished 2 days before the scheduled delivery date. The fabric drape and neckline embroidery are top tier atelier quality."
-                  </p>
-                  <span className="inline-block mt-2 rounded-md bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-600">
-                    Verified Bespoke Fit
-                  </span>
-                </div>
+                )}
               </div>
 
               <div className="flex justify-end pt-2 border-t border-stone-100">

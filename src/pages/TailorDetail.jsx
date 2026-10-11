@@ -72,6 +72,13 @@ export default function TailorDetail() {
   const [error, setError] = useState('');
   const [copiedId, setCopiedId] = useState(false);
 
+  // Database-backed reviews state
+  const [reviewsList, setReviewsList] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+
   // Normalize services
   const services = useMemo(() => {
     if (tailor?.services?.length) return tailor.services;
@@ -133,6 +140,79 @@ export default function TailorDetail() {
       active = false;
     };
   }, [id, t]);
+
+  // Fetch reviews from database
+  useEffect(() => {
+    let active = true;
+    setReviewsLoading(true);
+
+    fetch(`/api/tailors/${encodeURIComponent(id)}/reviews`)
+      .then(async (res) => {
+        if (!res.ok) return [];
+        return res.json();
+      })
+      .then((data) => {
+        if (active && Array.isArray(data)) {
+          setReviewsList(data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setReviewsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    if (!isSignedIn) {
+      openSignUp();
+      return;
+    }
+    if (!reviewComment.trim()) {
+      toast.error('Please write a review message');
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/tailors/${encodeURIComponent(id)}/reviews`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          rating: Number(reviewRating),
+          comment: reviewComment.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to submit review');
+
+      setReviewsList((prev) => [data, ...prev]);
+      if (tailor) {
+        setTailor((prev) => ({
+          ...prev,
+          rating: data.newRating ?? prev.rating,
+          reviews: data.newReviewCount ?? (prev.reviews || 0) + 1,
+        }));
+      }
+      setReviewComment('');
+      setReviewRating(5);
+      toast.success('Your review was successfully submitted!');
+      confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+    } catch (err) {
+      toast.error(err.message || 'Failed to submit review');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   // Check if saved & fetch measurements
   useEffect(() => {
@@ -840,61 +920,164 @@ export default function TailorDetail() {
 
               {/* Reviews Showcase */}
               <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm sm:p-7">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 pb-4">
                   <div>
                     <h3 className="text-base font-bold text-stone-950 sm:text-lg">
-                      {t('tailorView.reviewsTitle')}
+                      {t('tailorView.reviewsTitle', 'Client Reviews & Ratings')}
                     </h3>
                     <p className="mt-0.5 text-xs text-stone-500">
-                      {t('tailorView.reviewsSubtitle')}
+                      {reviewsList.length > 0
+                        ? `${reviewsList.length} verified review${reviewsList.length > 1 ? 's' : ''} from clients`
+                        : t('tailorView.reviewsSubtitle', 'Verified fitting and craftsmanship feedback.')}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-900">
-                    <Star size={13} className="fill-amber-500 text-amber-500" />
-                    {tailor.rating ? `${tailor.rating} / 5.0` : '5.0 ★'}
+                  <div className="flex items-center gap-1.5 rounded-full bg-amber-50 px-3.5 py-1 text-xs font-bold text-amber-900 border border-amber-200">
+                    <Star size={14} className="fill-amber-500 text-amber-500" />
+                    <span>{tailor.rating ? `${Number(tailor.rating).toFixed(1)} / 5.0` : '5.0 ★'}</span>
                   </div>
                 </div>
 
-                <div className="mt-5 space-y-3">
-                  <div className="rounded-2xl border border-stone-100 bg-stone-50/60 p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="h-7 w-7 rounded-full bg-[#8f2338] text-white flex items-center justify-center font-bold text-xs">
-                          R
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-stone-900">Rohit S.</p>
-                          <span className="text-[11px] text-stone-400">Verified Stitching Order</span>
-                        </div>
-                      </div>
-                      <div className="flex text-amber-500">
-                        {'★'.repeat(5)}
-                      </div>
-                    </div>
-                    <p className="mt-2 text-xs leading-relaxed text-stone-600">
-                      "Extremely impressed with the precision fit of my 3-piece formal suit. Completed right on time before the wedding event!"
+                {/* Form to Add Review (Logged in users only) */}
+                {isSignedIn ? (
+                  <form onSubmit={handleReviewSubmit} className="mt-5 rounded-2xl border border-stone-200 bg-stone-50/70 p-4.5 sm:p-5">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-stone-800">
+                      Write a Review for {tailor.name || 'this Tailor'}
+                    </h4>
+                    <p className="mt-0.5 text-[11px] text-stone-500">
+                      Share your experience with fit quality, timeline, and customer service.
                     </p>
-                  </div>
 
-                  <div className="rounded-2xl border border-stone-100 bg-stone-50/60 p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="h-7 w-7 rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold text-xs">
-                          P
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-stone-900">Pooja M.</p>
-                          <span className="text-[11px] text-stone-400">Verified Kurti & Saree Fitting</span>
-                        </div>
+                    {/* Star Rating Selector */}
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className="text-xs font-semibold text-stone-600">Your Rating:</span>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((starVal) => (
+                          <button
+                            key={starVal}
+                            type="button"
+                            onClick={() => setReviewRating(starVal)}
+                            className="p-1 text-stone-300 hover:text-amber-500 transition cursor-pointer"
+                            title={`${starVal} star${starVal > 1 ? 's' : ''}`}
+                          >
+                            <Star
+                              size={20}
+                              className={starVal <= reviewRating ? 'fill-amber-400 text-amber-500' : 'text-stone-300'}
+                            />
+                          </button>
+                        ))}
                       </div>
-                      <div className="flex text-amber-500">
-                        {'★'.repeat(5)}
-                      </div>
+                      <span className="text-xs font-bold text-amber-700 ml-1">
+                        {reviewRating === 5 ? '5 ★ Excellent' : reviewRating === 4 ? '4 ★ Very Good' : reviewRating === 3 ? '3 ★ Average' : reviewRating === 2 ? '2 ★ Poor' : '1 ★ Terrible'}
+                      </span>
                     </div>
-                    <p className="mt-2 text-xs leading-relaxed text-stone-600">
-                      "Very polite tailor, took in-person measurements carefully and gave suggestions on neckline styling. Will order again."
-                    </p>
+
+                    {/* Review Comment Input */}
+                    <div className="mt-3">
+                      <textarea
+                        rows={3}
+                        required
+                        value={reviewComment}
+                        onChange={(e) => setReviewComment(e.target.value)}
+                        placeholder="Tell others about the stitching quality, delivery speed, and overall fit..."
+                        className="w-full rounded-xl border border-stone-200 bg-white p-3 text-xs text-stone-900 outline-none focus:border-[#8f2338] transition placeholder:text-stone-400 shadow-2xs"
+                      />
+                    </div>
+
+                    <div className="mt-2.5 flex items-center justify-between">
+                      <span className="text-[11px] text-stone-400">
+                        Posting as <strong className="text-stone-700">{profile?.firstName || 'User'}</strong>
+                      </span>
+                      <button
+                        type="submit"
+                        disabled={submittingReview || !reviewComment.trim()}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#761c30] transition active:scale-95 disabled:opacity-50 cursor-pointer"
+                      >
+                        <Sparkles size={13} />
+                        <span>{submittingReview ? 'Submitting…' : 'Post Review'}</span>
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="mt-4 flex items-center justify-between rounded-2xl border border-dashed border-stone-200 bg-stone-50/50 p-3.5 text-xs">
+                    <span className="text-stone-600">Want to leave a review for this tailor?</span>
+                    <button
+                      type="button"
+                      onClick={openSignUp}
+                      className="font-bold text-[#8f2338] hover:underline cursor-pointer"
+                    >
+                      Sign In to Review →
+                    </button>
                   </div>
+                )}
+
+                {/* Reviews List */}
+                <div className="mt-5 space-y-3">
+                  {reviewsLoading ? (
+                    <div className="space-y-3">
+                      <div className="h-20 w-full animate-pulse rounded-2xl bg-stone-100" />
+                      <div className="h-20 w-full animate-pulse rounded-2xl bg-stone-100" />
+                    </div>
+                  ) : reviewsList.length === 0 ? (
+                    <div className="rounded-2xl border border-stone-100 bg-stone-50/50 p-6 text-center text-xs text-stone-500">
+                      <p className="font-semibold text-stone-700">No client reviews yet</p>
+                      <p className="mt-1 text-[11px] text-stone-400">
+                        Be the first verified customer to share feedback for {tailor.name}!
+                      </p>
+                    </div>
+                  ) : (
+                    reviewsList.map((rev) => {
+                      const firstLetter = (rev.userName || 'C').charAt(0).toUpperCase();
+                      const dateStr = rev.createdAt
+                        ? new Date(rev.createdAt).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })
+                        : '';
+                      return (
+                        <div
+                          key={rev._id || Math.random()}
+                          className="rounded-2xl border border-stone-100 bg-stone-50/60 p-4 transition hover:bg-stone-50"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2.5">
+                              {rev.userAvatar ? (
+                                <img
+                                  src={rev.userAvatar}
+                                  alt={rev.userName}
+                                  className="h-8 w-8 rounded-full object-cover border border-stone-200 shadow-2xs"
+                                />
+                              ) : (
+                                <div className="h-8 w-8 rounded-full bg-[#8f2338] text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                                  {firstLetter}
+                                </div>
+                              )}
+                              <div>
+                                <p className="text-xs font-bold text-stone-900">{rev.userName}</p>
+                                <span className="text-[10px] text-stone-400">
+                                  {dateStr ? `${dateStr} • ` : ''}Verified Client
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Stars */}
+                            <div className="flex items-center gap-0.5 text-amber-500">
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star
+                                  key={s}
+                                  size={12}
+                                  className={s <= rev.rating ? 'fill-amber-400 text-amber-400' : 'text-stone-300'}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <p className="mt-2.5 text-xs leading-relaxed text-stone-700">
+                            "{rev.comment}"
+                          </p>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </section>
             </div>

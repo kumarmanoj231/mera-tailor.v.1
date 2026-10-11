@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import {
   applyTailorVerification,
+  createTailorReview,
   getMyStudio,
   getPlatformStats,
   getTailor,
+  getTailorReviews,
   listSavedTailors,
   listTailors,
   submitB2BBid,
@@ -25,8 +27,10 @@ router.put('/tailors/my-studio', requireAuth, syncAppUser, requireRole('tailor',
 router.post('/tailors/apply-verification', requireAuth, syncAppUser, requireRole('tailor', 'admin'), applyTailorVerification);
 router.post('/tailors/b2b-bid/:requestId', requireAuth, syncAppUser, requireRole('tailor', 'admin'), validateObjectId('requestId'), submitB2BBid);
 
-// Single Tailor Profile
+// Single Tailor Profile & Reviews
 router.get('/tailors/:id', validateObjectId('id'), getTailor);
+router.get('/tailors/:id/reviews', validateObjectId('id'), getTailorReviews);
+router.post('/tailors/:id/reviews', requireAuth, syncAppUser, requireRole('customer', 'admin'), validateObjectId('id'), createTailorReview);
 
 // Tailor save action aliases
 router.post('/tailors/:id/save', requireAuth, syncAppUser, requireRole('customer', 'admin'), validateObjectId('id'), toggleSavedTailor);

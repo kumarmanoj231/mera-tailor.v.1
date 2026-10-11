@@ -241,6 +241,20 @@ const notificationSchema = new mongoose.Schema(
 notificationSchema.index({ recipientClerkUserId: 1, read: 1, createdAt: -1 });
 notificationSchema.index({ recipientClerkUserId: 1, createdAt: -1 });
 
+const reviewSchema = new mongoose.Schema(
+  {
+    tailorId: { type: mongoose.Schema.Types.ObjectId, ref: "Tailor", required: true, index: true },
+    clerkUserId: { type: String, required: true, index: true },
+    userName: { type: String, required: true, trim: true, maxlength: 120 },
+    userAvatar: { type: String, trim: true },
+    rating: { type: Number, required: true, min: 1, max: 5 },
+    comment: { type: String, required: true, trim: true, maxlength: 1000 },
+  },
+  { timestamps: true }
+);
+
+reviewSchema.index({ tailorId: 1, createdAt: -1 });
+
 export const Tailor = mongoose.models.Tailor || mongoose.model("Tailor", tailorSchema, "tailors");
 export const User = mongoose.models.User || mongoose.model("User", userSchema, "users");
 export const Order = mongoose.models.Order || mongoose.model("Order", orderSchema, "orders");
@@ -250,4 +264,6 @@ export const BusinessRequest =
   mongoose.models.BusinessRequest || mongoose.model("BusinessRequest", businessRequestSchema, "business_requests");
 export const Notification =
   mongoose.models.Notification || mongoose.model("Notification", notificationSchema, "notifications");
+export const Review =
+  mongoose.models.Review || mongoose.model("Review", reviewSchema, "reviews");
 
