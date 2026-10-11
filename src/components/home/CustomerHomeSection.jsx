@@ -150,6 +150,36 @@ const CATEGORIES_DATA = [
     icon: <PantsIcon />,
   },
   {
+    id: "Dress",
+    label: "Dresses & Gowns",
+    hiLabel: "ड्रेसेस व गाउन",
+    icon: <LadiesWearIcon />,
+  },
+  {
+    id: "Salwar & Suits",
+    label: "Salwar & Suits",
+    hiLabel: "सलवार व सूट्स",
+    icon: <EthnicWearIcon />,
+  },
+  {
+    id: "Bridal Wear",
+    label: "Bridal & Wedding",
+    hiLabel: "शादी व ब्राइडल",
+    icon: <EthnicWearIcon />,
+  },
+  {
+    id: "Uniforms",
+    label: "Uniforms",
+    hiLabel: "यूनिफॉर्म",
+    icon: <ShirtsIcon />,
+  },
+  {
+    id: "Kids Wear",
+    label: "Kids Wear",
+    hiLabel: "किड्स वियर",
+    icon: <ShirtsIcon />,
+  },
+  {
     id: "Alteration",
     label: "Alterations & Repair",
     hiLabel: "अल्टरेशन व रिपेयर",

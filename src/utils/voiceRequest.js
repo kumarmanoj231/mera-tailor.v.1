@@ -2,77 +2,135 @@ const categoryRules = [
   {
     category: "Ethnic Wear",
     terms: [
-      "ethnic wear", "ethnic", "lehenga", "lehnga", "saree", "sari", "kurti", "kurta",
-      "anarkali", "chaniya choli", "ghagra", "dupatta", "salwar", "salwar suit", "sherwani",
-      "indo-western", "traditional", "लहंगा", "साड़ी", "कुर्ती", "कुर्ता", "सलवार", "सलवार सूट",
-      "अनारकली", "घाघरा", "चोली", "पारंपरिक", "एथनिक", "शेरवानी"
+      "ethnic wear", "ethnic", "traditional", "indian wear", "desi",
+      "lehenga", "lehnga", "saree", "sari", "kurti", "kurta", "anarkali",
+      "chaniya choli", "ghagra", "dupatta", "salwar", "salwar suit", "sherwani",
+      "indo-western", "dhoti", "bandhgala", "nehru jacket", "modi jacket",
+      "लहंगा", "साड़ी", "कुर्ती", "कुर्ता", "सलवार", "सलवार सूट", "अनारकली",
+      "घाघरा", "चोली", "पारंपरिक", "एथनिक", "शेरवानी", "धोती", "बंदगला"
     ],
   },
   {
     category: "Ladies Wear",
     terms: [
       "ladies wear", "women's wear", "womens wear", "blouse", "choli", "frock", "skirt",
-      "maxi", "ladies suit", "gown", "bridal", "ladies", "महिला कपड़े", "महिलाओं के कपड़े",
-      "ब्लाउज", "चोली", "लेडीज", "लेडीज सूट"
+      "maxi", "ladies suit", "gown", "bridal", "ladies", "women", "plazo", "palazzo", "sharara", "gharara",
+      "महिला कपड़े", "महिलाओं के कपड़े", "ब्लाउज", "चोली", "लेडीज", "लेडीज सूट", "शरारा", "घरारा", "प्लाजो"
+    ],
+  },
+  {
+    category: "Bridal Wear",
+    terms: [
+      "bridal", "bridal wear", "wedding wear", "wedding lehenga", "bridal lehenga", "shaadi",
+      "shadi", "dulhan", "marraige wear", "shaadi ke kapde", "शादी का जोड़ा", "ब्राइडल", "दुल्हन", "शादी"
     ],
   },
   {
     category: "Formal Wear",
     terms: [
       "formal wear", "formal", "office wear", "blazer", "coat pant", "coat", "tuxedo",
-      "waistcoat", "formal shirt", "formal pant", "फॉर्मल", "ब्लेज़र", "कोट पैंट", "ऑफिस के कपड़े",
-      "कोट", "वेस्टकोट"
+      "waistcoat", "formal shirt", "formal pant", "executive wear", "corporate wear",
+      "फॉर्मल", "ब्लेज़र", "कोट पैंट", "ऑफिस के कपड़े", "कोट", "वेस्टकोट"
     ],
   },
   {
-    category: "Shirt",
-    terms: ["shirt", "shirts", "formal shirt", "casual shirt", "कमीज", "क़मीज़", "शर्ट"],
-  },
-  {
-    category: "Pants",
-    terms: ["pants", "pant", "trousers", "trouser", "jeans", "chinos", "पैंट", "पतलून", "ट्राउजर"],
-  },
-  {
-    category: "Dress",
-    terms: ["dress", "dresses", "gown", "maxi dress", "evening gown", "ड्रेस", "गाउन"],
+    category: "Sherwani & Groom",
+    terms: [
+      "sherwani", "sherwani & groom", "groom", "groom wear", "dulha", "dulhe ke kapde",
+      "indo western", "indo-western", "achkan", "jodhpuri", "jodhpuri suit",
+      "शेरवानी", "दूल्हा", "अचकन", "जोधपुरी सूट", "इंडो वेस्टर्न"
+    ],
   },
   {
     category: "Suit",
     terms: [
-      "suit", "suits", "3 piece suit", "2 piece suit", "safari suit", "safari",
-      "सूट", "सूट सिलवाना", "सफारी सूट", "थ्री पीस सूट"
+      "suit", "suits", "3 piece suit", "2 piece suit", "safari suit", "safari", "business suit",
+      "सूट", "सूट सिलवाना", "सफारी सूट", "थ्री पीस सूट", "सूट पैंट"
+    ],
+  },
+  {
+    category: "Shirt",
+    terms: [
+      "shirt", "shirts", "formal shirt", "casual shirt", "linen shirt", "cotton shirt",
+      "कमीज", "क़मीज़", "शर्ट", "शर्ट्स"
+    ],
+  },
+  {
+    category: "Pants",
+    terms: [
+      "pants", "pant", "trousers", "trouser", "jeans", "chinos", "formal trousers", "slacks",
+      "पैंट", "पतलून", "ट्राउजर", "ट्राउजर्स", "चीनो"
+    ],
+  },
+  {
+    category: "Dress",
+    terms: [
+      "dress", "dresses", "gown", "evening gown", "maxi dress", "one piece", "party dress",
+      "ड्रेस", "गाउन", "मैक्सी ड्रेस", "वन पीस"
+    ],
+  },
+  {
+    category: "Salwar & Suits",
+    terms: [
+      "salwar", "salwar suit", "salwar kameez", "patiala", "patiala suit", "churidar",
+      "सलवार", "सलवार सूट", "पटियाला सूट", "चूड़ीदार", "सलवार कमीज"
     ],
   },
   {
     category: "Alteration",
     terms: [
       "alteration", "alterations", "alter", "repair", "fit", "fitting", "resize",
-      "shorten", "tighten", "loosen", "tight", "loose", "rafa", "hemming",
+      "shorten", "tighten", "loosen", "tight", "loose", "rafa", "hemming", "mending",
       "अल्टरशन", "अल्टर", "कपड़े ठीक", "मरम्मत", "रफू", "फिटिंग", "ढीला करना", "टाइट करना"
     ],
   },
   {
+    category: "Uniforms",
+    terms: [
+      "uniform", "uniforms", "school uniform", "corporate uniform", "hotel uniform", "hospital uniform", "lab coat",
+      "वर्दी", "यूनिफॉर्म", "स्कूल यूनिफॉर्म"
+    ],
+  },
+  {
+    category: "Kids Wear",
+    terms: [
+      "kids wear", "kid wear", "children wear", "baby wear", "kids clothing", "bache ke kapde",
+      "बच्चों के कपड़े", "किड्स वियर"
+    ],
+  },
+  {
+    category: "Winter Wear",
+    terms: [
+      "winter wear", "overcoat", "wool coat", "jacket", "tweed", "woolen",
+      "सर्दियों के कपड़े", "ओवरकोट", "जैकेट"
+    ],
+  },
+  {
     category: "Men's Wear",
-    terms: ["men's wear", "mens wear", "gents wear", "men wear", "पुरुषों के कपड़े", "जेंट्स"],
+    terms: ["men's wear", "mens wear", "gents wear", "men wear", "पुरुषों के कपड़े", "जेंट्स", "पुरुष"],
   },
 ];
 
 const garmentList = [
-  { name: "Bridal Lehenga", terms: ["bridal lehenga", "ब्राइडल लहंगा", "शादी का लहंगा"] },
-  { name: "Lehenga", terms: ["lehenga", "lehnga", "ghagra", "लहंगा", "घाघरा"] },
-  { name: "Saree Blouse", terms: ["saree blouse", "blouse", "ब्लाउज", "चोली"] },
+  { name: "Bridal Lehenga", terms: ["bridal lehenga", "wedding lehenga", "ब्राइडल लहंगा", "शादी का लहंगा", "दुल्हन का लहंगा"] },
+  { name: "Lehenga", terms: ["lehenga", "lehnga", "ghagra", "chaniya choli", "लहंगा", "घाघरा", "चनिया चोली"] },
+  { name: "Saree Blouse", terms: ["saree blouse", "blouse", "designer blouse", "ब्लाउज", "चोली"] },
   { name: "Saree", terms: ["saree", "sari", "साड़ी"] },
   { name: "Kurti", terms: ["kurti", "kurta", "कुर्ती", "कुर्ता"] },
-  { name: "Salwar Suit", terms: ["salwar suit", "salwar kameez", "salwar", "सलवार सूट", "सलवार"] },
+  { name: "Salwar Suit", terms: ["salwar suit", "salwar kameez", "salwar", "patiala suit", "सलवार सूट", "सलवार", "पटियाला सूट"] },
   { name: "Anarkali", terms: ["anarkali", "अनारकली"] },
+  { name: "Sherwani", terms: ["sherwani", "groom sherwani", "शेरवानी", "दूल्हे की शेरवानी"] },
+  { name: "Indo-Western", terms: ["indo-western", "indo western", "achkan", "इंडो वेस्टर्न", "अचकन"] },
   { name: "3-Piece Suit", terms: ["3 piece suit", "3-piece suit", "three piece suit", "थ्री पीस सूट"] },
-  { name: "Sherwani", terms: ["sherwani", "शेरवानी"] },
-  { name: "Blazer", terms: ["blazer", "coat", "ब्लेज़र", "कोट"] },
+  { name: "2-Piece Suit", terms: ["2 piece suit", "2-piece suit", "two piece suit", "सूट"] },
+  { name: "Blazer", terms: ["blazer", "coat", "sports jacket", "ब्लेज़र", "कोट"] },
+  { name: "Tuxedo", terms: ["tuxedo", "tux", "टक्सीडो"] },
   { name: "Formal Shirt", terms: ["formal shirt", "formals shirt", "फॉर्मल शर्ट"] },
-  { name: "Shirt", terms: ["shirt", "shirts", "शर्ट", "कमीज"] },
-  { name: "Trousers / Pants", terms: ["pants", "pant", "trousers", "trouser", "पैंट", "पतलून"] },
-  { name: "Gown / Dress", terms: ["gown", "dress", "गाउन", "ड्रेस"] },
+  { name: "Shirt", terms: ["shirt", "shirts", "casual shirt", "शर्ट", "कमीज"] },
+  { name: "Trousers / Pants", terms: ["pants", "pant", "trousers", "trouser", "chinos", "पैंट", "पतलून", "ट्राउजर"] },
+  { name: "Gown / Dress", terms: ["gown", "dress", "evening gown", "maxi dress", "गाउन", "ड्रेस"] },
   { name: "Safari Suit", terms: ["safari suit", "सफारी सूट"] },
+  { name: "Uniform", terms: ["school uniform", "uniform", "वर्दी", "यूनिफॉर्म"] },
   { name: "Alteration / Fitting", terms: ["alteration", "alter", "repair", "fitting", "अल्टर", "फिटिंग", "मरम्मत", "रफू"] },
 ];
 
@@ -216,12 +274,39 @@ export function parseVoiceRequest(value) {
     location = "";
   }
 
+  // Determine default category if garment was detected without explicit category
+  let resolvedCategory = categoryRule?.category || "";
+  if (!resolvedCategory && garmentMatch) {
+    const garmentName = garmentMatch.name;
+    if (["Bridal Lehenga", "Lehenga", "Saree Blouse", "Saree", "Kurti", "Anarkali"].includes(garmentName)) {
+      resolvedCategory = "Ethnic Wear";
+    } else if (["Salwar Suit"].includes(garmentName)) {
+      resolvedCategory = "Salwar & Suits";
+    } else if (["Sherwani", "Indo-Western"].includes(garmentName)) {
+      resolvedCategory = "Sherwani & Groom";
+    } else if (["3-Piece Suit", "2-Piece Suit", "Safari Suit"].includes(garmentName)) {
+      resolvedCategory = "Suit";
+    } else if (["Blazer", "Tuxedo", "Formal Shirt"].includes(garmentName)) {
+      resolvedCategory = "Formal Wear";
+    } else if (["Shirt"].includes(garmentName)) {
+      resolvedCategory = "Shirt";
+    } else if (["Trousers / Pants"].includes(garmentName)) {
+      resolvedCategory = "Pants";
+    } else if (["Gown / Dress"].includes(garmentName)) {
+      resolvedCategory = "Dress";
+    } else if (["Alteration / Fitting"].includes(garmentName)) {
+      resolvedCategory = "Alteration";
+    } else if (["Uniform"].includes(garmentName)) {
+      resolvedCategory = "Uniforms";
+    }
+  }
+
   // Compose clean summary parts
   const summaryParts = [];
   if (colorRule) summaryParts.push(colorRule[0].toUpperCase());
   if (fabricRule) summaryParts.push(fabricRule[0]);
   if (garmentMatch) summaryParts.push(garmentMatch.name);
-  else if (categoryRule) summaryParts.push(categoryRule.category);
+  else if (resolvedCategory) summaryParts.push(resolvedCategory);
   if (quantity > 1) summaryParts.push(`(Qty: ${quantity})`);
   if (deadlineDays) summaryParts.push(`⚡ ${deadlineDays} day${deadlineDays > 1 ? "s" : ""}`);
   if (location) summaryParts.push(`📍 ${location}`);
@@ -230,7 +315,7 @@ export function parseVoiceRequest(value) {
   return {
     text,
     garment: garmentMatch?.name || "",
-    category: categoryRule?.category || (garmentMatch ? "Ethnic Wear" : ""),
+    category: resolvedCategory,
     color: colorRule?.[0] || "",
     fabric: fabricRule?.[0] || "",
     quantity,

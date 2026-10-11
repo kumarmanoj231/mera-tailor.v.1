@@ -32,6 +32,35 @@ const HeroSection = ({ onSignUp }) => {
   const [voiceError, setVoiceError] = React.useState("");
   const { startRecording, stopRecording, cancel: cancelVoice, isRecording, isTranscribing, error: transcriptionError } = useGeminiTranscription(setVoiceText);
 
+  const [showVoiceHelp, setShowVoiceHelp] = React.useState(false);
+  const voiceHelpTimeoutRef = React.useRef(null);
+
+  // Auto-show voice coachmark once for 6 seconds on initial mount
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowVoiceHelp(true);
+      voiceHelpTimeoutRef.current = setTimeout(() => {
+        setShowVoiceHelp(false);
+      }, 6000);
+    }, 1500);
+
+    return () => {
+      clearTimeout(timer);
+      if (voiceHelpTimeoutRef.current) clearTimeout(voiceHelpTimeoutRef.current);
+    };
+  }, []);
+
+  const handleVoiceButtonMouseEnter = () => {
+    if (voiceHelpTimeoutRef.current) clearTimeout(voiceHelpTimeoutRef.current);
+    setShowVoiceHelp(true);
+  };
+
+  const handleVoiceButtonMouseLeave = () => {
+    voiceHelpTimeoutRef.current = setTimeout(() => {
+      setShowVoiceHelp(false);
+    }, 3000);
+  };
+
   const closeVoiceAssistant = () => { setVoiceOpen(false); cancelVoice(); };
   React.useEffect(() => {
     if (!voiceOpen) return undefined;
@@ -52,7 +81,17 @@ const HeroSection = ({ onSignUp }) => {
     if (!request.text) return;
     sessionStorage.setItem("meratailor.voice-request", JSON.stringify(request));
     closeVoiceAssistant();
-    navigate("/find-tailors?source=voice");
+
+    // Construct rich URL params so FindTailors immediately filters & sorts
+    const params = new URLSearchParams();
+    params.set("source", "voice");
+    if (request.category) params.set("category", request.category);
+    if (request.garment) params.set("search", request.garment);
+    else if (request.text) params.set("search", request.text);
+    if (request.radiusKm) params.set("radius", String(request.radiusKm));
+    if (request.location) params.set("area", request.location);
+
+    navigate(`/find-tailors?${params.toString()}`);
   };
 
   const detectLocation = () => {
@@ -405,38 +444,69 @@ const HeroSection = ({ onSignUp }) => {
                 />
               </Link>
 
-              <button
-                type="button"
-                onClick={() => { setVoiceOpen(true); setVoiceError(""); }}
-                className="
-                  inline-flex
-                  min-h-12
-                  flex-1
-                  items-center
-                  justify-center
-                  gap-2
-                  rounded-xl
-                  border
-                  border-[#ded5cc]
-                  bg-white/95
-                  px-5
-                  text-[clamp(.78rem,1.7vw,.88rem)]
-                  font-bold
-                  text-[#252b3a]
-                  shadow-[0_6px_18px_rgba(60,45,35,0.08)]
-                  transition
-                  duration-200
-                  hover:-translate-y-0.5
-                  hover:bg-white
-                "
-              >
-                <Mic
-                  size={17}
-                  className="text-[#8f2338]"
-                />
+              <div className="relative flex-1">
+                <button
+                  type="button"
+                  onClick={() => { setVoiceOpen(true); setVoiceError(""); setShowVoiceHelp(false); }}
+                  onMouseEnter={handleVoiceButtonMouseEnter}
+                  onMouseLeave={handleVoiceButtonMouseLeave}
+                  className="
+                    inline-flex
+                    min-h-12
+                    w-full
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-xl
+                    border
+                    border-[#ded5cc]
+                    bg-white/95
+                    px-5
+                    text-[clamp(.78rem,1.7vw,.88rem)]
+                    font-bold
+                    text-[#252b3a]
+                    shadow-[0_6px_18px_rgba(60,45,35,0.08)]
+                    transition
+                    duration-200
+                    hover:-translate-y-0.5
+                    hover:bg-white
+                  "
+                >
+                  <Mic
+                    size={17}
+                    className="text-[#8f2338]"
+                  />
 
-                {t("home.tellUsNeed")}
-              </button>
+                  {t("home.tellUsNeed")}
+                </button>
+
+                {/* Floating Coachmark Tooltip / Hover Modal */}
+                {showVoiceHelp && (
+                  <div
+                    role="tooltip"
+                    className="absolute -top-16 left-1/2 -translate-x-1/2 z-30 w-72 rounded-2xl bg-[#1e293b] text-white p-3 shadow-xl border border-slate-700/60 text-xs animate-in fade-in zoom-in-95 duration-200"
+                  >
+                    <div className="flex items-start justify-between gap-1.5">
+                      <div className="flex items-center gap-1.5 text-amber-300 font-bold text-[11px]">
+                        <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
+                        <span>AI Voice Assistant</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setShowVoiceHelp(false); }}
+                        className="text-slate-400 hover:text-white"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-tight text-slate-200">
+                      Speak in <strong>Hindi or English</strong> — e.g. <em>"Red bridal lehenga in 5 days"</em> or <em>"2 shirts Raja Park"</em>!
+                    </p>
+                    {/* Tooltip triangle pointer */}
+                    <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-[#1e293b] border-r border-b border-slate-700/60" />
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Trust */}

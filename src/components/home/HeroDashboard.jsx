@@ -199,7 +199,7 @@ const HeroDashboard = ({ onSignUp }) => {
                   <span className="text-[8px] text-[#aaa39c]">•</span>
 
                   <span className="truncate text-[clamp(.55rem,1.3vw,.64rem)] text-[#777b84]">
-                    {tailorLocation}
+                    {isSignedIn ? tailorLocation : (topTailor?.city || t("home.nearYou", "Near You"))}
                   </span>
                 </div>
               </div>
@@ -245,7 +245,7 @@ const HeroDashboard = ({ onSignUp }) => {
                 <span className="text-[10px] font-semibold">{t("home.myOrders", "Orders")}</span>
               </Link>
 
-              {cleanPhone ? (
+              {isSignedIn && cleanPhone ? (
                 <a
                   href={`tel:${cleanPhone}`}
                   className="flex flex-col items-center justify-center gap-1 rounded-xl bg-emerald-50 py-1.5 text-center text-emerald-800 transition hover:bg-emerald-100"
@@ -255,13 +255,18 @@ const HeroDashboard = ({ onSignUp }) => {
                   <span className="text-[10px] font-semibold">{t("home.call", "Call")}</span>
                 </a>
               ) : (
-                <Link
-                  to={topTailor?._id ? `/tailors/${encodeURIComponent(topTailor._id)}` : "/find-tailors"}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onSignUp) onSignUp();
+                    else openSignUp();
+                  }}
                   className="flex flex-col items-center justify-center gap-1 rounded-xl bg-rose-50 py-1.5 text-center text-[#8f2338] transition hover:bg-rose-100"
+                  title={isSignedIn ? "Explore Studio" : "Get Started to Call"}
                 >
-                  <Sparkles size={13} />
-                  <span className="text-[10px] font-semibold">{t("home.book", "Book")}</span>
-                </Link>
+                  {isSignedIn ? <Sparkles size={13} /> : <Phone size={13} />}
+                  <span className="text-[10px] font-semibold">{isSignedIn ? t("home.book", "Book") : t("home.call", "Call")}</span>
+                </button>
               )}
             </div>
           </div>

@@ -145,10 +145,16 @@ const CATEGORIES_LIST = [
   { id: "", label: "All categories", icon: <Sparkles size={14} /> },
   { id: "Ethnic Wear", label: "Ethnic Wear", icon: <EthnicWearIcon /> },
   { id: "Ladies Wear", label: "Ladies Wear", icon: <LadiesWearIcon /> },
+  { id: "Bridal Wear", label: "Bridal & Wedding", icon: <EthnicWearIcon /> },
+  { id: "Salwar & Suits", label: "Salwar & Suits", icon: <EthnicWearIcon /> },
   { id: "Formal Wear", label: "Formal Wear", icon: <FormalWearIcon /> },
+  { id: "Sherwani & Groom", label: "Sherwani & Groom", icon: <SuitsSherwaniIcon /> },
+  { id: "Suit", label: "Suits", icon: <SuitsSherwaniIcon /> },
   { id: "Shirt", label: "Shirts", icon: <ShirtsIcon /> },
-  { id: "Pants", label: "Pants", icon: <PantsIcon /> },
-  { id: "Suit", label: "Suits & Sherwani", icon: <SuitsSherwaniIcon /> },
+  { id: "Pants", label: "Trousers & Pants", icon: <PantsIcon /> },
+  { id: "Dress", label: "Dresses & Gowns", icon: <LadiesWearIcon /> },
+  { id: "Uniforms", label: "Uniforms", icon: <ShirtsIcon /> },
+  { id: "Kids Wear", label: "Kids Wear", icon: <ShirtsIcon /> },
   { id: "Alteration", label: "Alterations & Repair", icon: <AlterationsIcon /> },
 ];
 
@@ -277,12 +283,38 @@ export default function FindTailors() {
 
   const colorLabel = (val) => val;
 
-  // Initialize from searchParams
+  // Initialize from searchParams & sessionStorage (Voice Assistant handoff)
   useEffect(() => {
-    const paramSearch = searchParams.get("search");
-    if (paramSearch) setQuery(paramSearch);
-    const paramCategory = searchParams.get("category");
-    if (paramCategory) setCategory(paramCategory);
+    let initialCategory = searchParams.get("category") || "";
+    let initialSearch = searchParams.get("search") || "";
+    let initialRadius = searchParams.get("radius");
+    let initialArea = searchParams.get("area") || "";
+
+    // Check if coming from voice request handoff
+    const storedVoice = sessionStorage.getItem("meratailor.voice-request");
+    if (storedVoice) {
+      try {
+        const parsed = JSON.parse(storedVoice);
+        setIntent(parsed);
+        if (parsed.category && !initialCategory) initialCategory = parsed.category;
+        if (parsed.garment && !initialSearch) initialSearch = parsed.garment;
+        else if (parsed.text && !initialSearch) initialSearch = parsed.text;
+        if (parsed.radiusKm && !initialRadius) initialRadius = parsed.radiusKm;
+        if (parsed.location && !initialArea) initialArea = parsed.location;
+      } catch (e) {
+        console.warn("Failed to parse stored voice request", e);
+      }
+      // Clean after reading to avoid sticky state on subsequent manual page navigation
+      sessionStorage.removeItem("meratailor.voice-request");
+    }
+
+    if (initialCategory) setCategory(initialCategory);
+    if (initialSearch) setQuery(initialSearch);
+    if (initialRadius) setRadius(Number(initialRadius));
+    if (initialArea) {
+      setLocationQuery(initialArea);
+      geocodeLocation(initialArea);
+    }
   }, [searchParams]);
 
   // Load Saved Tailors for Signed-in user
@@ -312,22 +344,100 @@ export default function FindTailors() {
     };
   }, [isSignedIn, getToken]);
 
-  // Gemini Voice Search Hook
+  // Voice Coachmark Hover / Auto-dismiss state
+  const [showVoiceHelp, setShowVoiceHelp] = useState(false);
+  const voiceHelpTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    // Show brief helper hint on mount for 5 seconds
+    const t = setTimeout(() => {
+      setShowVoiceHelp(true);
+      voiceHelpTimeoutRef.current = setTimeout(() => {
+        setShowVoiceHelp(false);
+      }, 5000);
+    }, 1200);
+    return () => {
+      clearTimeout(t);
+      if (voiceHelpTimeoutRef.current) clearTimeout(voiceHelpTimeoutRef.current);
+    };
+  }, []);
+
+  const handleVoiceHoverEnter = () => {
+    if (voiceHelpTimeoutRef.current) clearTimeout(voiceHelpTimeoutRef.current);
+    setShowVoiceHelp(true);
+  };
+
+  const handleVoiceHoverLeave = () => {
+    voiceHelpTimeoutRef.current = setTimeout(() => {
+      setShowVoiceHelp(false);
+    }, 2500);
+  };
+
+  // Gemini Voice Search Hook: Speak to Filter & Sort
   const voice = useGeminiTranscription({
     onTranscriptionComplete: (transcription) => {
       const parsed = parseVoiceRequest(transcription);
       setIntent(parsed);
-      if (parsed.garment) setQuery(parsed.garment);
-      else if (parsed.category) setCategory(parsed.category);
-      if (parsed.radiusKm) setRadius(parsed.radiusKm);
+      toast.success(isHi ? `आवाज़ पहचान ली गई: "${parsed.summary}"` : `Understood: "${parsed.summary}"`);
+      
+      let nextQuery = query;
+      let nextCategory = category;
+      let nextRadius = radius;
+
+      if (parsed.garment) {
+        nextQuery = parsed.garment;
+        setQuery(parsed.garment);
+      }
+      if (parsed.category) {
+        nextCategory = parsed.category;
+        setCategory(parsed.category);
+        // Automatically switch sort mode to Category Relevance
+        setSort("category");
+      }
+      if (parsed.radiusKm) {
+        nextRadius = parsed.radiusKm;
+        setRadius(parsed.radiusKm);
+      }
+
       if (parsed.location) {
         setLocationQuery(parsed.location);
         geocodeLocation(parsed.location);
       } else {
-        searchTailors();
+        // Trigger immediate search with fresh voice inputs
+        searchTailorsDirect(nextQuery, nextCategory, nextRadius);
       }
     },
   });
+
+  async function searchTailorsDirect(q, cat, rad) {
+    setBusy(true);
+    setError("");
+    try {
+      const params = new URLSearchParams();
+      if (!showAllLocations && center[0] && center[1]) {
+        params.set("lat", center[0]);
+        params.set("lng", center[1]);
+        params.set("radiusKm", rad);
+        params.set("radius", rad);
+      }
+      if (q && q.trim()) params.set("search", q.trim());
+      if (cat) params.set("category", cat);
+
+      const res = await fetch(`/api/tailors?${params.toString()}`);
+      if (res.ok) {
+        const data = await readJson(res, "/api/tailors");
+        setTailors(Array.isArray(data) ? data : []);
+      } else {
+        setTailors([]);
+      }
+    } catch (err) {
+      console.warn("Direct voice search failed:", err);
+      setError(t("discovery.error", "Failed to fetch tailoring studios."));
+      setTailors([]);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   // Geocode an area or city query
   async function geocodeLocation(targetPlace) {
@@ -419,6 +529,7 @@ export default function FindTailors() {
       if (!showAllLocations && lat && lng) {
         params.set("lat", lat);
         params.set("lng", lng);
+        params.set("radiusKm", radius);
         params.set("radius", radius);
       }
       if (query.trim()) params.set("search", query.trim());
@@ -529,16 +640,54 @@ export default function FindTailors() {
     }
   }
 
-  // Sorting
+  // Enhanced Sorting (Category Relevance, Rating, Distance, Price)
   const sorted = useMemo(() => {
     let list = [...tailors];
-    if (sort === "distance") {
+    const targetCategory = (category || intent?.category || "").toLowerCase();
+    const targetQuery = (query || intent?.garment || "").toLowerCase();
+
+    const getScore = (tailor) => {
+      let score = 0;
+      const cats = (tailor.categories || []).map((c) => String(c).toLowerCase());
+      const tailorName = (tailor.name || "").toLowerCase();
+      const services = (tailor.services || []).map((s) => (s.name || "").toLowerCase());
+
+      // Priority match for chosen/spoken category
+      if (targetCategory) {
+        if (cats.some((c) => c === targetCategory)) score += 50;
+        else if (cats.some((c) => c.includes(targetCategory) || targetCategory.includes(c))) score += 30;
+      }
+
+      // Priority match for garment/search query
+      if (targetQuery) {
+        if (tailorName.includes(targetQuery)) score += 20;
+        if (cats.some((c) => c.includes(targetQuery))) score += 25;
+        if (services.some((s) => s.includes(targetQuery))) score += 20;
+      }
+
+      // Verified boost
+      if (tailor.verified || tailor.verificationStatus === "verified") score += 10;
+      return score;
+    };
+
+    if (sort === "category" || sort === "relevance" || sort === "recommended") {
+      list.sort((a, b) => {
+        const scoreDiff = getScore(b) - getScore(a);
+        if (scoreDiff !== 0) return scoreDiff;
+        // Secondary sort: rating
+        return (b.rating || 0) - (a.rating || 0);
+      });
+    } else if (sort === "distance") {
       list.sort((a, b) => (a.distance ?? 9999) - (b.distance ?? 9999));
     } else if (sort === "rating") {
       list.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    } else if (sort === "price-asc") {
+      list.sort((a, b) => (a.minPrice || 499) - (b.minPrice || 499));
+    } else if (sort === "price-desc") {
+      list.sort((a, b) => (b.minPrice || 499) - (a.minPrice || 499));
     }
     return list;
-  }, [tailors, sort]);
+  }, [tailors, sort, category, query, intent]);
 
   const verifiedStudiosCount = useMemo(() => {
     return sorted.filter((t) => t.verified || t.verificationStatus === "verified").length;
@@ -723,20 +872,52 @@ export default function FindTailors() {
                 placeholder={isHi ? "परिधान, दर्जी, क्षेत्र, शहर..." : "Garment, tailor, area, city..."}
                 className="w-full rounded-xl border border-stone-200 bg-[#fdfbf9] pl-10 pr-10 py-2.5 text-xs sm:text-sm outline-none transition focus:border-[#8f2338] focus:bg-white focus:ring-2 focus:ring-rose-200/50"
               />
-              {/* Gemini Voice Search Mic */}
-              <button
-                type="button"
-                onClick={voice.isRecording ? voice.stopRecording : voice.startRecording}
-                disabled={voice.isTranscribing}
-                title={voice.isRecording ? "Stop recording" : "Search by voice"}
-                className={`absolute right-2.5 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-lg transition ${
-                  voice.isRecording
-                    ? "animate-pulse bg-rose-100 text-[#8f2338] ring-2 ring-rose-300"
-                    : "text-[#8f2338] hover:bg-rose-50"
-                }`}
-              >
-                <Mic size={15} className={voice.isRecording ? "animate-bounce" : ""} />
-              </button>
+              {/* Gemini Voice Search Mic with Coachmark Hover Modal */}
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center">
+                <button
+                  type="button"
+                  onClick={voice.isRecording ? voice.stopRecording : voice.startRecording}
+                  onMouseEnter={handleVoiceHoverEnter}
+                  onMouseLeave={handleVoiceHoverLeave}
+                  disabled={voice.isTranscribing}
+                  title={voice.isRecording ? "Stop recording" : "Search by voice"}
+                  className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${
+                    voice.isRecording
+                      ? "animate-pulse bg-rose-100 text-[#8f2338] ring-2 ring-rose-300"
+                      : "text-[#8f2338] hover:bg-rose-50"
+                  }`}
+                >
+                  <Mic size={15} className={voice.isRecording ? "animate-bounce" : ""} />
+                </button>
+
+                {/* Floating Coachmark Modal/Tooltip */}
+                {showVoiceHelp && (
+                  <div
+                    role="tooltip"
+                    className="absolute bottom-9 right-0 z-40 w-64 rounded-xl bg-[#1e293b] p-3 text-white shadow-xl border border-slate-700/80 text-xs animate-in fade-in duration-200"
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="flex items-center gap-1.5 font-bold text-amber-300 text-[11px]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />
+                        <span>{isHi ? "बोलकर खोजें व छांटें" : "Speak to Search & Sort"}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowVoiceHelp(false)}
+                        className="text-slate-400 hover:text-white"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-tight text-slate-200">
+                      {isHi
+                        ? "जैसे 'शेरवानी 10 किमी' या 'शादी का लहंगा' कहें। श्रेणी और परिणाम तुरंत क्रमबद्ध होंगे!"
+                        : 'Say e.g. "Bridal Lehenga in 5 days" or "Sherwani 10 km". Results filter & sort instantly!'}
+                    </p>
+                    <div className="absolute -bottom-1.5 right-3 w-3 h-3 rotate-45 bg-[#1e293b] border-r border-b border-slate-700/80" />
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Search CTA button */}
@@ -837,8 +1018,11 @@ export default function FindTailors() {
                   className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-800 outline-none focus:border-[#8f2338]"
                 >
                   <option value="recommended">{t("discovery.recommended", "Recommended")}</option>
-                  <option value="distance">{t("discovery.distance", "Distance (Closest)")}</option>
+                  <option value="category">{isHi ? "श्रेणी प्रासंगिकता" : "Category Relevance"}</option>
                   <option value="rating">{t("discovery.rating", "Rating (Highest)")}</option>
+                  <option value="distance">{t("discovery.distance", "Distance (Closest)")}</option>
+                  <option value="price-asc">{isHi ? "कीमत (कम से ज्यादा)" : "Price (Low to High)"}</option>
+                  <option value="price-desc">{isHi ? "कीमत (ज्यादा से कम)" : "Price (High to Low)"}</option>
                 </select>
               </label>
             </div>
@@ -1093,8 +1277,9 @@ export default function FindTailors() {
                                   {tailor.name}
                                 </h4>
                                 <p className="text-stone-500 text-[11px] truncate">
-                                  {[tailor.area, tailor.city].filter(Boolean).join(", ") ||
-                                    (isHi ? "स्थानीय स्टूडियो" : "Local Studio")}
+                                  {isSignedIn
+                                    ? [tailor.area, tailor.city].filter(Boolean).join(", ") || (isHi ? "स्थानीय स्टूडियो" : "Local Studio")
+                                    : (tailor.city || (isHi ? "दर्जी स्टूडियो" : "Tailor Studio"))}
                                 </p>
                                 <p className="mt-1 font-semibold text-stone-800 text-[11px]">
                                   {t("discovery.kmAway", { distance: tailor.distance ?? "—" })}
@@ -1284,10 +1469,17 @@ export default function FindTailors() {
 
                             {/* Location & Distance */}
                             <div className="mt-2 flex items-center gap-3 text-xs text-stone-500 flex-wrap">
-                              <span className="flex items-center gap-1">
-                                <MapPin size={12} className="text-[#8f2338] shrink-0" />
-                                <span className="truncate">{tailorArea}</span>
-                              </span>
+                              {isSignedIn ? (
+                                <span className="flex items-center gap-1">
+                                  <MapPin size={12} className="text-[#8f2338] shrink-0" />
+                                  <span className="truncate">{tailorArea}</span>
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-[11px] text-stone-400">
+                                  <Lock size={11} className="text-stone-400 shrink-0" />
+                                  <span className="truncate">{tailor.city || "Sign in to view location"}</span>
+                                </span>
+                              )}
                               {tailor.distance !== undefined && (
                                 <span className="flex items-center gap-1 font-semibold text-stone-700">
                                   <Navigation size={11} className="text-[#8f2338] shrink-0" />
@@ -1344,14 +1536,26 @@ export default function FindTailors() {
                                 <span>Pin</span>
                               </button>
 
-                              {/* Call Tailor */}
-                              <a
-                                href={`tel:${tailor.phone || "+919876543210"}`}
-                                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition"
-                              >
-                                <Phone size={12} />
-                                <span>Call tailor</span>
-                              </a>
+                              {/* Call Tailor or Locked State */}
+                              {isSignedIn ? (
+                                <a
+                                  href={`tel:${tailor.phone || "+919876543210"}`}
+                                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition"
+                                >
+                                  <Phone size={12} />
+                                  <span>Call tailor</span>
+                                </a>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={openSignUp}
+                                  className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-semibold text-stone-600 hover:bg-rose-50 hover:text-[#8f2338] transition"
+                                  title="Sign in to call this studio"
+                                >
+                                  <Lock size={12} className="text-stone-400" />
+                                  <span>Call</span>
+                                </button>
+                              )}
 
                               {/* View Information CTA */}
                               <Link

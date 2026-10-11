@@ -31,7 +31,7 @@ export async function listTailors(req, res) {
       Number.isFinite(lng) &&
       Math.abs(lat) <= 90 &&
       Math.abs(lng) <= 180;
-    const radiusKm = Math.min(500, Math.max(1, Number(req.query.radiusKm) || 10));
+    const radiusKm = Math.min(500, Math.max(1, Number(req.query.radiusKm || req.query.radius) || 10));
     const allLocations =
       req.query.allLocations === 'true' ||
       req.query.showAll === 'true' ||
