@@ -23,8 +23,20 @@ import { validateObjectId } from '../middleware/validate.js';
 
 const router = Router();
 
-// Secure all /api/users routes with Clerk auth & MongoDB profile sync
-router.use(requireAuth, syncAppUser);
+// Secure user routes with Clerk auth & MongoDB profile sync
+const userAuthPaths = [
+  '/me',
+  '/profile',
+  '/account',
+  '/onboarding',
+  '/location',
+  '/dashboard',
+  '/tailor-dashboard',
+  '/business-dashboard',
+  '/saved-tailors',
+  '/measurements',
+];
+router.use(userAuthPaths, requireAuth, syncAppUser);
 
 // -------------------------------------------------------------
 // USER PROFILE & PREFERENCES

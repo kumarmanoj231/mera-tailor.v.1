@@ -14,6 +14,9 @@ import webhookRoutes from './webhookRoutes.js';
 
 const router = Router();
 
+// Public health check router (unauthenticated)
+router.use(healthRoutes);
+
 // Primary RESTful User Resource
 router.use('/users', userRoutes);
 
@@ -31,7 +34,6 @@ router.use(
   businessRequestRoutes,
   adminRoutes,
   roleDashboardRoutes,
-  healthRoutes,
   voiceRoutes
 );
 

@@ -7,10 +7,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import apiRoutes from './routes/index.js';
 import { connectDatabase } from './config/database.js';
+import { getHealth } from './controllers/healthController.js';
 
 const app = express();
 const projectDir = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(projectDir, '../dist');
+
+// Direct public health check for Render & uptime monitors (always returns 200)
+app.get(['/health', '/api/health'], getHealth);
+
 const clerkPublishableKey = process.env.CLERK_PUBLISHABLE_KEY || process.env.VITE_CLERK_PUBLISHABLE_KEY;
 if (process.env.CLERK_SECRET_KEY && clerkPublishableKey) {
   app.use(clerkMiddleware({ secretKey: process.env.CLERK_SECRET_KEY, publishableKey: clerkPublishableKey }));
