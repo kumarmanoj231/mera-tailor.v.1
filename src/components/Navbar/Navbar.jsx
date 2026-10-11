@@ -121,9 +121,7 @@ const Navbar = () => {
             />
           )}
 
-          {isSignedIn && (
-            <NotificationBell mobile />
-          )}
+          <NotificationBell mobile />
 
           {isSignedIn && (
             <div className="pl-0.5">

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Bell } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNotifications } from '../../context/NotificationContext';
@@ -7,12 +7,17 @@ import NotificationDropdown from './NotificationDropdown';
 const NotificationBell = ({ mobile = false }) => {
   const { t } = useTranslation();
   const { unreadCount, isOpen, toggleOpen } = useNotifications();
+  const triggerRef = useRef(null);
 
   return (
-    <div className="relative inline-block">
+    <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => toggleOpen()}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleOpen();
+        }}
         className={`group relative flex items-center justify-center rounded-xl border border-stone-200 text-stone-700 transition cursor-pointer active:scale-95 ${
           isOpen
             ? 'bg-stone-100 border-stone-300 text-stone-900'
@@ -41,7 +46,12 @@ const NotificationBell = ({ mobile = false }) => {
       </button>
 
       {/* Dropdown Popover */}
-      {isOpen && <NotificationDropdown onClose={() => toggleOpen(false)} />}
+      {isOpen && (
+        <NotificationDropdown
+          triggerRef={triggerRef}
+          onClose={() => toggleOpen(false)}
+        />
+      )}
     </div>
   );
 };

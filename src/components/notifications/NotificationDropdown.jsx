@@ -19,6 +19,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { useNotifications } from '../../context/NotificationContext';
+import { useAuth } from '../../context/AuthContext';
 
 // Helper for relative timestamps
 function formatTimeAgo(dateString) {
@@ -80,9 +81,10 @@ function getNotificationBg(type) {
   }
 }
 
-const NotificationDropdown = ({ onClose }) => {
+const NotificationDropdown = ({ onClose, triggerRef }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { isSignedIn, openSignUp } = useAuth();
   const {
     notifications,
     unreadCount,
@@ -106,10 +108,17 @@ const NotificationDropdown = ({ onClose }) => {
   // Close on outside click
   useEffect(() => {
     const handleOutsideClick = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        onClose();
+      // If clicking inside the dropdown container, ignore
+      if (containerRef.current && containerRef.current.contains(event.target)) {
+        return;
       }
+      // If clicking on the trigger bell button itself, ignore (toggle is handled by the bell button)
+      if (triggerRef?.current && triggerRef.current.contains(event.target)) {
+        return;
+      }
+      onClose();
     };
+
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
         onClose();
@@ -122,7 +131,7 @@ const NotificationDropdown = ({ onClose }) => {
       document.removeEventListener('mousedown', handleOutsideClick);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [onClose]);
+  }, [onClose, triggerRef]);
 
   const handleNotificationClick = (notification) => {
     if (!notification.read) {
@@ -142,7 +151,9 @@ const NotificationDropdown = ({ onClose }) => {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-x-3 top-20 z-[90] max-h-[85vh] overflow-hidden rounded-2xl border border-stone-200/90 bg-white shadow-2xl transition-all sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[440px]"
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      className="fixed inset-x-3 top-20 z-[100] max-h-[85vh] overflow-hidden rounded-2xl border border-stone-200/90 bg-white shadow-2xl transition-all pointer-events-auto sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[440px]"
       role="dialog"
       aria-label={t('navbar.notifications', 'Notifications')}
     >
@@ -309,10 +320,24 @@ const NotificationDropdown = ({ onClose }) => {
                 : t('navbar.noNotifications', 'No notifications yet')}
             </p>
             <p className="mt-1 text-xs text-stone-500 max-w-xs">
-              {filter === 'unread'
+              {!isSignedIn
+                ? 'Sign in or create an account to view your live orders, tailor quotes, and status alerts.'
+                : filter === 'unread'
                 ? 'You have read all current alerts. Check the All tab for past updates.'
                 : 'Order requests, status changes, tailor quotes, and announcements will appear here.'}
             </p>
+            {!isSignedIn && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  openSignUp();
+                }}
+                className="mt-4 rounded-xl bg-[#8f2338] px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-[#781c2e] active:scale-95 cursor-pointer"
+              >
+                Sign In to View
+              </button>
+            )}
           </div>
         )}
 

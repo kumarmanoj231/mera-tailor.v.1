@@ -52,13 +52,17 @@ const DesktopActions = ({
       )}
 
       {/* =====================================================
-          AUTHENTICATED USER: NOTIFICATIONS, DASHBOARD & AVATAR
+          NOTIFICATION BELL (ALL ROLES & VISITORS)
+      ====================================================== */}
+      <div className="flex items-center border-l border-stone-200/80 pl-2">
+        <NotificationBell />
+      </div>
+
+      {/* =====================================================
+          AUTHENTICATED USER: DASHBOARD & AVATAR
       ====================================================== */}
       {isSignedIn ? (
         <div className="flex items-center gap-2 border-l border-stone-200/80 pl-2">
-          {/* Real-time Notification Bell */}
-          <NotificationBell />
-
           {/* Single clean dashboard nav icon, dynamically linked to /admin for admin */}
           <NavIconButton
             to={dashboardRoute}
