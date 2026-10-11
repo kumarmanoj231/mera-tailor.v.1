@@ -139,6 +139,56 @@ export async function acceptOrderQuote(req, res) {
   }
 }
 
+/**
+ * Customer cancel order endpoint
+ * Order can ONLY be cancelled if no progress has been made by the tailor
+ * (i.e., status is Request Sent or Quote Received).
+ * Cancelled orders are preserved in MongoDB and NEVER purged.
+ */
+export async function cancelCustomerOrder(req, res) {
+  try {
+    const order = await Order.findOne({ id: req.params.id });
+    if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+    const isOwner = String(order.clerkUserId) === String(req.authUserId);
+    const isAdmin = req.appUser?.role === 'admin';
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'You are not authorized to cancel this order.' });
+    }
+
+    if (order.status === 'Cancelled') {
+      return res.status(400).json({ error: 'This order is already cancelled.' });
+    }
+
+    // Gating check: customer can only cancel if tailor has NOT made progress
+    // If Accepted, In Production, Ready for Pickup, or Completed, cancellation is blocked.
+    const cancellableStatuses = ['Request Sent', 'Quote Received', 'Pending Review'];
+    if (!cancellableStatuses.includes(order.status) && !isAdmin) {
+      return res.status(400).json({
+        error: `Cannot cancel order in status '${order.status}'. Work or commitment has already commenced with the atelier. Please contact the studio directly.`,
+      });
+    }
+
+    const reason = String(req.body?.reason || 'Cancelled by customer').trim().slice(0, 300);
+    order.status = 'Cancelled';
+    order.history = order.history || [];
+    order.history.push([
+      'Cancelled',
+      new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+      reason,
+    ]);
+    await order.save();
+
+    res.json({
+      success: true,
+      message: 'Order successfully cancelled and stored in past orders.',
+      order,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
 export async function updateOrderStatus(req, res) {
   try {
     const order = await Order.findOne({ id: req.params.id });

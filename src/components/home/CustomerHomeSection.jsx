@@ -200,6 +200,7 @@ export default function CustomerHomeSection() {
   const [savedCount, setSavedCount] = useState(0);
   const [recommendedTailors, setRecommendedTailors] = useState([]);
   const [loadingTailors, setLoadingTailors] = useState(true);
+  const [loadingOrders, setLoadingOrders] = useState(true);
 
   // Customer Name and Location formatted cleanly
   const rawName = profile?.firstName || user?.firstName || profile?.name?.split(" ")[0] || "Customer";
@@ -214,6 +215,7 @@ export default function CustomerHomeSection() {
     async function loadDashboardData() {
       try {
         setLoadingTailors(true);
+        setLoadingOrders(true);
         const token = await getToken();
         if (token) {
           const res = await fetch("/api/users/dashboard", {
@@ -242,7 +244,10 @@ export default function CustomerHomeSection() {
       } catch (err) {
         console.warn("Failed to load customer home data:", err);
       } finally {
-        if (active) setLoadingTailors(false);
+        if (active) {
+          setLoadingTailors(false);
+          setLoadingOrders(false);
+        }
       }
     }
 
@@ -648,7 +653,26 @@ export default function CustomerHomeSection() {
           </Link>
         </div>
 
-        {activeOrders.length > 0 ? (
+        {loadingOrders ? (
+          <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map((n) => (
+              <div
+                key={n}
+                className="h-44 animate-pulse rounded-2xl border border-stone-200 bg-stone-100/70 p-5 flex flex-col justify-between"
+              >
+                <div className="space-y-2.5">
+                  <div className="flex justify-between">
+                    <div className="h-5 w-24 rounded-md bg-stone-200" />
+                    <div className="h-5 w-16 rounded-full bg-stone-200" />
+                  </div>
+                  <div className="h-4 w-3/4 rounded-md bg-stone-200 mt-2" />
+                  <div className="h-3 w-1/2 rounded-md bg-stone-200" />
+                </div>
+                <div className="h-8 w-full rounded-xl bg-stone-200" />
+              </div>
+            ))}
+          </div>
+        ) : activeOrders.length > 0 ? (
           <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {activeOrders.map((order) => (
               <div
@@ -658,7 +682,7 @@ export default function CustomerHomeSection() {
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="rounded-md bg-white border border-stone-200 px-2.5 py-0.5 text-xs font-bold text-stone-800">
-                      {order.garmentType || "Bespoke Garment"}
+                      {order.garment || order.category || (isHi ? "कस्टम परिधान" : "Bespoke Garment")}
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-emerald-800">
                       <Clock3 size={11} />
@@ -667,7 +691,7 @@ export default function CustomerHomeSection() {
                   </div>
 
                   <h3 className="mt-3 text-sm font-bold text-stone-900 line-clamp-1">
-                    {order.tailorName ? `${order.tailorName} Atelier` : "Local Tailor Studio"}
+                    {order.tailorName || (isHi ? "सत्यापित दर्जी स्टूडियो" : "Verified Tailor Atelier")}
                   </h3>
 
                   <p className="mt-1 text-xs text-stone-500 line-clamp-2">
@@ -677,7 +701,7 @@ export default function CustomerHomeSection() {
                   <div className="mt-3 flex items-center justify-between text-xs border-t border-stone-200/80 pt-2.5">
                     <span className="text-stone-500">{isHi ? "कोटेशन मूल्य:" : "Quote Price:"}</span>
                     <strong className="text-stone-900 font-extrabold">
-                      {order.price ? `₹${order.price}` : (isHi ? "प्रतीक्षित" : "Pending")}
+                      {order.quotePrice != null ? `₹${order.quotePrice}` : order.price != null ? `₹${order.price}` : (isHi ? "प्रतीक्षित" : "Pending")}
                     </strong>
                   </div>
                 </div>

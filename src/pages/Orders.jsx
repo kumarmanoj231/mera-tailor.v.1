@@ -26,26 +26,6 @@ import { useAuth } from "../context/AuthContext";
 import { toast } from "react-toastify";
 import { useTranslation } from "react-i18next";
 
-const DEFAULT_SAMPLE_ORDER = {
-  _id: "sample-order-1",
-  id: "MT-3E3484C3",
-  createdAt: "2026-10-06T10:00:00.000Z",
-  garment: "Alteration & Hemming",
-  category: "Alteration",
-  quantity: 1,
-  status: "Completed",
-  tailorName: "Royal Jaipur",
-  tailorId: "rec-1",
-  color: "blackcotton",
-  fabric: "Cotton",
-  deadline: "Flexible",
-  price: 190,
-  quotePrice: 190,
-  image: "/assets/kurta.png",
-  tailorPhone: "+919876543210",
-  notes: "Pant hem shortening by 2 inches and waist fitting adjustment.",
-};
-
 const ORDER_STAGES = [
   { id: "placed", title: "Request Placed", subtitle: "Sent to studio", icon: <FileText size={16} />, offsetDays: 0 },
   { id: "quote", title: "Quote Ready", subtitle: "Awaiting approval", icon: <FileText size={16} />, offsetDays: 0 },
@@ -87,7 +67,8 @@ export default function Orders() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [actingId, setActingId] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [confirmDeleteOrder, setConfirmDeleteOrder] = useState(null);
+  const [cancelModalOrder, setCancelModalOrder] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
 
   const load = async () => {
     try {
@@ -116,11 +97,10 @@ export default function Orders() {
     }
   }, [isSignedIn]);
 
-  // Use orders from API, or fallback to sample order so the UI is immediately enriched
+  // Purely database-driven list - zero dummy or sample order fallbacks
   const activeOrdersList = useMemo(() => {
     if (!isSignedIn) return [];
-    if (orders.length > 0) return orders;
-    return [DEFAULT_SAMPLE_ORDER];
+    return orders;
   }, [orders, isSignedIn]);
 
   // Quote acceptance action
@@ -129,7 +109,7 @@ export default function Orders() {
     try {
       const token = await getToken();
       const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/accept`, {
-        method: "PUT",
+        method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -140,7 +120,7 @@ export default function Orders() {
       toast.success(isHi ? "कोटेशन स्वीकार कर लिया गया!" : "Quote accepted! Tailor notified.");
       await load();
       if (selectedOrder?.id === orderId) {
-        setSelectedOrder((prev) => (prev ? { ...prev, status: "In Production" } : null));
+        setSelectedOrder((prev) => (prev ? { ...prev, status: "Accepted" } : null));
       }
     } catch (e) {
       toast.error(e.message || "Failed to accept quote.");
@@ -149,31 +129,38 @@ export default function Orders() {
     }
   };
 
-  // Delete / cancel order
-  const cancelOrder = async (orderId) => {
+  // Safe cancellation: cancels without purging from DB so past order history is preserved
+  const handleCancelOrder = async (orderId) => {
     setActingId(orderId);
     try {
       const token = await getToken();
-      const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/cancel`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason: cancelReason || "Cancelled by customer" }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not delete order.");
-      toast.success(isHi ? "ऑर्डर अनुरोध हटा दिया गया।" : "Order request cancelled.");
-      setOrders((prev) => prev.filter((o) => (o.id || o._id) !== orderId));
-      setConfirmDeleteOrder(null);
-      if (selectedOrder?.id === orderId) setSelectedOrder(null);
+      if (!res.ok) throw new Error(data.error || "Could not cancel order.");
+      toast.success(isHi ? "ऑर्डर सफलतापूर्वक रद्द कर दिया गया।" : "Order cancelled and archived in history.");
+      setCancelModalOrder(null);
+      setCancelReason("");
+      await load();
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder((prev) => (prev ? { ...prev, status: "Cancelled" } : null));
+      }
     } catch (e) {
-      toast.error(e.message || "Failed to delete order.");
+      toast.error(e.message || "Failed to cancel order.");
     } finally {
       setActingId("");
     }
   };
 
-  // Filter calculations
+  // Filter calculations across pure database orders
   const activeCount = useMemo(
-    () => activeOrdersList.filter((o) => ["In Production", "Accepted"].includes(o.status)).length,
+    () => activeOrdersList.filter((o) => ["In Production", "Accepted", "Request Sent", "Pending Review"].includes(o.status)).length,
     [activeOrdersList]
   );
   const quoteCount = useMemo(
@@ -184,16 +171,22 @@ export default function Orders() {
     () => activeOrdersList.filter((o) => ["Ready for Pickup", "Ready", "Completed"].includes(o.status)).length,
     [activeOrdersList]
   );
+  const cancelledCount = useMemo(
+    () => activeOrdersList.filter((o) => o.status === "Cancelled").length,
+    [activeOrdersList]
+  );
 
   const filteredOrders = useMemo(() => {
     let list = activeOrdersList;
 
     if (statusFilter === "active") {
-      list = list.filter((o) => ["In Production", "Accepted"].includes(o.status));
+      list = list.filter((o) => ["In Production", "Accepted", "Request Sent", "Pending Review"].includes(o.status));
     } else if (statusFilter === "quotes") {
       list = list.filter((o) => ["Quote Received", "Quote Ready"].includes(o.status));
     } else if (statusFilter === "completed") {
       list = list.filter((o) => ["Ready for Pickup", "Ready", "Completed"].includes(o.status));
+    } else if (statusFilter === "cancelled") {
+      list = list.filter((o) => o.status === "Cancelled");
     }
 
     if (searchQuery.trim()) {
@@ -230,8 +223,13 @@ export default function Orders() {
     }
   };
 
+  // Check if order is cancellable by customer (tailor has not started progress)
+  const isOrderCancellable = (order) => {
+    return order && ["Request Sent", "Quote Received", "Pending Review"].includes(order.status);
+  };
+
   return (
-    <div className="min-h-screen bg-[#fbf9f5] text-[#111827] selection:bg-[#8f2338] selection:text-white">
+    <div className="min-h-screen bg-[#fbf9f5] font-sans text-[#111827] selection:bg-[#8f2338] selection:text-white">
       <Navbar />
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -256,19 +254,19 @@ export default function Orders() {
                   <ShoppingBag size={20} />
                 </div>
                 <div>
-                  <span className="text-[11px] font-black uppercase tracking-wider text-[#8f2338]">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#8f2338]">
                     {isHi ? "आपकी गतिविधि" : "YOUR ACTIVITY"}
                   </span>
-                  <h1 className="font-serif text-2xl sm:text-3xl font-black tracking-tight text-stone-900 leading-tight">
+                  <h1 className="font-sans text-2xl sm:text-3xl font-black tracking-tight text-stone-900 leading-tight">
                     {isHi ? "मेरे ऑर्डर" : "My Orders"}
                   </h1>
                 </div>
               </div>
 
-              <p className="mt-1 text-xs sm:text-sm text-stone-500 leading-relaxed">
+              <p className="mt-1 text-xs sm:text-sm text-stone-500 leading-relaxed font-sans">
                 {isHi
-                  ? "अपने सिलाई अनुरोधों, कोट्स और पिछले ऑर्डरों को ट्रैक करें।"
-                  : "Track your tailoring requests and previous orders."}
+                  ? "अपने सिलाई अनुरोधों, कोट्स और पिछले सभी ऑर्डरों को ट्रैक करें।"
+                  : "Track your tailoring requests, review quotes, and follow your order history."}
               </p>
             </div>
 
@@ -284,20 +282,20 @@ export default function Orders() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={isHi ? "ऑर्डर, परिधान या स्टूडियो खोजें..." : "Search order, garment, studio..."}
-                    className="w-full sm:w-64 rounded-xl border border-stone-200 bg-[#fdfbf9] pl-9 pr-3 py-2 text-xs outline-none focus:border-[#8f2338] focus:bg-white focus:ring-2 focus:ring-rose-100 transition"
+                    className="w-full sm:w-64 rounded-xl border border-stone-200 bg-[#fdfbf9] pl-9 pr-3 py-2 text-xs font-sans outline-none focus:border-[#8f2338] focus:bg-white focus:ring-2 focus:ring-rose-100 transition"
                   />
                 </div>
 
                 <div className="inline-flex items-center justify-center rounded-full border border-stone-200 bg-white px-3.5 py-1.5 text-xs font-bold text-stone-700 shadow-2xs">
                   <span>
-                    {activeOrdersList.length} {isHi ? "कुल ऑर्डर" : "Total"}
+                    {activeOrdersList.length} {isHi ? "कुल ऑर्डर" : "Total Orders"}
                   </span>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Filter Status Tabs Strip matching mockup */}
+          {/* Filter Status Tabs Strip */}
           {isSignedIn && (
             <div className="relative z-10 mt-6 flex items-center gap-2 overflow-x-auto border-t border-stone-100 pt-5 pb-1 scrollbar-thin">
               {[
@@ -309,7 +307,7 @@ export default function Orders() {
                 },
                 {
                   id: "active",
-                  label: isHi ? "प्रगति पर" : "In Progress",
+                  label: isHi ? "सक्रिय / प्रगति पर" : "Active & In Progress",
                   count: activeCount,
                   icon: <Clock size={14} />,
                 },
@@ -321,9 +319,15 @@ export default function Orders() {
                 },
                 {
                   id: "completed",
-                  label: isHi ? "तैयार व डिलीवर" : "Ready & Delivered",
+                  label: isHi ? "तैयार व डिलीवर" : "Completed",
                   count: completedCount,
                   icon: <Truck size={14} />,
+                },
+                {
+                  id: "cancelled",
+                  label: isHi ? "रद्द किए गए" : "Cancelled",
+                  count: cancelledCount,
+                  icon: <X size={14} />,
                 },
               ].map((tab) => {
                 const isActive = statusFilter === tab.id;
@@ -594,6 +598,35 @@ export default function Orders() {
                         </div>
 
                         <div className="flex items-center gap-2">
+                          {/* Cancel Order Button (Available only if no progress has been made) */}
+                          {isOrderCancellable(order) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCancelModalOrder(order);
+                                setCancelReason("");
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100 px-3 py-2 text-xs font-bold text-[#8f2338] shadow-2xs transition active:scale-95"
+                              title="Cancel order before studio starts cutting/production"
+                            >
+                              <X size={13} />
+                              <span>{isHi ? "रद्द करें" : "Cancel"}</span>
+                            </button>
+                          )}
+
+                          {/* Accept Quote Button if Quote Received */}
+                          {(order.status === "Quote Received" || order.status === "Quote Ready") && (
+                            <button
+                              type="button"
+                              disabled={actingId === order.id}
+                              onClick={() => acceptQuote(order.id)}
+                              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 px-3 py-2 text-xs font-bold text-white shadow-xs transition active:scale-95 disabled:opacity-50"
+                            >
+                              <CheckCircle2 size={13} />
+                              <span>{actingId === order.id ? (isHi ? "स्वीकार कर रहे..." : "Accepting...") : (isHi ? "कोट स्वीकारें" : "Accept Quote")}</span>
+                            </button>
+                          )}
+
                           {/* View Details Button */}
                           <button
                             type="button"
@@ -624,6 +657,78 @@ export default function Orders() {
         )}
 
         {/* =========================================================
+            CANCEL ORDER CONFIRMATION MODAL
+        ========================================================== */}
+        {cancelModalOrder && (
+          <div
+            className="fixed inset-0 z-[1050] flex items-center justify-center bg-stone-950/60 p-4 backdrop-blur-xs transition-opacity"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setCancelModalOrder(null);
+            }}
+          >
+            <div className="relative w-full max-w-md rounded-3xl bg-white p-6 sm:p-7 shadow-2xl transition-all">
+              <div className="flex items-center gap-3 border-b border-stone-100 pb-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-[#8f2338]">
+                  <AlertCircle size={20} />
+                </div>
+                <div>
+                  <h3 className="font-sans text-base sm:text-lg font-bold text-stone-900">
+                    {isHi ? "ऑर्डर रद्द करने की पुष्टि" : "Cancel Tailoring Request?"}
+                  </h3>
+                  <p className="text-xs text-stone-400">
+                    Reference #{cancelModalOrder.id || cancelModalOrder._id?.slice(-8).toUpperCase()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3 text-xs sm:text-sm">
+                <p className="text-stone-600 leading-relaxed font-sans">
+                  {isHi
+                    ? "क्या आप वाकई इस सिलाई अनुरोध को रद्द करना चाहते हैं? चूंकि दर्जी ने अभी सिलाई या कटाई शुरू नहीं की है, इसलिए आप इसे अभी रद्द कर सकते हैं। यह रिकॉर्ड आपके पिछले ऑर्डरों में सुरक्षित रहेगा।"
+                    : "Are you sure you want to cancel this order? Because the tailoring studio has not yet begun fabric cutting or production, cancellation is permitted. This order will remain safely preserved in your past orders history."}
+                </p>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    {isHi ? "रद्द करने का कारण (वैकल्पिक):" : "Reason for cancellation (optional):"}
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    placeholder={isHi ? "जैसे: कार्यक्रम की तारीख बदल गई..." : "e.g., Event date changed, found fabric locally..."}
+                    className="w-full rounded-xl border border-stone-200 bg-stone-50 p-2.5 text-xs font-sans outline-none focus:border-[#8f2338] focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-2 border-t border-stone-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setCancelModalOrder(null)}
+                  className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50 transition"
+                >
+                  {isHi ? "रखें" : "Keep Order"}
+                </button>
+                <button
+                  type="button"
+                  disabled={actingId === cancelModalOrder.id}
+                  onClick={() => handleCancelOrder(cancelModalOrder.id)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] transition disabled:opacity-50"
+                >
+                  <X size={14} />
+                  <span>
+                    {actingId === cancelModalOrder.id
+                      ? (isHi ? "रद्द हो रहा..." : "Cancelling...")
+                      : (isHi ? "हां, रद्द करें" : "Confirm Cancel")}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================
             ORDER DETAILS MODAL
         ========================================================== */}
         {selectedOrder && (
@@ -641,7 +746,7 @@ export default function Orders() {
                     <Scissors size={20} />
                   </div>
                   <div>
-                    <h3 className="font-serif text-lg font-bold text-stone-900">
+                    <h3 className="font-sans text-lg font-bold text-stone-900">
                       {isHi ? "ऑर्डर विवरण" : "Order Specifications"}
                     </h3>
                     <p className="text-xs text-stone-400">
@@ -664,7 +769,7 @@ export default function Orders() {
                 <div className="grid grid-cols-2 gap-3 bg-[#fdfbf9] p-3.5 rounded-2xl border border-stone-100">
                   <div>
                     <span className="text-[10px] uppercase font-bold text-stone-400">Garment</span>
-                    <p className="font-bold text-stone-900 mt-0.5">{selectedOrder.garment || "Alteration & Hemming"}</p>
+                    <p className="font-bold text-stone-900 mt-0.5">{selectedOrder.garment || selectedOrder.category || "Custom Garment"}</p>
                   </div>
                   <div>
                     <span className="text-[10px] uppercase font-bold text-stone-400">Status</span>
@@ -675,17 +780,17 @@ export default function Orders() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <span className="text-[10px] uppercase font-bold text-stone-400">Color</span>
-                    <p className="font-semibold text-stone-800">{selectedOrder.color || "blackcotton"}</p>
+                    <p className="font-semibold text-stone-800">{selectedOrder.color || "Specified"}</p>
                   </div>
                   <div>
                     <span className="text-[10px] uppercase font-bold text-stone-400">Fabric</span>
-                    <p className="font-semibold text-stone-800">{selectedOrder.fabric || "Cotton"}</p>
+                    <p className="font-semibold text-stone-800">{selectedOrder.fabric || "Selected"}</p>
                   </div>
                 </div>
 
                 <div>
                   <span className="text-[10px] uppercase font-bold text-stone-400">Tailoring Studio</span>
-                  <p className="font-bold text-stone-900 mt-0.5">{selectedOrder.tailorName || "Royal Jaipur"}</p>
+                  <p className="font-bold text-stone-900 mt-0.5">{selectedOrder.tailorName || "Studio Atelier"}</p>
                 </div>
 
                 {selectedOrder.notes && (
@@ -697,32 +802,69 @@ export default function Orders() {
                   </div>
                 )}
 
+                {/* Status Timeline History */}
+                {Array.isArray(selectedOrder.history) && selectedOrder.history.length > 0 && (
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-stone-400 block mb-2">Order Activity Log</span>
+                    <div className="space-y-1.5 bg-stone-50/70 p-3 rounded-xl border border-stone-100">
+                      {selectedOrder.history.map((step, idx) => {
+                        const stepTitle = Array.isArray(step) ? step[0] : String(step);
+                        const stepDate = Array.isArray(step) && step[1] ? step[1] : "";
+                        const stepDetail = Array.isArray(step) && step[2] ? step[2] : "";
+                        return (
+                          <div key={idx} className="flex items-center justify-between text-xs">
+                            <span className="font-medium text-stone-800">{stepTitle}{stepDetail ? ` (${stepDetail})` : ""}</span>
+                            <span className="text-stone-400 font-mono text-[11px]">{stepDate}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="border-t border-stone-100 pt-3 flex items-center justify-between">
                   <span className="font-bold text-stone-700">Total Quotation</span>
                   <strong className="text-xl font-black text-[#8f2338]">
-                    ₹{selectedOrder.quotePrice || selectedOrder.price || 190}
+                    ₹{selectedOrder.quotePrice || selectedOrder.price || 0}
                   </strong>
                 </div>
               </div>
 
               {/* Modal Footer */}
-              <div className="mt-6 flex items-center justify-end gap-2 border-t border-stone-100 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setSelectedOrder(null)}
-                  className="rounded-xl border border-stone-200 bg-white px-4 py-2 font-bold text-stone-700 hover:bg-stone-50"
-                >
-                  Close
-                </button>
-                {selectedOrder.status === "Quote Received" && (
+              <div className="mt-6 flex items-center justify-between gap-2 border-t border-stone-100 pt-4">
+                {isOrderCancellable(selectedOrder) ? (
                   <button
                     type="button"
-                    onClick={() => acceptQuote(selectedOrder.id)}
-                    className="rounded-xl bg-[#8f2338] px-5 py-2 font-bold text-white shadow-xs hover:bg-[#781c2e]"
+                    onClick={() => {
+                      setCancelModalOrder(selectedOrder);
+                      setSelectedOrder(null);
+                    }}
+                    className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-bold text-[#8f2338] hover:bg-rose-100 transition"
                   >
-                    Accept Quote
+                    {isHi ? "ऑर्डर रद्द करें" : "Cancel Request"}
                   </button>
+                ) : (
+                  <div />
                 )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrder(null)}
+                    className="rounded-xl border border-stone-200 bg-white px-4 py-2 font-bold text-stone-700 hover:bg-stone-50 text-xs"
+                  >
+                    Close
+                  </button>
+                  {selectedOrder.status === "Quote Received" && (
+                    <button
+                      type="button"
+                      onClick={() => acceptQuote(selectedOrder.id)}
+                      className="rounded-xl bg-[#8f2338] px-5 py-2 font-bold text-white shadow-xs hover:bg-[#781c2e] text-xs"
+                    >
+                      Accept Quote
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   acceptOrderQuote,
+  cancelCustomerOrder,
   createOrder,
   declineOrder,
   deleteOrder,
@@ -24,6 +25,8 @@ router.delete('/orders/:id', ...signedIn, validateOrderId, deleteOrder);
 router.patch('/orders/:id/quote', ...signedIn, requireRole('tailor', 'admin'), validateOrderId, sendOrderQuote);
 router.patch('/orders/:id/decline', ...signedIn, requireRole('tailor', 'admin'), validateOrderId, declineOrder);
 router.patch('/orders/:id/accept', ...signedIn, requireRole('customer', 'admin'), validateOrderId, acceptOrderQuote);
+router.patch('/orders/:id/cancel', ...signedIn, requireRole('customer', 'admin'), validateOrderId, cancelCustomerOrder);
+router.put('/orders/:id/cancel', ...signedIn, requireRole('customer', 'admin'), validateOrderId, cancelCustomerOrder);
 router.patch('/orders/:id/status', ...signedIn, requireRole('tailor', 'admin'), validateOrderId, updateOrderStatus);
 
 export default router;
