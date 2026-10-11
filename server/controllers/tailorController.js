@@ -2,7 +2,7 @@ import { BusinessRequest, Order, Tailor, User, Review } from '../models.js';
 import { createNotification } from './notificationController.js';
 
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const publicTailor = ({ ownerClerkUserId, verifiedBy, __v, ...tailor }) => tailor;
+const publicTailor = ({ verifiedBy, __v, ...tailor }) => tailor;
 
 function haversineKm(lat1, lon1, lat2, lon2) {
   if (!Number.isFinite(lat1) || !Number.isFinite(lon1) || !Number.isFinite(lat2) || !Number.isFinite(lon2)) return null;
@@ -136,11 +136,17 @@ export async function getTailor(req, res) {
 
     if (tailor.ownerClerkUserId) {
       const ownerUser = await User.findOne({ clerkUserId: tailor.ownerClerkUserId })
-        .select('avatar imageUrl')
+        .select('firstName lastName avatar imageUrl')
         .lean();
-      const userImg = ownerUser?.avatar || ownerUser?.imageUrl;
-      if (userImg) {
-        tailor.image = userImg;
+      if (ownerUser) {
+        const userImg = ownerUser.avatar || ownerUser.imageUrl;
+        if (userImg) {
+          tailor.image = userImg;
+        }
+        if (!tailor.owner || tailor.owner === 'Master Artisan') {
+          const fullName = `${ownerUser.firstName || ''} ${ownerUser.lastName || ''}`.trim();
+          if (fullName) tailor.owner = fullName;
+        }
       }
     }
 

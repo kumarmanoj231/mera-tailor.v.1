@@ -1,5 +1,6 @@
-import { BusinessRequest, Tailor, User } from '../models.js';
+import { Business, BusinessRequest, Tailor, User } from '../models.js';
 import { createNotification } from './notificationController.js';
+import { getOrSyncBusinessProfile } from '../utils/businessProfileMigration.js';
 
 const escapeRegex = value => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -15,7 +16,11 @@ export async function createBusinessRequest(req, res) {
     }
 
     // STRICT CHECK: Only verified business accounts can publish requirements
-    const bp = req.appUser?.businessProfile;
+    let business = await Business.findOne({ ownerClerkUserId: req.authUserId });
+    if (!business && req.appUser?.businessProfile?.companyName) {
+      business = await getOrSyncBusinessProfile(req.authUserId, req.appUser);
+    }
+    const bp = business || req.appUser?.businessProfile;
     if (userRole === 'business') {
       const isVerified = bp?.verified === true || bp?.verificationStatus === 'verified';
       if (!isVerified) {
@@ -143,9 +148,25 @@ export async function listBusinessRequests(req, res) {
       });
     }
 
+    // Gather creator Clerk user IDs to enrich authentic company avatars
+    const allCreatorUserIds = [...new Set(rows.map(r => r.clerkUserId).filter(Boolean))];
+    const creatorUserMap = new Map();
+    if (allCreatorUserIds.length > 0) {
+      const creatorUsers = await User.find({ clerkUserId: { $in: allCreatorUserIds } })
+        .select('clerkUserId avatar imageUrl firstName lastName')
+        .lean();
+      creatorUsers.forEach(u => {
+        creatorUserMap.set(u.clerkUserId, {
+          avatar: u.avatar || u.imageUrl || '',
+          name: `${u.firstName || ''} ${u.lastName || ''}`.trim(),
+        });
+      });
+    }
+
     const formatted = rows.map((r) => {
       const isOwner = r.clerkUserId === req.authUserId;
       const quotesCount = r.quotes?.length || 0;
+      const creatorInfo = creatorUserMap.get(r.clerkUserId);
 
       // Enrich quotes with authentic Clerk avatar if missing
       const enrichedQuotes = (r.quotes || []).map(q => ({
@@ -171,6 +192,8 @@ export async function listBusinessRequests(req, res) {
 
       return {
         ...r,
+        creatorAvatar: creatorInfo?.avatar || '',
+        creatorName: r.creatorName || creatorInfo?.name || 'Business Client',
         isOwner,
         quotesCount,
         quotes: visibleQuotes,
@@ -362,10 +385,10 @@ export async function submitQuote(req, res) {
       createNotification({
         recipientClerkUserId: item.clerkUserId,
         title: 'New Quotation Received',
-        message: `${tailor.name || 'An atelier'} submitted a quote of ₹${quotePayload.totalPrice} for '${item.organisation || item.requirement}'.`,
+        message: `${tailor.name || 'An atelier'} submitted a quote of ₹${quotePayload.totalAmount} for '${item.organisation || item.requirement}'.`,
         type: 'bid',
         link: '/bulk',
-        metadata: { requestId: item._id, quoteId: quotePayload._id, totalPrice: quotePayload.totalPrice },
+        metadata: { requestId: item._id, quoteId: quotePayload._id, totalAmount: quotePayload.totalAmount },
       }).catch(() => {});
     }
 
@@ -480,12 +503,28 @@ export async function getBusinessProfile(req, res) {
     const user = await User.findOne({ clerkUserId: req.authUserId }).lean();
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
+    let business = await Business.findOne({ ownerClerkUserId: req.authUserId }).lean();
+    if (!business && (user.role === 'business' || user.businessProfile?.companyName || user.businessProfile?.verificationStatus)) {
+      business = await getOrSyncBusinessProfile(req.authUserId, user);
+      if (business?.toObject) business = business.toObject();
+    }
+
+    const businessData = business || user.businessProfile || {
+      verificationStatus: 'unverified',
+      verified: false,
+    };
+
     res.json({
-      businessProfile: user.businessProfile || {
-        verificationStatus: 'unverified',
-        verified: false,
-      },
+      business: businessData,
+      businessProfile: businessData,
       userRole: user.role,
+      user: {
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        avatar: user.avatar || user.imageUrl || '',
+      },
       email: user.email,
       phone: user.phone,
     });
@@ -503,7 +542,9 @@ export async function updateBusinessProfile(req, res) {
     const user = await User.findOne({ clerkUserId: req.authUserId });
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
-    const bp = user.businessProfile || {};
+    let business = await Business.findOne({ ownerClerkUserId: req.authUserId });
+    const bp = business || user.businessProfile || {};
+
     const companyName = String(req.body.companyName || bp.companyName || '').trim().slice(0, 150);
     const gstin = String(req.body.gstin || bp.gstin || '').trim().toUpperCase().slice(0, 20);
     const businessType = String(req.body.businessType || bp.businessType || 'Corporate Enterprise').trim().slice(0, 80);
@@ -513,8 +554,8 @@ export async function updateBusinessProfile(req, res) {
     const city = String(req.body.city || bp.city || 'Jaipur').trim().slice(0, 80);
     const state = String(req.body.state || bp.state || 'Rajasthan').trim().slice(0, 80);
     const pincode = String(req.body.pincode || bp.pincode || '').trim().slice(0, 10);
-    const contactPerson = String(req.body.contactPerson || bp.contactPerson || '').trim().slice(0, 100);
-    const contactPhone = String(req.body.contactPhone || bp.contactPhone || '').trim().slice(0, 25);
+    const contactPerson = String(req.body.contactPerson || bp.contactPerson || `${user.firstName || ''} ${user.lastName || ''}`.trim() || '').trim().slice(0, 100);
+    const contactPhone = String(req.body.contactPhone || bp.contactPhone || user.phone || '').trim().slice(0, 25);
     const documentUrl = String(req.body.documentUrl || bp.documentUrl || '').trim();
 
     if (!companyName) {
@@ -526,8 +567,8 @@ export async function updateBusinessProfile(req, res) {
       return res.status(400).json({ error: 'Invalid GSTIN format. Expected 15-character Indian GST identification number (e.g., 08AAACH7409R1ZZ).' });
     }
 
-    user.businessProfile = {
-      ...bp,
+    const updatePayload = {
+      ownerClerkUserId: req.authUserId,
       companyName,
       gstin,
       businessType,
@@ -540,8 +581,22 @@ export async function updateBusinessProfile(req, res) {
       contactPerson,
       contactPhone,
       documentUrl,
+      image: user.avatar || user.imageUrl || '',
       verificationStatus: req.body.submitForAudit ? 'pending' : (bp.verificationStatus || 'unverified'),
       verificationAppliedAt: req.body.submitForAudit ? new Date() : bp.verificationAppliedAt,
+    };
+
+    business = await Business.findOneAndUpdate(
+      { ownerClerkUserId: req.authUserId },
+      { $set: updatePayload },
+      { new: true, upsert: true, runValidators: true }
+    );
+
+    // Keep user.businessProfile in sync for backward compatibility
+    user.businessProfile = {
+      ...(user.businessProfile || {}),
+      ...updatePayload,
+      verified: Boolean(business.verified),
     };
 
     // Auto-promote role to 'business' if currently 'customer'
@@ -555,7 +610,8 @@ export async function updateBusinessProfile(req, res) {
       message: req.body.submitForAudit
         ? 'Business credentials submitted for administrative verification audit.'
         : 'Business profile updated successfully.',
-      businessProfile: user.businessProfile,
+      business,
+      businessProfile: business,
     });
   } catch (error) {
     res.status(400).json({ error: error.message });

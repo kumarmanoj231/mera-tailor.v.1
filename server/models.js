@@ -255,7 +255,42 @@ const reviewSchema = new mongoose.Schema(
 
 reviewSchema.index({ tailorId: 1, createdAt: -1 });
 
+const businessSchema = new mongoose.Schema(
+  {
+    ownerClerkUserId: { type: String, required: true, unique: true, index: true },
+    companyName: { type: String, required: true, trim: true },
+    gstin: { type: String, trim: true, uppercase: true },
+    businessType: { type: String, trim: true, default: "Corporate Enterprise" },
+    panNumber: { type: String, trim: true, uppercase: true },
+    website: { type: String, trim: true },
+    address: { type: String, trim: true },
+    city: { type: String, trim: true, default: "Jaipur" },
+    state: { type: String, trim: true, default: "Rajasthan" },
+    pincode: { type: String, trim: true },
+    contactPerson: { type: String, trim: true },
+    contactPhone: { type: String, trim: true },
+    documentUrl: { type: String, trim: true },
+    description: { type: String, trim: true },
+    image: { type: String, trim: true },
+    location: pointSchema,
+    verified: { type: Boolean, default: false, index: true },
+    verificationStatus: {
+      type: String,
+      enum: ["unverified", "pending", "verified", "rejected"],
+      default: "unverified",
+      index: true,
+    },
+    verificationAppliedAt: Date,
+    verificationNotes: String,
+    verifiedBy: String,
+    verifiedAt: Date,
+    rejectionReason: String,
+  },
+  { timestamps: true }
+);
+
 export const Tailor = mongoose.models.Tailor || mongoose.model("Tailor", tailorSchema, "tailors");
+export const Business = mongoose.models.Business || mongoose.model("Business", businessSchema, "businesses");
 export const User = mongoose.models.User || mongoose.model("User", userSchema, "users");
 export const Order = mongoose.models.Order || mongoose.model("Order", orderSchema, "orders");
 export const Measurement =

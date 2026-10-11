@@ -47,7 +47,7 @@ export default function BusinessHomeSection() {
 
         if (res.ok) {
           const data = await res.json();
-          const list = Array.isArray(data) ? data : data.bulkOrders || [];
+          const list = Array.isArray(data) ? data : data.bulkOrders || data.requests || [];
           if (isMounted) setMyBulkOrders(list);
         }
       } catch (err) {
@@ -63,7 +63,12 @@ export default function BusinessHomeSection() {
     };
   }, [getToken]);
 
-  const businessName = profile?.businessName || profile?.name || user?.firstName || (isHi ? "बिजनेस पार्टनर" : "Enterprise Partner");
+  const businessName =
+    profile?.businessProfile?.companyName ||
+    profile?.businessName ||
+    profile?.name ||
+    user?.firstName ||
+    (isHi ? "बिजनेस पार्टनर" : "Enterprise Partner");
 
   const bulkCategories = [
     {

@@ -1,6 +1,7 @@
-import { BusinessRequest, Measurement, Order, Tailor, User } from '../models.js';
+import { Business, BusinessRequest, Measurement, Order, Tailor, User } from '../models.js';
 import { clerkClient } from '@clerk/express';
 import { createNotification } from './notificationController.js';
+import { getOrSyncBusinessProfile } from '../utils/businessProfileMigration.js';
 
 export const publicUser = user => ({
   id: user._id?.toString?.() || user.clerkUserId,
@@ -386,8 +387,15 @@ export async function getTailorDashboard(req, res) {
       ? Math.round((serviceList.reduce((acc, s) => acc + (s.days || 5), 0) / serviceList.length) * 10) / 10
       : 0;
 
+    const tailorObj = tailor.toObject ? tailor.toObject() : { ...tailor };
+    const userAvatar = req.appUser?.avatar || req.appUser?.imageUrl || '';
+    if (userAvatar && (!tailorObj.image || tailorObj.image.includes('unsplash.com'))) {
+      tailorObj.image = userAvatar;
+    }
+
     res.json({
-      tailor: tailor.toObject ? tailor.toObject() : tailor,
+      tailor: tailorObj,
+      user: publicUser(req.appUser || {}),
       requests,
       bulkRequirements,
       earnings: {
@@ -430,9 +438,22 @@ export async function getTailorDashboard(req, res) {
  */
 export async function getBusinessDashboard(req, res) {
   try {
+    const user = req.appUser || (await User.findOne({ clerkUserId: req.authUserId }).lean());
+    let business = await Business.findOne({ ownerClerkUserId: req.authUserId }).lean();
+    if (!business && user) {
+      business = await getOrSyncBusinessProfile(req.authUserId, user);
+      if (business?.toObject) business = business.toObject();
+    }
+
     const requests = await BusinessRequest.find({ clerkUserId: req.authUserId }).sort({ createdAt: -1 }).lean();
+    const bp = business || user?.businessProfile || {};
+
     res.json({
+      business: bp,
+      businessProfile: bp,
+      user: user ? publicUser(user) : null,
       requests,
+      bulkOrders: requests,
       stats: {
         totalRequirements: requests.length,
         submitted: requests.filter(r => r.status === 'submitted').length,

@@ -13,12 +13,16 @@ import {
 } from '../controllers/businessRequestController.js';
 import { requireAuth, requireRole, syncAppUser } from '../middleware/authMiddleware.js';
 import { validateObjectId } from '../middleware/validate.js';
+import { getBusinessDashboard } from '../controllers/userController.js';
 
 const router = Router();
 
 // 1. Business Profile & GSTIN Verification Application
 router.get('/business/profile', requireAuth, syncAppUser, getBusinessProfile);
 router.put('/business/profile', requireAuth, syncAppUser, updateBusinessProfile);
+
+// Bulk orders dashboard alias
+router.get('/bulk-orders', requireAuth, syncAppUser, getBusinessDashboard);
 
 // 2. B2B Commercial Tenders & Bulk RFQs (Tailor, Business, Admin)
 router.use('/business-requests', requireAuth, syncAppUser, requireRole('business', 'tailor', 'admin'));

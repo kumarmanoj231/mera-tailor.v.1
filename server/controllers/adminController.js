@@ -1,7 +1,8 @@
 import { clerkClient } from '@clerk/express';
 import { randomBytes } from 'node:crypto';
-import { BusinessRequest, Order, Tailor, User } from '../models.js';
+import { Business, BusinessRequest, Order, Tailor, User } from '../models.js';
 import { createNotification } from './notificationController.js';
+import { getOrSyncBusinessProfile } from '../utils/businessProfileMigration.js';
 
 const roles = ['customer', 'tailor', 'business', 'admin'];
 const publicUser = user => ({
@@ -554,28 +555,83 @@ export async function listAdminNotifications(_req, res) {
  */
 export async function listAdminBusinesses(_req, res) {
   try {
-    const businesses = await User.find({
-      $or: [
-        { role: 'business' },
-        { 'businessProfile.companyName': { $exists: true, $ne: '' } },
-        { 'businessProfile.verificationStatus': { $exists: true } },
-      ],
-    }).sort({ createdAt: -1 }).lean();
+    const [businesses, users] = await Promise.all([
+      Business.find().sort({ createdAt: -1 }).lean(),
+      User.find({
+        $or: [
+          { role: 'business' },
+          { 'businessProfile.companyName': { $exists: true, $ne: '' } },
+          { 'businessProfile.verificationStatus': { $exists: true } },
+        ],
+      }).sort({ createdAt: -1 }).lean(),
+    ]);
 
-    res.json(
-      businesses.map((u) => ({
-        id: u._id,
-        clerkUserId: u.clerkUserId,
-        email: u.email,
-        name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'Business User',
-        phone: u.phone,
-        avatar: u.avatar || u.imageUrl || '',
-        businessProfile: u.businessProfile || {},
-        verificationStatus: u.businessProfile?.verificationStatus || 'unverified',
-        verified: Boolean(u.businessProfile?.verified),
-        createdAt: u.createdAt,
-      }))
-    );
+    const businessMap = new Map();
+    businesses.forEach(b => {
+      businessMap.set(b.ownerClerkUserId, b);
+    });
+
+    const userMap = new Map();
+    users.forEach(u => {
+      userMap.set(u.clerkUserId, u);
+    });
+
+    // Auto-sync any user who has a business profile but no Business document yet
+    for (const u of users) {
+      if (!businessMap.has(u.clerkUserId) && (u.businessProfile?.companyName || u.businessProfile?.verificationStatus)) {
+        const synced = await getOrSyncBusinessProfile(u.clerkUserId, u);
+        if (synced) {
+          businessMap.set(u.clerkUserId, synced.toObject ? synced.toObject() : synced);
+        }
+      }
+    }
+
+    // Combine into uniform list
+    const combined = [];
+    const processedClerkIds = new Set();
+
+    // Add all businesses
+    for (const [clerkId, b] of businessMap.entries()) {
+      processedClerkIds.add(clerkId);
+      const u = userMap.get(clerkId);
+      combined.push({
+        id: b._id,
+        businessId: b._id,
+        userId: u?._id,
+        clerkUserId: clerkId,
+        companyName: b.companyName,
+        email: u?.email || '',
+        name: `${u?.firstName || ''} ${u?.lastName || ''}`.trim() || b.contactPerson || 'Business Client',
+        phone: b.contactPhone || u?.phone || '',
+        avatar: u?.avatar || u?.imageUrl || b.image || '',
+        businessProfile: b,
+        verificationStatus: b.verificationStatus || 'unverified',
+        verified: Boolean(b.verified),
+        createdAt: b.createdAt,
+      });
+    }
+
+    // Include any users with business role not in processedClerkIds
+    for (const u of users) {
+      if (!processedClerkIds.has(u.clerkUserId)) {
+        combined.push({
+          id: u._id,
+          userId: u._id,
+          clerkUserId: u.clerkUserId,
+          companyName: u.businessProfile?.companyName || `${u.firstName || ''}'s Enterprise`,
+          email: u.email || '',
+          name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'Business User',
+          phone: u.phone || '',
+          avatar: u.avatar || u.imageUrl || '',
+          businessProfile: u.businessProfile || {},
+          verificationStatus: u.businessProfile?.verificationStatus || 'unverified',
+          verified: Boolean(u.businessProfile?.verified),
+          createdAt: u.createdAt,
+        });
+      }
+    }
+
+    res.json(combined);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -587,29 +643,75 @@ export async function listAdminBusinesses(_req, res) {
  */
 export async function verifyBusiness(req, res) {
   try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ error: 'Business account not found.' });
+    const id = req.params.id;
+    let business = null;
+    let user = null;
 
-    if (!user.businessProfile) user.businessProfile = {};
-    user.businessProfile.verified = true;
-    user.businessProfile.verificationStatus = 'verified';
-    user.businessProfile.verifiedAt = new Date();
-    user.businessProfile.verifiedBy = req.authUserId;
-    user.businessProfile.rejectionReason = undefined;
-    user.role = 'business';
+    if (/^[a-f\d]{24}$/i.test(id)) {
+      business = await Business.findById(id);
+      if (business) {
+        user = await User.findOne({ clerkUserId: business.ownerClerkUserId });
+      } else {
+        user = await User.findById(id);
+        if (user) {
+          business = await Business.findOne({ ownerClerkUserId: user.clerkUserId });
+          if (!business) {
+            business = await getOrSyncBusinessProfile(user.clerkUserId, user);
+          }
+        }
+      }
+    } else {
+      user = await User.findOne({ clerkUserId: id });
+      business = await Business.findOne({ ownerClerkUserId: id });
+      if (!business && user) {
+        business = await getOrSyncBusinessProfile(id, user);
+      }
+    }
 
-    await user.save();
+    if (!business && !user) {
+      return res.status(404).json({ error: 'Business account not found.' });
+    }
 
-    createNotification({
-      recipientClerkUserId: user.clerkUserId,
-      title: 'Business Account Verified!',
-      message: 'Your organization has been officially verified. You can now post bulk requirements and manage b2b tenders.',
-      type: 'announcement',
-      link: '/bulk',
-      metadata: { businessUserId: user._id },
-    }).catch(() => {});
+    const verifiedAt = new Date();
+    if (business) {
+      business.verified = true;
+      business.verificationStatus = 'verified';
+      business.verifiedAt = verifiedAt;
+      business.verifiedBy = req.authUserId;
+      business.rejectionReason = undefined;
+      if (req.body?.notes) business.verificationNotes = String(req.body.notes).trim().slice(0, 500);
+      await business.save();
+    }
 
-    res.json({ success: true, user: publicUser(user), businessProfile: user.businessProfile });
+    if (user) {
+      if (!user.businessProfile) user.businessProfile = {};
+      user.businessProfile.verified = true;
+      user.businessProfile.verificationStatus = 'verified';
+      user.businessProfile.verifiedAt = verifiedAt;
+      user.businessProfile.verifiedBy = req.authUserId;
+      user.businessProfile.rejectionReason = undefined;
+      user.role = 'business';
+      await user.save();
+    }
+
+    const recipientClerkId = business?.ownerClerkUserId || user?.clerkUserId;
+    if (recipientClerkId) {
+      createNotification({
+        recipientClerkUserId: recipientClerkId,
+        title: 'Business Account Verified!',
+        message: 'Your organization has been officially verified. You can now post bulk requirements and manage B2B tenders.',
+        type: 'announcement',
+        link: '/bulk',
+        metadata: { businessId: business?._id },
+      }).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      business,
+      businessProfile: business || user?.businessProfile,
+      user: user ? publicUser(user) : null,
+    });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -621,28 +723,68 @@ export async function verifyBusiness(req, res) {
  */
 export async function rejectBusiness(req, res) {
   try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ error: 'Business account not found.' });
+    const id = req.params.id;
+    let business = null;
+    let user = null;
 
-    if (!user.businessProfile) user.businessProfile = {};
-    user.businessProfile.verified = false;
-    user.businessProfile.verificationStatus = 'rejected';
-    user.businessProfile.verifiedAt = undefined;
-    user.businessProfile.verifiedBy = undefined;
-    user.businessProfile.rejectionReason = req.body?.reason || 'Business verification rejected by administrator';
+    if (/^[a-f\d]{24}$/i.test(id)) {
+      business = await Business.findById(id);
+      if (business) {
+        user = await User.findOne({ clerkUserId: business.ownerClerkUserId });
+      } else {
+        user = await User.findById(id);
+        if (user) {
+          business = await Business.findOne({ ownerClerkUserId: user.clerkUserId });
+        }
+      }
+    } else {
+      user = await User.findOne({ clerkUserId: id });
+      business = await Business.findOne({ ownerClerkUserId: id });
+    }
 
-    await user.save();
+    if (!business && !user) {
+      return res.status(404).json({ error: 'Business account not found.' });
+    }
 
-    createNotification({
-      recipientClerkUserId: user.clerkUserId,
-      title: 'Business Verification Update',
-      message: `Your business verification application was not approved. Reason: ${user.businessProfile.rejectionReason}`,
-      type: 'general',
-      link: '/bulk',
-      metadata: { businessUserId: user._id },
-    }).catch(() => {});
+    const reason = req.body?.reason || req.body?.notes || 'Business verification rejected by administrator';
 
-    res.json({ success: true, user: publicUser(user), businessProfile: user.businessProfile });
+    if (business) {
+      business.verified = false;
+      business.verificationStatus = 'rejected';
+      business.verifiedAt = undefined;
+      business.verifiedBy = undefined;
+      business.rejectionReason = reason;
+      await business.save();
+    }
+
+    if (user) {
+      if (!user.businessProfile) user.businessProfile = {};
+      user.businessProfile.verified = false;
+      user.businessProfile.verificationStatus = 'rejected';
+      user.businessProfile.verifiedAt = undefined;
+      user.businessProfile.verifiedBy = undefined;
+      user.businessProfile.rejectionReason = reason;
+      await user.save();
+    }
+
+    const recipientClerkId = business?.ownerClerkUserId || user?.clerkUserId;
+    if (recipientClerkId) {
+      createNotification({
+        recipientClerkUserId: recipientClerkId,
+        title: 'Business Verification Update',
+        message: `Your business verification application was not approved. Reason: ${reason}`,
+        type: 'general',
+        link: '/bulk',
+        metadata: { businessId: business?._id },
+      }).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      business,
+      businessProfile: business || user?.businessProfile,
+      user: user ? publicUser(user) : null,
+    });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
