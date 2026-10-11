@@ -2089,71 +2089,111 @@ export default function Dashboard() {
                 </div>
 
                 {/* Verification & Discovery Ranking Booster Card */}
-                <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between border-b border-stone-100 pb-3">
-                    <span className="text-xs font-bold uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
-                      <Sparkles size={14} className="text-amber-500" />
-                      {t("tailorDashboard.rankingBoosterTitle", "Discovery Ranking Booster")}
-                    </span>
-                    <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                      {tailorChecklist.score}% {t("tailorDashboard.score", "Score")}
-                    </span>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div>
-                    <div className="flex justify-between text-[11px] text-stone-500 mb-1">
-                      <span>{t("tailorDashboard.profileCompleteness", "Search Listing Strength")}</span>
-                      <span className="font-bold text-stone-800">{tailorChecklist.completedCount} of {tailorChecklist.totalCount} completed</span>
+                {tailorData?.verified ? (
+                  <div className="rounded-3xl border border-emerald-200 bg-emerald-50/50 p-6 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
+                      <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
+                        <ShieldCheck size={16} className="text-emerald-600" />
+                        {t("tailorDashboard.verifiedStudioStatus", "Verified Studio Status")}
+                      </span>
+                      <span className="rounded-full bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-800">
+                        100% {t("tailorDashboard.score", "Score")}
+                      </span>
                     </div>
-                    <div className="h-2 w-full rounded-full bg-stone-100 overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-[#8f2338] to-emerald-500 transition-all duration-500"
-                        style={{ width: `${tailorChecklist.score}%` }}
-                      />
+
+                    <div className="flex items-start gap-3.5 pt-1">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-xs">
+                        <CheckCircle2 size={20} />
+                      </div>
+                      <div>
+                        <h4 className="font-serif text-base font-bold text-stone-900">
+                          {tailorData?.name || "Verified Master Studio"}
+                        </h4>
+                        <p className="mt-1 text-xs text-stone-600 leading-relaxed">
+                          {t("tailorDashboard.verifiedActiveText", "Your workshop profile is 100% verified and active. Your studio enjoys priority top placement on Find Tailors and full access to B2B commercial orders.")}
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* 5-Step Checklist */}
-                  <ul className="space-y-2.5 text-xs">
-                    {tailorChecklist.steps.map((step) => (
-                      <li key={step.id} className="flex items-start gap-2.5">
-                        {step.done ? (
-                          <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
-                        ) : (
-                          <div className="h-4 w-4 rounded-full border-2 border-stone-300 shrink-0 mt-0.5" />
-                        )}
-                        <div>
-                          <p className={`font-semibold ${step.done ? "text-stone-800" : "text-stone-500"}`}>
-                            {step.title}
-                          </p>
-                          <p className="text-[11px] text-stone-400 line-clamp-1">{step.desc}</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-
-                  {/* Explanation Notice */}
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-stone-800 leading-relaxed">
-                    💡 <strong>{t("tailorDashboard.trendTipHeading", "How to Trend on Find Tailors")}:</strong>{" "}
-                    {t(
-                      "tailorDashboard.trendTipDesc",
-                      "Verified studios with complete rate cards and workshop GPS rank #1 in customer search results and receive up to 5× more quote inquiries."
+                    {tailorData?._id && (
+                      <div className="pt-2 border-t border-emerald-100/60">
+                        <Link
+                          to={`/tailors/${encodeURIComponent(tailorData._id)}`}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-[#8f2338] hover:underline"
+                        >
+                          <span>{t("dashboardPage.viewStudio", "View Public Studio Profile")}</span>
+                          <ArrowRight size={13} />
+                        </Link>
+                      </div>
                     )}
                   </div>
+                ) : (
+                  <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+                      <span className="text-xs font-bold uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
+                        <Sparkles size={14} className="text-amber-500" />
+                        {t("tailorDashboard.rankingBoosterTitle", "Discovery Ranking Booster")}
+                      </span>
+                      <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                        {tailorChecklist.score}% {t("tailorDashboard.score", "Score")}
+                      </span>
+                    </div>
 
-                  {/* Call to action */}
-                  {!tailorData?.verified && (
-                    <button
-                      type="button"
-                      onClick={() => setIsApplyVerificationOpen(true)}
-                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#8f2338] px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] transition"
-                    >
-                      <ShieldCheck size={14} />
-                      <span>{t("verification.applyButton", "Apply for Verification")}</span>
-                    </button>
-                  )}
-                </div>
+                    {/* Progress Bar */}
+                    <div>
+                      <div className="flex justify-between text-[11px] text-stone-500 mb-1">
+                        <span>{t("tailorDashboard.profileCompleteness", "Search Listing Strength")}</span>
+                        <span className="font-bold text-stone-800">{tailorChecklist.completedCount} of {tailorChecklist.totalCount} completed</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-stone-100 overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-[#8f2338] to-emerald-500 transition-all duration-500"
+                          style={{ width: `${tailorChecklist.score}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 5-Step Checklist */}
+                    <ul className="space-y-2.5 text-xs">
+                      {tailorChecklist.steps.map((step) => (
+                        <li key={step.id} className="flex items-start gap-2.5">
+                          {step.done ? (
+                            <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                          ) : (
+                            <div className="h-4 w-4 rounded-full border-2 border-stone-300 shrink-0 mt-0.5" />
+                          )}
+                          <div>
+                            <p className={`font-semibold ${step.done ? "text-stone-800" : "text-stone-500"}`}>
+                              {step.title}
+                            </p>
+                            <p className="text-[11px] text-stone-400 line-clamp-1">{step.desc}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {/* Explanation Notice */}
+                    <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-stone-800 leading-relaxed">
+                      💡 <strong>{t("tailorDashboard.trendTipHeading", "How to Trend on Find Tailors")}:</strong>{" "}
+                      {t(
+                        "tailorDashboard.trendTipDesc",
+                        "Verified studios with complete rate cards and workshop GPS rank #1 in customer search results and receive up to 5× more quote inquiries."
+                      )}
+                    </div>
+
+                    {/* Call to action */}
+                    {!tailorData?.verified && (
+                      <button
+                        type="button"
+                        onClick={() => setIsApplyVerificationOpen(true)}
+                        className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#8f2338] px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] transition"
+                      >
+                        <ShieldCheck size={14} />
+                        <span>{t("verification.applyButton", "Apply for Verification")}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Tailor Quick Activity Metrics */}
                 <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-xs space-y-4">
@@ -2754,78 +2794,121 @@ export default function Dashboard() {
                       </div>
 
                       {/* Studio Discovery Checklist Card */}
-                      <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-xs flex flex-col justify-between">
-                        <div>
-                          <div className="flex items-center justify-between border-b border-stone-100 pb-3">
-                            <div className="flex items-center gap-2">
-                              <TrendingUp size={16} className="text-[#8f2338]" />
-                              <h3 className="font-serif text-base font-bold text-stone-900">
-                                {t("tailorDashboard.rankingStrength", "Discovery Ranking Strength")}
-                              </h3>
-                            </div>
-                            <span className="text-xs font-extrabold text-[#8f2338] bg-[#f7eee5] px-2.5 py-0.5 rounded-lg">
-                              {tailorChecklist.score}%
-                            </span>
-                          </div>
-
-                          {/* Progress Meter */}
-                          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stone-100">
-                            <div
-                              className="h-full bg-gradient-to-r from-rose-400 to-[#8f2338] transition-all duration-700"
-                              style={{ width: `${tailorChecklist.score}%` }}
-                            />
-                          </div>
-
-                          <div className="mt-4 space-y-2.5">
-                            {tailorChecklist.steps.map((step) => (
-                              <div
-                                key={step.id}
-                                className={`flex items-center justify-between rounded-xl p-2.5 transition text-xs ${
-                                  step.done ? "bg-emerald-50/50 border border-emerald-100" : "bg-stone-50 border border-stone-200"
-                                }`}
-                              >
-                                <div className="flex items-center gap-2.5">
-                                  {step.done ? (
-                                    <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                                  ) : (
-                                    <div className="h-4 w-4 rounded-full border-2 border-stone-300 shrink-0" />
-                                  )}
-                                  <div>
-                                    <p className={`font-bold ${step.done ? "text-emerald-950 line-through opacity-80" : "text-stone-800"}`}>
-                                      {step.title}
-                                    </p>
-                                    <p className="text-[10px] text-stone-500">{step.desc}</p>
-                                  </div>
-                                </div>
-
-                                {!step.done && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (step.id === "verified") setIsApplyVerificationOpen(true);
-                                      else setIsEditStudioOpen(true);
-                                    }}
-                                    className="text-[11px] font-bold text-[#8f2338] hover:underline shrink-0"
-                                  >
-                                    {t("tailorDashboard.completeStep", "Fix")} →
-                                  </button>
-                                )}
+                      {tailorData?.verified ? (
+                        <div className="rounded-3xl border border-emerald-200 bg-emerald-50/50 p-6 shadow-xs flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck size={18} className="text-emerald-600" />
+                                <h3 className="font-serif text-base font-bold text-stone-900">
+                                  {t("tailorDashboard.rankingStrength", "Discovery Ranking Strength")}
+                                </h3>
                               </div>
-                            ))}
+                              <span className="text-xs font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 rounded-lg">
+                                100%
+                              </span>
+                            </div>
+
+                            <div className="mt-4 flex items-start gap-3.5">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-xs">
+                                <CheckCircle2 size={20} />
+                              </div>
+                              <div>
+                                <h4 className="font-serif text-base font-bold text-emerald-950">
+                                  Top Search Visibility Active
+                                </h4>
+                                <p className="mt-1 text-xs text-stone-600 leading-relaxed">
+                                  All studio profile details, service rate cards, workshop location, and artisan verification credentials are confirmed. Customers in your service radius find your atelier at the top of results.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-6 pt-3 border-t border-emerald-100 flex items-center justify-between text-xs">
+                            <span className="text-emerald-800 font-medium">All 5 milestones complete</span>
+                            <button
+                              type="button"
+                              onClick={() => setIsEditStudioOpen(true)}
+                              className="font-bold text-[#8f2338] hover:underline"
+                            >
+                              {t("tailorDashboard.editAllFields", "Edit Studio Profile")}
+                            </button>
                           </div>
                         </div>
+                      ) : (
+                        <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-xs flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+                              <div className="flex items-center gap-2">
+                                <TrendingUp size={16} className="text-[#8f2338]" />
+                                <h3 className="font-serif text-base font-bold text-stone-900">
+                                  {t("tailorDashboard.rankingStrength", "Discovery Ranking Strength")}
+                                </h3>
+                              </div>
+                              <span className="text-xs font-extrabold text-[#8f2338] bg-[#f7eee5] px-2.5 py-0.5 rounded-lg">
+                                {tailorChecklist.score}%
+                              </span>
+                            </div>
 
-                        <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between text-xs">
-                          <span className="text-stone-500">{tailorChecklist.completedCount} / {tailorChecklist.totalCount} completed</span>
-                          <button
-                            type="button"
-                            onClick={() => setIsEditStudioOpen(true)}
-                            className="font-bold text-[#8f2338] hover:underline"
-                          >
-                            {t("tailorDashboard.editAllFields", "Edit Studio Profile")}
-                          </button>
+                            {/* Progress Meter */}
+                            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stone-100">
+                              <div
+                                className="h-full bg-gradient-to-r from-rose-400 to-[#8f2338] transition-all duration-700"
+                                style={{ width: `${tailorChecklist.score}%` }}
+                              />
+                            </div>
+
+                            <div className="mt-4 space-y-2.5">
+                              {tailorChecklist.steps.map((step) => (
+                                <div
+                                  key={step.id}
+                                  className={`flex items-center justify-between rounded-xl p-2.5 transition text-xs ${
+                                    step.done ? "bg-emerald-50/50 border border-emerald-100" : "bg-stone-50 border border-stone-200"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    {step.done ? (
+                                      <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                                    ) : (
+                                      <div className="h-4 w-4 rounded-full border-2 border-stone-300 shrink-0" />
+                                    )}
+                                    <div>
+                                      <p className={`font-bold ${step.done ? "text-emerald-950 line-through opacity-80" : "text-stone-800"}`}>
+                                        {step.title}
+                                      </p>
+                                      <p className="text-[10px] text-stone-500">{step.desc}</p>
+                                    </div>
+                                  </div>
+
+                                  {!step.done && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (step.id === "verified") setIsApplyVerificationOpen(true);
+                                        else setIsEditStudioOpen(true);
+                                      }}
+                                      className="text-[11px] font-bold text-[#8f2338] hover:underline shrink-0"
+                                    >
+                                      {t("tailorDashboard.completeStep", "Fix")} →
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between text-xs">
+                            <span className="text-stone-500">{tailorChecklist.completedCount} / {tailorChecklist.totalCount} completed</span>
+                            <button
+                              type="button"
+                              onClick={() => setIsEditStudioOpen(true)}
+                              className="font-bold text-[#8f2338] hover:underline"
+                            >
+                              {t("tailorDashboard.editAllFields", "Edit Studio Profile")}
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
 
                     {/* 3. Action Items: Urgent Quotations */}

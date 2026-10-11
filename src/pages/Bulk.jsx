@@ -485,66 +485,61 @@ export default function Bulk() {
     <div className="min-h-screen bg-[#faf9f6] text-[#172033] flex flex-col font-sans antialiased">
       <Navbar />
 
-      {/* SUB-HEADER NAVIGATION BAR */}
-      <div className="sticky top-[72px] z-30 border-b border-stone-200/80 bg-white/95 backdrop-blur-md shadow-2xs">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 py-3">
-            {/* Left: Module Title */}
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl bg-amber-50 text-[#f59e0b] flex items-center justify-center font-bold">
-                <Layers size={20} strokeWidth={2.4} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-base font-bold text-stone-900 leading-tight">
-                    B2B Commercial Tenders & Bulk Orders
-                  </h1>
-                  <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold">
-                    {isAdmin ? "Admin Console" : isTailor ? "Artisan Marketplace" : "Enterprise Hub"}
-                  </span>
-                </div>
-                <p className="text-[11px] text-stone-500">
-                  Institutional Uniforms, Corporate Blazers, Garment Production & Quotations
-                </p>
-              </div>
-            </div>
-
-            {/* Right: Actions */}
-            <div className="flex items-center gap-2">
-              {(isBusiness || isAdmin) && (
-                <button
-                  type="button"
-                  onClick={() => handleOpenPostModal()}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] hover:bg-[#761c30] px-4 py-2 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
-                >
-                  <Plus size={14} />
-                  <span>Post Requirement</span>
-                </button>
-              )}
-
-              {isBusiness && (
-                <button
-                  type="button"
-                  onClick={() => setIsVerificationModalOpen(true)}
-                  className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold border transition cursor-pointer ${
-                    isBizVerified
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                      : isBizPending
-                      ? "border-amber-200 bg-amber-50 text-amber-800"
-                      : "border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
-                  }`}
-                >
-                  <ShieldCheck size={14} className={isBizVerified ? "text-emerald-600" : "text-amber-500"} />
-                  <span>{isBizVerified ? "Verified GSTIN" : isBizPending ? "Audit Pending" : "Verify Business"}</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* MAIN CONTAINER */}
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+        {/* PAGE HEADER */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-3xl border border-stone-200/90 bg-white p-5 sm:p-6 shadow-xs">
+          {/* Left: Module Title */}
+          <div className="flex items-center gap-3.5">
+            <div className="h-11 w-11 rounded-2xl bg-amber-50 text-[#f59e0b] border border-amber-200 flex items-center justify-center font-bold shrink-0">
+              <Layers size={22} strokeWidth={2.2} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-base sm:text-lg font-bold text-stone-900 leading-tight">
+                  B2B Commercial Tenders & Bulk Orders
+                </h1>
+                <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold">
+                  {isAdmin ? "Admin Console" : isTailor ? "Artisan Marketplace" : "Enterprise Hub"}
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-500 mt-0.5">
+                Institutional Uniforms, Corporate Blazers, Garment Production & Quotations
+              </p>
+            </div>
+          </div>
+
+          {/* Right: Actions */}
+          <div className="flex items-center gap-2">
+            {(isBusiness || isAdmin) && (
+              <button
+                type="button"
+                onClick={() => handleOpenPostModal()}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] hover:bg-[#761c30] px-4 py-2.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
+              >
+                <Plus size={14} />
+                <span>Post Requirement</span>
+              </button>
+            )}
+
+            {isBusiness && (
+              <button
+                type="button"
+                onClick={() => setIsVerificationModalOpen(true)}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2.5 text-xs font-semibold border transition cursor-pointer ${
+                  isBizVerified
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : isBizPending
+                    ? "border-amber-200 bg-amber-50 text-amber-800"
+                    : "border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+                }`}
+              >
+                <ShieldCheck size={14} className={isBizVerified ? "text-emerald-600" : "text-amber-500"} />
+                <span>{isBizVerified ? "Verified GSTIN" : isBizPending ? "Audit Pending" : "Verify Business"}</span>
+              </button>
+            )}
+          </div>
+        </div>
         {/* 1. BUSINESS VERIFICATION BANNER (FOR BUSINESS ACCOUNTS) */}
         {isBusiness && !isBizVerified && (
           <div

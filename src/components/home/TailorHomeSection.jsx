@@ -167,8 +167,13 @@ export default function TailorHomeSection() {
     }
 
     loadTailorData();
+    const interval = setInterval(() => {
+      loadTailorData();
+    }, 15000);
+
     return () => {
       isMounted = false;
+      clearInterval(interval);
     };
   }, [getToken]);
 
@@ -519,109 +524,9 @@ export default function TailorHomeSection() {
       </div>
 
       {/* =========================================================
-          MAIN LAYOUT: LEFT SIDEBAR + CONSOLE MAIN AREA
+          MAIN CONSOLE WORKSPACE (CLEAN FULL-WIDTH MINIMAL DASHBOARD)
       ========================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* =======================================================
-            1. LEFT SIDEBAR (SIDE OPTIONS & GET VERIFIED CARD)
-        ======================================================== */}
-        <aside className="lg:col-span-3 xl:col-span-2 space-y-4">
-          <div className="rounded-3xl border border-stone-200 bg-white p-3.5 sm:p-4 shadow-xs flex flex-col justify-between">
-            {/* Navigation Options List */}
-            <nav className="space-y-1">
-              {sidebarNavItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeSidebarTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveSidebarTab(item.id);
-                      if (item.route.startsWith("/")) {
-                        navigate(item.route);
-                      } else if (item.route === "#analytics") {
-                        const el = document.getElementById("analytics-section");
-                        if (el) el.scrollIntoView({ behavior: "smooth" });
-                      }
-                    }}
-                    className={`w-full flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-xs font-bold transition ${
-                      isActive
-                        ? "bg-rose-50 text-[#8f2338] shadow-2xs font-extrabold"
-                        : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
-                    }`}
-                  >
-                    <Icon
-                      size={17}
-                      className={isActive ? "text-[#8f2338]" : "text-stone-400"}
-                    />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-
-            {/* Sidebar Verification Status Card */}
-            {isVerified ? (
-              <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 text-left shadow-2xs">
-                <div className="flex items-center justify-between">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-700 shadow-2xs">
-                    <ShieldCheck size={20} className="text-emerald-700" />
-                  </div>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-800">
-                    Active
-                  </span>
-                </div>
-
-                <h4 className="mt-2.5 font-sans text-xs font-bold text-stone-900 flex items-center gap-1.5">
-                  <span>Verified Atelier</span>
-                  <CheckCircle2 size={13} className="text-emerald-600 fill-emerald-100" />
-                </h4>
-                <p className="mt-1 text-[11px] text-stone-600 leading-relaxed">
-                  Your workshop is officially certified with priority search visibility.
-                </p>
-              </div>
-            ) : isPending ? (
-              <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-left shadow-2xs">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 border border-amber-300 text-amber-700 shadow-2xs">
-                  <Clock3 size={18} />
-                </div>
-                <h4 className="mt-2.5 font-sans text-xs font-bold text-stone-900">
-                  Verification In Review
-                </h4>
-                <p className="mt-1 text-[11px] text-stone-600 leading-relaxed">
-                  Application submitted to admin. Status will update once approved.
-                </p>
-              </div>
-            ) : (
-              <div className="mt-6 rounded-2xl border border-rose-100 bg-[#fdf4f4] p-4 text-left shadow-2xs">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 border border-amber-200 shadow-2xs">
-                  <Crown size={18} className="text-amber-500 fill-amber-400" />
-                </div>
-
-                <h4 className="mt-2.5 font-sans text-sm font-bold text-stone-900">
-                  {t("tailorDashboard.getVerified", "Get Verified")}
-                </h4>
-                <p className="mt-1 text-[11px] text-stone-500 leading-relaxed">
-                  {t("tailorDashboard.getVerifiedSub", "Boost visibility & get 5x more orders")}
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() => setIsVerificationModalOpen(true)}
-                  className="mt-3.5 w-full inline-flex items-center justify-center gap-1 rounded-xl bg-[#8f2338] py-2 text-xs font-bold text-white shadow-xs hover:bg-[#761c30] transition active:scale-95"
-                >
-                  <span>{t("tailorDashboard.applyForVerification", "Apply for Verification")} →</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </aside>
-
-        {/* =======================================================
-            2. MAIN RIGHT CONSOLE WORKSPACE (10 / 9 COLS)
-        ======================================================== */}
-        <div className="lg:col-span-9 xl:col-span-10 space-y-6">
+      <div className="w-full space-y-6">
           {/* =====================================================
               ROW 1: HERO COMMAND BANNER + STUDIO SNAPSHOT
           ====================================================== */}
@@ -790,9 +695,6 @@ export default function TailorHomeSection() {
                 <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${isVerified ? "bg-emerald-50 text-emerald-700" : "bg-[#fdf2f4] text-[#8f2338]"}`}>
                   {isVerified ? <ShieldCheck size={16} /> : <Users size={16} />}
                 </div>
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-50 text-[#8f2338] text-[11px] font-bold">
-                  →
-                </div>
               </div>
               <p className="mt-2.5 text-[10px] font-bold uppercase tracking-wider text-stone-400">
                 Atelier Tier
@@ -812,9 +714,6 @@ export default function TailorHomeSection() {
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
                   <Star size={16} className="fill-emerald-500 text-emerald-600" />
                 </div>
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-50 text-[#8f2338] text-[11px] font-bold">
-                  →
-                </div>
               </div>
               <p className="mt-2.5 text-[10px] font-bold uppercase tracking-wider text-stone-400">
                 Client Trust
@@ -832,9 +731,6 @@ export default function TailorHomeSection() {
               <div className="flex items-center justify-between">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
                   <FileText size={16} />
-                </div>
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-50 text-[#8f2338] text-[11px] font-bold">
-                  →
                 </div>
               </div>
               <p className="mt-2.5 text-[10px] font-bold uppercase tracking-wider text-stone-400">
@@ -854,9 +750,6 @@ export default function TailorHomeSection() {
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
                   <Layers size={16} />
                 </div>
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-50 text-[#8f2338] text-[11px] font-bold">
-                  →
-                </div>
               </div>
               <p className="mt-2.5 text-[10px] font-bold uppercase tracking-wider text-stone-400">
                 B2B Demands
@@ -874,9 +767,6 @@ export default function TailorHomeSection() {
               <div className="flex items-center justify-between">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-50 text-teal-700 font-bold text-sm">
                   ₹
-                </div>
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-50 text-[#8f2338] text-[11px] font-bold">
-                  →
                 </div>
               </div>
               <p className="mt-2.5 text-[10px] font-bold uppercase tracking-wider text-stone-400">
@@ -1452,7 +1342,6 @@ export default function TailorHomeSection() {
             </div>
           </div>
         </div>
-      </div>
 
       {/* =========================================================
           VERIFICATION APPLICATION MODAL (ONLY IF UNVERIFIED)

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
-import { Measurement, Order, Tailor } from '../models.js';
+import { Measurement, Order, Tailor, User } from '../models.js';
 import { createNotification } from './notificationController.js';
 
 function buildOrderQuery(paramId, extra = {}) {
@@ -14,23 +14,63 @@ function buildOrderQuery(paramId, extra = {}) {
 
 export async function listOrders(req, res) {
   try {
-    let rows = await Order.find({ clerkUserId: req.authUserId }).sort({ createdAt: -1 }).lean();
+    const isTailor = req.appUser?.role === 'tailor';
+    let tailor = null;
+    if (isTailor) {
+      tailor = await Tailor.findOne({ ownerClerkUserId: req.authUserId }).select('_id name phone').lean();
+    }
+
+    let filter = {};
+    if (isTailor && tailor && req.query.view !== 'customer') {
+      filter.tailorId = tailor._id;
+    } else {
+      filter.clerkUserId = req.authUserId;
+    }
+
+    let rows = await Order.find(filter).sort({ createdAt: -1 }).lean();
     if (req.query.status === 'active') rows = rows.filter(o => !['Completed', 'Cancelled'].includes(o.status));
-    if (req.query.status === 'quotes') rows = rows.filter(o => o.status === 'Quote Received');
+    if (req.query.status === 'quotes') rows = rows.filter(o => ['Quote Received', 'Request Sent'].includes(o.status));
     if (req.query.status === 'history') rows = rows.filter(o => ['Completed', 'Cancelled'].includes(o.status));
 
-    // Verify tailor existence
-    const tailorIds = [...new Set(rows.map(r => r.tailorId).filter(Boolean))];
-    const liveTailors = tailorIds.length ? await Tailor.find({ _id: { $in: tailorIds } }).select('_id').lean() : [];
-    const liveSet = new Set(liveTailors.map(t => String(t._id)));
+    // When tailor is viewing their studio orders, enrich with authentic client details
+    if (isTailor && tailor && req.query.view !== 'customer' && rows.length > 0) {
+      const clientUserIds = [...new Set(rows.map(r => r.clerkUserId).filter(Boolean))];
+      const clientUsers = await User.find({ clerkUserId: { $in: clientUserIds } })
+        .select('clerkUserId firstName lastName phone email avatar imageUrl')
+        .lean();
+      const clientMap = new Map();
+      clientUsers.forEach(u => {
+        clientMap.set(u.clerkUserId, {
+          name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'Client',
+          phone: u.phone || '',
+          email: u.email || '',
+          avatar: u.avatar || u.imageUrl || '',
+        });
+      });
+      rows = rows.map(r => {
+        const client = clientMap.get(r.clerkUserId);
+        return {
+          ...r,
+          clientName: client?.name || 'Client',
+          clientPhone: client?.phone || '',
+          clientEmail: client?.email || '',
+          clientAvatar: client?.avatar || '',
+        };
+      });
+    } else {
+      // Customer view: verify tailor existence
+      const tailorIds = [...new Set(rows.map(r => r.tailorId).filter(Boolean))];
+      const liveTailors = tailorIds.length ? await Tailor.find({ _id: { $in: tailorIds } }).select('_id').lean() : [];
+      const liveSet = new Set(liveTailors.map(t => String(t._id)));
 
-    rows = rows.map(order => {
-      const exists = order.tailorId && liveSet.has(String(order.tailorId));
-      if (!exists && order.status === 'Completed') {
-        return { ...order, tailorName: 'undefined' };
-      }
-      return order;
-    });
+      rows = rows.map(order => {
+        const exists = order.tailorId && liveSet.has(String(order.tailorId));
+        if (!exists && order.status === 'Completed') {
+          return { ...order, tailorName: 'undefined' };
+        }
+        return order;
+      });
+    }
 
     res.json(rows);
   } catch (error) {

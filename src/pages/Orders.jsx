@@ -58,7 +58,8 @@ const getStatusStepIndex = (status) => {
 export default function Orders() {
   const { t, i18n } = useTranslation();
   const isHi = i18n.language === "hi";
-  const { isSignedIn, getToken, openSignUp } = useAuth();
+  const { isSignedIn, getToken, openSignUp, profile, user } = useAuth();
+  const isTailor = (profile?.role || user?.publicMetadata?.appRole) === "tailor";
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -69,10 +70,12 @@ export default function Orders() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [quoteModalOrder, setQuoteModalOrder] = useState(null);
+  const [quotePriceInput, setQuotePriceInput] = useState("");
 
-  const load = async () => {
+  const load = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const token = await getToken();
       const res = await fetch("/api/orders", {
         headers: { Authorization: `Bearer ${token}` },
@@ -82,15 +85,19 @@ export default function Orders() {
       setOrders(Array.isArray(data) ? data : []);
       setError("");
     } catch (e) {
-      setError(e.message || "Failed to load orders.");
+      if (showLoading) setError(e.message || "Failed to load orders.");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
     if (isSignedIn) {
-      load();
+      load(true);
+      const interval = setInterval(() => {
+        load(false);
+      }, 15000);
+      return () => clearInterval(interval);
     } else {
       setOrders([]);
       setLoading(false);
@@ -103,7 +110,7 @@ export default function Orders() {
     return orders;
   }, [orders, isSignedIn]);
 
-  // Quote acceptance action
+  // Quote acceptance action (Customer)
   const acceptQuote = async (orderId) => {
     setActingId(orderId);
     try {
@@ -118,7 +125,7 @@ export default function Orders() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to accept quote.");
       toast.success(isHi ? "कोटेशन स्वीकार कर लिया गया!" : "Quote accepted! Tailor notified.");
-      await load();
+      await load(false);
       if (selectedOrder?.id === orderId) {
         setSelectedOrder((prev) => (prev ? { ...prev, status: "Accepted" } : null));
       }
@@ -147,12 +154,97 @@ export default function Orders() {
       toast.success(isHi ? "ऑर्डर सफलतापूर्वक रद्द कर दिया गया।" : "Order cancelled and archived in history.");
       setCancelModalOrder(null);
       setCancelReason("");
-      await load();
+      await load(false);
       if (selectedOrder?.id === orderId) {
         setSelectedOrder((prev) => (prev ? { ...prev, status: "Cancelled" } : null));
       }
     } catch (e) {
       toast.error(e.message || "Failed to cancel order.");
+    } finally {
+      setActingId("");
+    }
+  };
+
+  // Tailor: submit or update quote
+  const handleSendQuote = async (orderId, price) => {
+    const numPrice = Number(price);
+    if (!Number.isFinite(numPrice) || numPrice < 0) {
+      toast.error(isHi ? "कृपया मान्य कोट राशि दर्ज करें।" : "Please enter a valid quote amount.");
+      return;
+    }
+    setActingId(orderId);
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/quote`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ quotePrice: numPrice }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to submit quote.");
+      toast.success(isHi ? "कोटेशन ग्राहक को भेज दिया गया!" : "Quote submitted to client successfully!");
+      setQuoteModalOrder(null);
+      setQuotePriceInput("");
+      await load(false);
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder((prev) => (prev ? { ...prev, quotePrice: numPrice, status: "Quote Received" } : null));
+      }
+    } catch (e) {
+      toast.error(e.message || "Failed to submit quote.");
+    } finally {
+      setActingId("");
+    }
+  };
+
+  // Tailor: decline request
+  const handleDeclineOrder = async (orderId) => {
+    if (!window.confirm(isHi ? "क्या आप वाकई इस अनुरोध को अस्वीकार करना चाहते हैं?" : "Are you sure you want to decline this tailoring request?")) return;
+    setActingId(orderId);
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/decline`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to decline order.");
+      toast.success(isHi ? "अनुरोध अस्वीकार कर दिया गया।" : "Request declined.");
+      await load(false);
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder((prev) => (prev ? { ...prev, status: "Cancelled" } : null));
+      }
+    } catch (e) {
+      toast.error(e.message || "Failed to decline order.");
+    } finally {
+      setActingId("");
+    }
+  };
+
+  // Tailor: progress status
+  const handleUpdateStatus = async (orderId, nextStatus) => {
+    setActingId(orderId);
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update order status.");
+      toast.success(isHi ? `ऑर्डर स्थिति: ${nextStatus}` : `Order status updated to ${nextStatus}!`);
+      await load(false);
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder((prev) => (prev ? { ...prev, status: nextStatus } : null));
+      }
+    } catch (e) {
+      toast.error(e.message || "Failed to update status.");
     } finally {
       setActingId("");
     }
@@ -182,7 +274,7 @@ export default function Orders() {
     if (statusFilter === "active") {
       list = list.filter((o) => ["In Production", "Accepted", "Request Sent", "Pending Review"].includes(o.status));
     } else if (statusFilter === "quotes") {
-      list = list.filter((o) => ["Quote Received", "Quote Ready"].includes(o.status));
+      list = list.filter((o) => ["Quote Received", "Quote Ready", "Request Sent"].includes(o.status));
     } else if (statusFilter === "completed") {
       list = list.filter((o) => ["Ready for Pickup", "Ready", "Completed"].includes(o.status));
     } else if (statusFilter === "cancelled") {
@@ -195,8 +287,11 @@ export default function Orders() {
         (o) =>
           o.garment?.toLowerCase().includes(q) ||
           o.tailorName?.toLowerCase().includes(q) ||
+          o.clientName?.toLowerCase().includes(q) ||
+          o.clientPhone?.toLowerCase().includes(q) ||
           String(o.id || o._id).toLowerCase().includes(q) ||
-          o.color?.toLowerCase().includes(q)
+          o.color?.toLowerCase().includes(q) ||
+          o.fabric?.toLowerCase().includes(q)
       );
     }
 
@@ -227,7 +322,7 @@ export default function Orders() {
 
   // Check if order is cancellable by customer (tailor has not started progress)
   const isOrderCancellable = (order) => {
-    return order && ["Request Sent", "Quote Received", "Pending Review"].includes(order.status);
+    return !isTailor && order && ["Request Sent", "Quote Received", "Pending Review"].includes(order.status);
   };
 
   return (
@@ -257,18 +352,26 @@ export default function Orders() {
                 </div>
                 <div>
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#8f2338]">
-                    {isHi ? "आपकी गतिविधि" : "YOUR ACTIVITY"}
+                    {isTailor
+                      ? (isHi ? "दर्जी कंसोल गतिविधि" : "ATELIER ORDERS CONSOLE")
+                      : (isHi ? "आपकी गतिविधि" : "YOUR ACTIVITY")}
                   </span>
                   <h1 className="font-sans text-2xl sm:text-3xl font-black tracking-tight text-stone-900 leading-tight">
-                    {isHi ? "मेरे ऑर्डर" : "My Orders"}
+                    {isTailor
+                      ? (isHi ? "स्टूडियो ऑर्डर" : "Studio Orders")
+                      : (isHi ? "मेरे ऑर्डर" : "My Orders")}
                   </h1>
                 </div>
               </div>
 
               <p className="mt-1 text-xs sm:text-sm text-stone-500 leading-relaxed font-sans">
-                {isHi
-                  ? "अपने सिलाई अनुरोधों, कोट्स और पिछले सभी ऑर्डरों को ट्रैक करें।"
-                  : "Track your tailoring requests, review quotes, and follow your order history."}
+                {isTailor
+                  ? (isHi
+                      ? "अपने ग्राहकों के ऑर्डर, कोटेशन अनुरोध और सिलाई की प्रगति प्रबंधित करें।"
+                      : "Manage client bespoke requests, submit pricing quotes, and advance garments through production.")
+                  : (isHi
+                      ? "अपने सिलाई अनुरोधों, कोट्स और पिछले सभी ऑर्डरों को ट्रैक करें।"
+                      : "Track your tailoring requests, review quotes, and follow your order history.")}
               </p>
             </div>
 
@@ -283,7 +386,11 @@ export default function Orders() {
                   <input
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={isHi ? "ऑर्डर, परिधान या स्टूडियो खोजें..." : "Search order, garment, studio..."}
+                    placeholder={
+                      isTailor
+                        ? (isHi ? "ऑर्डर, ग्राहक नाम, फ़ोन या परिधान खोजें..." : "Search client, phone, garment, order ID...")
+                        : (isHi ? "ऑर्डर, परिधान या स्टूडियो खोजें..." : "Search order, garment, studio...")
+                    }
                     className="w-full sm:w-64 rounded-xl border border-stone-200 bg-[#fdfbf9] pl-9 pr-3 py-2 text-xs font-sans outline-none focus:border-[#8f2338] focus:bg-white focus:ring-2 focus:ring-rose-100 transition"
                   />
                 </div>
@@ -307,18 +414,35 @@ export default function Orders() {
                   count: activeOrdersList.length,
                   icon: <ShoppingBag size={14} />,
                 },
-                {
-                  id: "active",
-                  label: isHi ? "सक्रिय / प्रगति पर" : "Active & In Progress",
-                  count: activeCount,
-                  icon: <Clock size={14} />,
-                },
-                {
-                  id: "quotes",
-                  label: isHi ? "कोट्स तैयार" : "Quotes Ready",
-                  count: quoteCount,
-                  icon: <FileText size={14} />,
-                },
+                ...(isTailor
+                  ? [
+                      {
+                        id: "quotes",
+                        label: isHi ? "कोटेशन प्रतीक्षारत" : "Needs Quote",
+                        count: quoteCount,
+                        icon: <FileText size={14} />,
+                      },
+                      {
+                        id: "active",
+                        label: isHi ? "सिलाई प्रगति पर" : "In Production",
+                        count: activeCount,
+                        icon: <Scissors size={14} />,
+                      },
+                    ]
+                  : [
+                      {
+                        id: "active",
+                        label: isHi ? "सक्रिय / प्रगति पर" : "Active & In Progress",
+                        count: activeCount,
+                        icon: <Clock size={14} />,
+                      },
+                      {
+                        id: "quotes",
+                        label: isHi ? "कोट्स तैयार" : "Quotes Ready",
+                        count: quoteCount,
+                        icon: <FileText size={14} />,
+                      },
+                    ]),
                 {
                   id: "completed",
                   label: isHi ? "तैयार व डिलीवर" : "Completed",
@@ -544,9 +668,9 @@ export default function Orders() {
                       </div>
                     </div>
 
-                    {/* Bottom Row: Garment Swatch, Studio Link, Tags, Price Quote & Action Buttons */}
+                    {/* Bottom Row: Garment Swatch, Studio / Client Link, Tags, Price Quote & Action Buttons */}
                     <div className="p-5 sm:px-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-                      {/* Left: Swatch Image, Studio Link & Tags */}
+                      {/* Left: Swatch Image, Identity & Tags */}
                       <div className="flex items-center gap-3.5 flex-wrap">
                         {/* Swatch / Garment Thumbnail */}
                         <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-stone-200 bg-stone-100 flex items-center justify-center">
@@ -561,15 +685,47 @@ export default function Orders() {
                         </div>
 
                         <div>
-                          {/* Studio Link */}
-                          <Link
-                            to={order.tailorId ? `/tailors/${encodeURIComponent(order.tailorId)}` : "/find-tailors"}
-                            className="inline-flex items-center gap-1 font-sans text-xs font-bold text-stone-900 hover:text-[#8f2338] transition"
-                          >
-                            <MapPin size={13} className="text-[#8f2338]" />
-                            <span>{order.tailorName || (order.status === "Completed" ? "undefined" : t("dashboardPage.masterStudio", "Master Studio"))}</span>
-                            <ChevronRight size={13} />
-                          </Link>
+                          {isTailor ? (
+                            <div className="flex items-center gap-2">
+                              {order.clientAvatar ? (
+                                <img
+                                  src={order.clientAvatar}
+                                  alt={order.clientName}
+                                  className="h-7 w-7 rounded-full object-cover border border-stone-200"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                  }}
+                                />
+                              ) : (
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-50 text-[#8f2338] border border-rose-100 text-xs font-bold shrink-0">
+                                  {(order.clientName || "C").charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <span className="font-bold text-stone-900 text-xs block">
+                                  {order.clientName || "Client"}
+                                </span>
+                                {order.clientPhone && (
+                                  <a
+                                    href={`tel:${order.clientPhone}`}
+                                    className="text-[11px] text-stone-500 hover:text-[#8f2338] flex items-center gap-1 font-sans"
+                                  >
+                                    <Phone size={10} />
+                                    <span>{order.clientPhone}</span>
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <Link
+                              to={order.tailorId ? `/tailors/${encodeURIComponent(order.tailorId)}` : "/find-tailors"}
+                              className="inline-flex items-center gap-1 font-sans text-xs font-bold text-stone-900 hover:text-[#8f2338] transition"
+                            >
+                              <MapPin size={13} className="text-[#8f2338]" />
+                              <span>{order.tailorName || (order.status === "Completed" ? "undefined" : t("dashboardPage.masterStudio", "Master Studio"))}</span>
+                              <ChevronRight size={13} />
+                            </Link>
+                          )}
 
                           {/* Attribute Tags */}
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
@@ -602,45 +758,128 @@ export default function Orders() {
                       <div className="flex flex-wrap items-center gap-4 self-end lg:self-center">
                         <div className="text-left sm:text-right">
                           <span className="block text-[10px] font-medium text-stone-400 uppercase tracking-wider">
-                            {isHi ? "दर्जी कोटेशन" : "Tailor quote"}
+                            {isTailor
+                              ? (isHi ? "ऑर्डर कोटेशन" : "Order Quotation")
+                              : (isHi ? "दर्जी कोटेशन" : "Tailor quote")}
                           </span>
                           <strong className="text-2xl font-black text-[#8f2338]">
                             {order.quotePrice != null
                               ? `₹${order.quotePrice}`
                               : order.price != null
                               ? `₹${order.price}`
+                              : isTailor
+                              ? (isHi ? "कोट प्रतीक्षारत" : "Needs Quote")
                               : (isHi ? "समीक्षाधीन" : "Awaiting Review")}
                           </strong>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          {/* Cancel Order Button (Available only if no progress has been made) */}
-                          {isOrderCancellable(order) && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCancelModalOrder(order);
-                                setCancelReason("");
-                              }}
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100 px-3 py-2 text-xs font-bold text-[#8f2338] shadow-2xs transition active:scale-95"
-                              title="Cancel order before studio starts cutting/production"
-                            >
-                              <X size={13} />
-                              <span>{isHi ? "रद्द करें" : "Cancel"}</span>
-                            </button>
-                          )}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* TAILOR ACTIONS */}
+                          {isTailor ? (
+                            <>
+                              {/* Send or Update Quote */}
+                              {(order.status === "Request Sent" || order.status === "Quote Received") && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setQuoteModalOrder(order);
+                                    setQuotePriceInput(order.quotePrice != null ? String(order.quotePrice) : order.price != null ? String(order.price) : "");
+                                  }}
+                                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] hover:bg-[#781c2e] px-3.5 py-2 text-xs font-bold text-white shadow-xs transition active:scale-95"
+                                >
+                                  <FileText size={13} />
+                                  <span>
+                                    {order.status === "Quote Received"
+                                      ? (isHi ? "कोट अपडेट करें" : "Update Quote")
+                                      : (isHi ? "कोट भेजें" : "Send Quote")}
+                                  </span>
+                                </button>
+                              )}
 
-                          {/* Accept Quote Button if Quote Received */}
-                          {(order.status === "Quote Received" || order.status === "Quote Ready") && (
-                            <button
-                              type="button"
-                              disabled={actingId === order.id}
-                              onClick={() => acceptQuote(order.id)}
-                              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 px-3 py-2 text-xs font-bold text-white shadow-xs transition active:scale-95 disabled:opacity-50"
-                            >
-                              <CheckCircle2 size={13} />
-                              <span>{actingId === order.id ? (isHi ? "स्वीकार कर रहे..." : "Accepting...") : (isHi ? "कोट स्वीकारें" : "Accept Quote")}</span>
-                            </button>
+                              {/* Decline pre-production request */}
+                              {["Request Sent", "Quote Received"].includes(order.status) && (
+                                <button
+                                  type="button"
+                                  disabled={actingId === order.id}
+                                  onClick={() => handleDeclineOrder(order.id)}
+                                  className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 px-3 py-2 text-xs font-bold text-[#8f2338] shadow-2xs transition active:scale-95 disabled:opacity-50"
+                                >
+                                  <X size={13} />
+                                  <span>{isHi ? "अस्वीकार करें" : "Decline"}</span>
+                                </button>
+                              )}
+
+                              {/* Start Production when Accepted */}
+                              {order.status === "Accepted" && (
+                                <button
+                                  type="button"
+                                  disabled={actingId === order.id}
+                                  onClick={() => handleUpdateStatus(order.id, "In Production")}
+                                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 px-3.5 py-2 text-xs font-bold text-white shadow-xs transition active:scale-95 disabled:opacity-50"
+                                >
+                                  <Scissors size={13} />
+                                  <span>{actingId === order.id ? "Updating..." : (isHi ? "सिलाई शुरू करें" : "Start Production")}</span>
+                                </button>
+                              )}
+
+                              {/* Mark Ready when In Production */}
+                              {order.status === "In Production" && (
+                                <button
+                                  type="button"
+                                  disabled={actingId === order.id}
+                                  onClick={() => handleUpdateStatus(order.id, "Ready for Pickup")}
+                                  className="inline-flex items-center gap-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 px-3.5 py-2 text-xs font-bold text-white shadow-xs transition active:scale-95 disabled:opacity-50"
+                                >
+                                  <Package size={13} />
+                                  <span>{actingId === order.id ? "Updating..." : (isHi ? "तैयार मार्क करें" : "Mark Ready")}</span>
+                                </button>
+                              )}
+
+                              {/* Mark Completed when Ready for Pickup */}
+                              {order.status === "Ready for Pickup" && (
+                                <button
+                                  type="button"
+                                  disabled={actingId === order.id}
+                                  onClick={() => handleUpdateStatus(order.id, "Completed")}
+                                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 px-3.5 py-2 text-xs font-bold text-white shadow-xs transition active:scale-95 disabled:opacity-50"
+                                >
+                                  <CheckCircle2 size={13} />
+                                  <span>{actingId === order.id ? "Updating..." : (isHi ? "ऑर्डर पूर्ण करें" : "Mark Completed")}</span>
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            /* CUSTOMER ACTIONS */
+                            <>
+                              {/* Cancel Order Button */}
+                              {isOrderCancellable(order) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCancelModalOrder(order);
+                                    setCancelReason("");
+                                  }}
+                                  className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100 px-3 py-2 text-xs font-bold text-[#8f2338] shadow-2xs transition active:scale-95"
+                                  title="Cancel order before studio starts cutting/production"
+                                >
+                                  <X size={13} />
+                                  <span>{isHi ? "रद्द करें" : "Cancel"}</span>
+                                </button>
+                              )}
+
+                              {/* Accept Quote Button if Quote Received */}
+                              {(order.status === "Quote Received" || order.status === "Quote Ready") && (
+                                <button
+                                  type="button"
+                                  disabled={actingId === order.id}
+                                  onClick={() => acceptQuote(order.id)}
+                                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 px-3 py-2 text-xs font-bold text-white shadow-xs transition active:scale-95 disabled:opacity-50"
+                                >
+                                  <CheckCircle2 size={13} />
+                                  <span>{actingId === order.id ? (isHi ? "स्वीकार कर रहे..." : "Accepting...") : (isHi ? "कोट स्वीकारें" : "Accept Quote")}</span>
+                                </button>
+                              )}
+                            </>
                           )}
 
                           {/* View Details Button */}
@@ -745,6 +984,94 @@ export default function Orders() {
         )}
 
         {/* =========================================================
+            TAILOR SEND / UPDATE QUOTE MODAL
+        ========================================================== */}
+        {quoteModalOrder && (
+          <div
+            className="fixed inset-0 z-[1050] flex items-center justify-center bg-stone-950/60 p-4 backdrop-blur-xs transition-opacity"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setQuoteModalOrder(null);
+            }}
+          >
+            <div className="relative w-full max-w-md rounded-3xl bg-white p-6 sm:p-7 shadow-2xl transition-all">
+              <div className="flex items-center gap-3 border-b border-stone-100 pb-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
+                  <FileText size={20} />
+                </div>
+                <div>
+                  <h3 className="font-sans text-base sm:text-lg font-bold text-stone-900">
+                    {isHi ? "कोटेशन सबमिट करें" : "Submit Tailor Quotation"}
+                  </h3>
+                  <p className="text-xs text-stone-400">
+                    Order #{quoteModalOrder.id || quoteModalOrder._id?.slice(-8).toUpperCase()} · {quoteModalOrder.garment}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3 text-xs sm:text-sm">
+                <p className="text-stone-600 leading-relaxed font-sans">
+                  {isHi
+                    ? "ग्राहक को अपनी सिलाई और सामग्री का कुल कोटेशन भेजें। ग्राहक के स्वीकार करने पर आप कटाई और उत्पादन शुरू कर सकेंगे।"
+                    : "Enter your custom tailoring price for this client request. When the client approves, you can begin fabric cutting and production."}
+                </p>
+
+                {quoteModalOrder.clientName && (
+                  <div className="rounded-xl bg-stone-50 border border-stone-100 p-2.5 text-xs">
+                    <span className="text-stone-400 block text-[10px] font-bold uppercase">Client</span>
+                    <strong className="text-stone-800">{quoteModalOrder.clientName}</strong>
+                    {quoteModalOrder.clientPhone && (
+                      <span className="text-stone-500 ml-2">({quoteModalOrder.clientPhone})</span>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    {isHi ? "कुल कोटेशन राशि (₹):" : "Total Quotation Amount (₹):"}
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-stone-400 text-sm">₹</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={quotePriceInput}
+                      onChange={(e) => setQuotePriceInput(e.target.value)}
+                      placeholder="e.g. 1499"
+                      className="w-full rounded-xl border border-stone-200 bg-stone-50 pl-8 pr-3 py-2.5 text-sm font-bold text-stone-900 outline-none focus:border-[#8f2338] focus:bg-white"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-2 border-t border-stone-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setQuoteModalOrder(null)}
+                  className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50 transition"
+                >
+                  {isHi ? "रद्द करें" : "Cancel"}
+                </button>
+                <button
+                  type="button"
+                  disabled={actingId === quoteModalOrder.id || !quotePriceInput}
+                  onClick={() => handleSendQuote(quoteModalOrder.id, quotePriceInput)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] px-5 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] transition disabled:opacity-50"
+                >
+                  <CheckCircle2 size={14} />
+                  <span>
+                    {actingId === quoteModalOrder.id
+                      ? (isHi ? "सबमिट हो रहा..." : "Submitting...")
+                      : (isHi ? "कोटेशन भेजें" : "Send Quote")}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================
             ORDER DETAILS MODAL
         ========================================================== */}
         {selectedOrder && (
@@ -793,6 +1120,43 @@ export default function Orders() {
                   </div>
                 </div>
 
+                {/* Client Information (Tailor View) */}
+                {isTailor && (
+                  <div className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-3.5">
+                    <span className="text-[10px] uppercase font-bold text-stone-400 block mb-2">Client Details</span>
+                    <div className="flex items-center gap-2.5">
+                      {selectedOrder.clientAvatar ? (
+                        <img
+                          src={selectedOrder.clientAvatar}
+                          alt={selectedOrder.clientName}
+                          className="h-9 w-9 rounded-full object-cover border border-stone-200"
+                          onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        />
+                      ) : (
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-rose-50 text-[#8f2338] border border-rose-100 text-xs font-bold shrink-0">
+                          {(selectedOrder.clientName || "C").charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <strong className="text-stone-900 text-xs sm:text-sm block">
+                          {selectedOrder.clientName || "Client"}
+                        </strong>
+                        <div className="flex items-center gap-3 text-xs text-stone-500 mt-0.5 flex-wrap">
+                          {selectedOrder.clientPhone && (
+                            <a
+                              href={`tel:${selectedOrder.clientPhone}`}
+                              className="hover:text-[#8f2338] flex items-center gap-1 font-sans text-stone-700 font-medium"
+                            >
+                              <Phone size={11} /> {selectedOrder.clientPhone}
+                            </a>
+                          )}
+                          {selectedOrder.clientEmail && <span>{selectedOrder.clientEmail}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <span className="text-[10px] uppercase font-bold text-stone-400">Color</span>
@@ -804,12 +1168,14 @@ export default function Orders() {
                   </div>
                 </div>
 
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-stone-400">Tailoring Studio</span>
-                  <p className="font-bold text-stone-900 mt-0.5">
-                    {selectedOrder.tailorName || (selectedOrder.status === "Completed" ? "undefined" : t("dashboardPage.masterStudio", "Master Studio"))}
-                  </p>
-                </div>
+                {!isTailor && (
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-stone-400">Tailoring Studio</span>
+                    <p className="font-bold text-stone-900 mt-0.5">
+                      {selectedOrder.tailorName || (selectedOrder.status === "Completed" ? "undefined" : t("dashboardPage.masterStudio", "Master Studio"))}
+                    </p>
+                  </div>
+                )}
 
                 {selectedOrder.notes && (
                   <div>
@@ -853,7 +1219,7 @@ export default function Orders() {
               </div>
 
               {/* Modal Footer */}
-              <div className="mt-6 flex items-center justify-between gap-2 border-t border-stone-100 pt-4">
+              <div className="mt-6 flex items-center justify-between gap-2 border-t border-stone-100 pt-4 flex-wrap">
                 {isOrderCancellable(selectedOrder) ? (
                   <button
                     type="button"
@@ -877,14 +1243,59 @@ export default function Orders() {
                   >
                     Close
                   </button>
-                  {selectedOrder.status === "Quote Received" && (
-                    <button
-                      type="button"
-                      onClick={() => acceptQuote(selectedOrder.id)}
-                      className="rounded-xl bg-[#8f2338] px-5 py-2 font-bold text-white shadow-xs hover:bg-[#781c2e] text-xs"
-                    >
-                      Accept Quote
-                    </button>
+                  {isTailor ? (
+                    <>
+                      {(selectedOrder.status === "Request Sent" || selectedOrder.status === "Quote Received") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuoteModalOrder(selectedOrder);
+                            setQuotePriceInput(selectedOrder.quotePrice != null ? String(selectedOrder.quotePrice) : selectedOrder.price != null ? String(selectedOrder.price) : "");
+                            setSelectedOrder(null);
+                          }}
+                          className="rounded-xl bg-[#8f2338] px-4 py-2 font-bold text-white shadow-xs hover:bg-[#781c2e] text-xs"
+                        >
+                          {selectedOrder.status === "Quote Received" ? "Update Quote" : "Send Quote"}
+                        </button>
+                      )}
+                      {selectedOrder.status === "Accepted" && (
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateStatus(selectedOrder.id, "In Production")}
+                          className="rounded-xl bg-blue-700 px-4 py-2 font-bold text-white shadow-xs hover:bg-blue-800 text-xs"
+                        >
+                          Start Production
+                        </button>
+                      )}
+                      {selectedOrder.status === "In Production" && (
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateStatus(selectedOrder.id, "Ready for Pickup")}
+                          className="rounded-xl bg-amber-700 px-4 py-2 font-bold text-white shadow-xs hover:bg-amber-800 text-xs"
+                        >
+                          Mark Ready
+                        </button>
+                      )}
+                      {selectedOrder.status === "Ready for Pickup" && (
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateStatus(selectedOrder.id, "Completed")}
+                          className="rounded-xl bg-emerald-700 px-4 py-2 font-bold text-white shadow-xs hover:bg-emerald-800 text-xs"
+                        >
+                          Mark Completed
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    selectedOrder.status === "Quote Received" && (
+                      <button
+                        type="button"
+                        onClick={() => acceptQuote(selectedOrder.id)}
+                        className="rounded-xl bg-[#8f2338] px-5 py-2 font-bold text-white shadow-xs hover:bg-[#781c2e] text-xs"
+                      >
+                        Accept Quote
+                      </button>
+                    )
                   )}
                 </div>
               </div>
