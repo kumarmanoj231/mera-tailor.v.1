@@ -130,7 +130,25 @@ export async function deleteAdminUser(req, res) {
 
 export async function listAdminTailors(_req, res) {
   try {
-    res.json(await Tailor.find().sort({ name: 1 }).lean());
+    let tailors = await Tailor.find().sort({ name: 1 }).lean();
+    const ownerIds = [...new Set(tailors.map(t => t.ownerClerkUserId).filter(Boolean))];
+    if (ownerIds.length > 0) {
+      const ownerUsers = await User.find({ clerkUserId: { $in: ownerIds } })
+        .select('clerkUserId avatar imageUrl')
+        .lean();
+      const userImageMap = new Map();
+      ownerUsers.forEach(u => {
+        const img = u.avatar || u.imageUrl;
+        if (img) userImageMap.set(u.clerkUserId, img);
+      });
+      tailors = tailors.map(t => {
+        if (t.ownerClerkUserId && userImageMap.has(t.ownerClerkUserId)) {
+          return { ...t, image: userImageMap.get(t.ownerClerkUserId) };
+        }
+        return t;
+      });
+    }
+    res.json(tailors);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -142,9 +160,26 @@ export async function listAdminTailors(_req, res) {
  */
 export async function listPendingVerifications(_req, res) {
   try {
-    const tailors = await Tailor.find()
+    let tailors = await Tailor.find()
       .sort({ verificationAppliedAt: -1, createdAt: -1 })
       .lean();
+    const ownerIds = [...new Set(tailors.map(t => t.ownerClerkUserId).filter(Boolean))];
+    if (ownerIds.length > 0) {
+      const ownerUsers = await User.find({ clerkUserId: { $in: ownerIds } })
+        .select('clerkUserId avatar imageUrl')
+        .lean();
+      const userImageMap = new Map();
+      ownerUsers.forEach(u => {
+        const img = u.avatar || u.imageUrl;
+        if (img) userImageMap.set(u.clerkUserId, img);
+      });
+      tailors = tailors.map(t => {
+        if (t.ownerClerkUserId && userImageMap.has(t.ownerClerkUserId)) {
+          return { ...t, image: userImageMap.get(t.ownerClerkUserId) };
+        }
+        return t;
+      });
+    }
     res.json(tailors);
   } catch (error) {
     res.status(500).json({ error: error.message });

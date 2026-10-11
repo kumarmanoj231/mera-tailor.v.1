@@ -36,6 +36,7 @@ import confetti from "canvas-confetti";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useAuth } from "../context/AuthContext";
+import TailorAvatar from "../components/common/TailorAvatar";
 
 const CATEGORIES = [
   "Corporate Uniforms",
@@ -1209,29 +1210,38 @@ export default function Bulk() {
                         }`}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm text-stone-900">{quote.tailorName}</span>
-                              {quote.tailorVerified && (
-                                <span className="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.2 text-[9px] font-bold">
-                                  ✓ Verified Atelier
+                          <div className="flex items-center gap-3">
+                            <TailorAvatar
+                              image={quote.tailorImage}
+                              name={quote.tailorName}
+                              size="sm"
+                              rounded="rounded-xl"
+                              alt={quote.tailorName}
+                            />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-sm text-stone-900">{quote.tailorName}</span>
+                                {quote.tailorVerified && (
+                                  <span className="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.2 text-[9px] font-bold">
+                                    ✓ Verified Atelier
+                                  </span>
+                                )}
+                                <span
+                                  className={`rounded-full px-2 py-0.2 text-[9px] font-bold capitalize ${
+                                    quote.status === "accepted"
+                                      ? "bg-emerald-600 text-white"
+                                      : quote.status === "rejected"
+                                      ? "bg-stone-200 text-stone-600"
+                                      : "bg-amber-100 text-amber-800"
+                                  }`}
+                                >
+                                  {quote.status}
                                 </span>
-                              )}
-                              <span
-                                className={`rounded-full px-2 py-0.2 text-[9px] font-bold capitalize ${
-                                  quote.status === "accepted"
-                                    ? "bg-emerald-600 text-white"
-                                    : quote.status === "rejected"
-                                    ? "bg-stone-200 text-stone-600"
-                                    : "bg-amber-100 text-amber-800"
-                                }`}
-                              >
-                                {quote.status}
-                              </span>
-                            </div>
+                              </div>
                             <span className="text-xs text-stone-500 mt-0.5 block">
                               {quote.tailorCity || "Jaipur"} • Lead Time: {quote.leadTimeDays || 14} days {quote.sampleOffered ? "• Free Sample Prototype" : ""}
                             </span>
+                            </div>
                           </div>
 
                           <div className="text-right">

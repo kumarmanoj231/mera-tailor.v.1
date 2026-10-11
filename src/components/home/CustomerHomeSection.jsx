@@ -25,6 +25,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { toast } from "react-toastify";
 import { useAuth } from "../../context/AuthContext";
+import TailorAvatar from "../common/TailorAvatar";
 
 // Custom Illustrated Craft Category SVG Graphics matching the atelier UI mockup
 function EthnicWearIcon() {
@@ -814,21 +815,14 @@ export default function CustomerHomeSection() {
                 >
                   <div>
                     {/* Studio Image Thumbnail / Card Header */}
-                    <div className="relative h-40 w-full overflow-hidden rounded-xl bg-stone-100 flex items-center justify-center border border-stone-100">
-                      {studioImage ? (
-                        <img
-                          src={studioImage}
-                          alt={tailor.name || "Tailor Studio"}
-                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center text-stone-300">
-                          <ImageIcon size={34} strokeWidth={1.2} />
-                        </div>
-                      )}
+                    <div className="relative h-40 w-full overflow-hidden rounded-xl border border-stone-100">
+                      <TailorAvatar
+                        image={studioImage}
+                        name={tailor.name}
+                        size="custom"
+                        className="h-full w-full rounded-xl"
+                        alt={tailor.name || "Tailor Studio"}
+                      />
 
                       {/* Bookmark / Heart Button */}
                       <button

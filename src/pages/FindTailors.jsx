@@ -43,6 +43,7 @@ import {
   isGuestLocationPromptDismissed,
   dismissGuestLocationPrompt,
 } from "../utils/locationService";
+import TailorAvatar from "../components/common/TailorAvatar";
 
 const DEFAULT_CENTER = [26.9124, 75.7873]; // Jaipur Central Discovery
 
@@ -1555,7 +1556,7 @@ export default function FindTailors() {
                   {sorted.map((tailor) => {
                     const isSaved = savedTailorIds.has(String(tailor._id));
                     const isVerified = tailor.verified || tailor.verificationStatus === "verified";
-                    const tailorImage = tailor.image || tailor.heroImage || "/assets/hero-atelier.jpg";
+                    const tailorImage = tailor.image || tailor.heroImage;
                     const tailorArea = tailor.area || tailor.city || "C block, Jaipur";
                     const tailorRating = tailor.rating || 4.8;
                     const tailorReviews = tailor.reviews || 120;
@@ -1568,14 +1569,13 @@ export default function FindTailors() {
                         className="group relative flex flex-col sm:flex-row items-stretch overflow-hidden rounded-2xl border border-stone-200 bg-white p-4 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-[#8f2338]/40 hover:shadow-md gap-4"
                       >
                         {/* Left: Studio Image Showcase */}
-                        <div className="relative h-44 sm:h-auto sm:w-56 shrink-0 overflow-hidden rounded-xl bg-stone-100 border border-stone-100">
-                          <img
-                            src={tailorImage}
+                        <div className="relative h-44 sm:h-auto sm:w-56 shrink-0 overflow-hidden rounded-xl border border-stone-100">
+                          <TailorAvatar
+                            image={tailorImage}
+                            name={tailor.name}
+                            size="banner"
+                            className="h-full w-full rounded-xl"
                             alt={tailor.name}
-                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            onError={(e) => {
-                              e.currentTarget.src = "/assets/hero-atelier.jpg";
-                            }}
                           />
                         </div>
 

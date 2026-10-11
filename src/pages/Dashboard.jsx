@@ -48,6 +48,7 @@ import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import AdminPortal from "./AdminPortal";
+import TailorAvatar from "../components/common/TailorAvatar";
 
 const money = (value) =>
   new Intl.NumberFormat("en-IN", {
@@ -1857,30 +1858,13 @@ export default function Dashboard() {
                     <div className="mt-4 rounded-2xl border border-stone-200 bg-[#fdfbf9] p-3.5 transition hover:border-[#8f2338]/30">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-3">
-                          <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fdf2f4] text-[#8f2338] font-black text-sm shrink-0 border border-rose-100 overflow-hidden">
-                            {(displaySavedStudio.image || displaySavedStudio.heroImage || displaySavedStudio.avatar) ? (
-                              <img
-                                src={displaySavedStudio.image || displaySavedStudio.heroImage || displaySavedStudio.avatar}
-                                alt={displaySavedStudio.name || "Studio"}
-                                className="h-full w-full object-cover"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none";
-                                  const fallback = e.currentTarget.nextElementSibling;
-                                  if (fallback) fallback.style.display = "flex";
-                                }}
-                              />
-                            ) : null}
-                            <span
-                              className="items-center justify-center h-full w-full"
-                              style={{
-                                display: (displaySavedStudio.image || displaySavedStudio.heroImage || displaySavedStudio.avatar) ? "none" : "flex",
-                              }}
-                            >
-                              {displaySavedStudio.name
-                                ? displaySavedStudio.name.slice(0, 2).toUpperCase()
-                                : "ST"}
-                            </span>
-                          </div>
+                          <TailorAvatar
+                            image={displaySavedStudio.image || displaySavedStudio.heroImage || displaySavedStudio.avatar}
+                            name={displaySavedStudio.name}
+                            size="md"
+                            rounded="rounded-2xl"
+                            alt={displaySavedStudio.name || "Studio"}
+                          />
                           <div>
                             <h4 className="font-bold text-xs sm:text-sm text-stone-900 line-clamp-1">
                               {displaySavedStudio.name}
@@ -3217,16 +3201,13 @@ export default function Dashboard() {
                     <div className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-7 shadow-xs space-y-5">
                       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 pb-4">
                         <div className="flex items-center gap-3.5">
-                          {tailorData?.image && (
-                            <img
-                              src={tailorData.image}
-                              alt={tailorData.name || "Studio"}
-                              className="h-14 w-14 rounded-2xl object-cover border border-stone-200 shadow-2xs shrink-0"
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                              }}
-                            />
-                          )}
+                          <TailorAvatar
+                            image={tailorData?.image || profile?.avatar || profile?.imageUrl || user?.imageUrl}
+                            name={tailorData?.name || profile?.firstName || "Studio"}
+                            size="lg"
+                            rounded="rounded-2xl"
+                            alt={tailorData?.name || "Studio"}
+                          />
                           <div>
                             <h2 className="font-serif text-xl font-bold text-[#231b1a]">
                               {tailorData?.name || "My Tailoring Studio"}
@@ -4370,28 +4351,13 @@ export default function Dashboard() {
                           <div>
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex items-center gap-3">
-                                <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fdf2f4] text-[#8f2338] font-black text-xs shrink-0 border border-rose-100 overflow-hidden">
-                                  {(tailor.image || tailor.heroImage || tailor.avatar) ? (
-                                    <img
-                                      src={tailor.image || tailor.heroImage || tailor.avatar}
-                                      alt={tailor.name || "Studio"}
-                                      className="h-full w-full object-cover"
-                                      onError={(e) => {
-                                        e.currentTarget.style.display = "none";
-                                        const fallback = e.currentTarget.nextElementSibling;
-                                        if (fallback) fallback.style.display = "flex";
-                                      }}
-                                    />
-                                  ) : null}
-                                  <span
-                                    className="items-center justify-center h-full w-full"
-                                    style={{
-                                      display: (tailor.image || tailor.heroImage || tailor.avatar) ? "none" : "flex",
-                                    }}
-                                  >
-                                    {tailor.name ? tailor.name.slice(0, 2).toUpperCase() : "ST"}
-                                  </span>
-                                </div>
+                                <TailorAvatar
+                                  image={tailor.image || tailor.heroImage || tailor.avatar}
+                                  name={tailor.name}
+                                  size="md"
+                                  rounded="rounded-2xl"
+                                  alt={tailor.name || "Studio"}
+                                />
                                 <div>
                                   <h3 className="font-sans text-base font-bold text-stone-900 line-clamp-1">
                                     {tailor.name}

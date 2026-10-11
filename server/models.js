@@ -156,6 +156,7 @@ const quoteSchema = new mongoose.Schema(
     tailorId: { type: mongoose.Schema.Types.ObjectId, ref: "Tailor" },
     tailorClerkUserId: String,
     tailorName: String,
+    tailorImage: String,
     tailorCity: String,
     tailorPhone: String,
     tailorVerified: { type: Boolean, default: false },

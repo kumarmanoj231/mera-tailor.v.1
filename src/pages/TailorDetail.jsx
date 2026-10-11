@@ -31,6 +31,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import TailorAvatar from '../components/common/TailorAvatar';
 
 const EMPTY_FORM = {
   garment: '',
@@ -585,15 +586,14 @@ export default function TailorDetail() {
               {/* Studio Hero Profile Card */}
               <section className="overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-sm">
                 <div className="relative h-64 w-full bg-stone-900 sm:h-72">
-                  <img
-                    src={tailor.image || '/assets/tailor-character.png'}
+                  <TailorAvatar
+                    image={tailor.image}
+                    name={tailor.name}
+                    size="hero"
+                    className="h-full w-full rounded-none"
                     alt={tailor.name}
-                    className="h-full w-full object-cover opacity-90 transition duration-500 hover:scale-105"
-                    onError={e => {
-                      e.currentTarget.src = '/assets/tailor-character.png';
-                    }}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
 
                   {/* Badges Overlay */}
                   <div className="absolute top-4 left-4 right-4 flex flex-wrap items-center justify-between gap-2">

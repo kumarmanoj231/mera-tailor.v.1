@@ -1,13 +1,13 @@
-import React, { useState } from "react";
+import React from "react";
 import { Star, MapPin, CheckCircle2, ArrowRight, Phone, Lock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../../context/AuthContext";
+import TailorAvatar from "../common/TailorAvatar";
 
 const FeaturedTailorCard = ({ tailor }) => {
   const { t } = useTranslation();
   const { isSignedIn, openSignUp } = useAuth();
-  const [imageError, setImageError] = useState(false);
 
   if (!tailor) return null;
 
@@ -51,20 +51,13 @@ const FeaturedTailorCard = ({ tailor }) => {
       {/* Top Details & Avatar */}
       <div>
         <div className="flex items-start gap-3.5">
-          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-stone-200 bg-[#f7eee5]">
-            {image && !imageError ? (
-              <img
-                src={image}
-                alt={name || "Tailor Studio"}
-                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                onError={() => setImageError(true)}
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center font-bold text-[#8f2338]">
-                {initials}
-              </div>
-            )}
-          </div>
+          <TailorAvatar
+            image={image}
+            name={name}
+            size="lg"
+            rounded="rounded-xl"
+            alt={name || "Tailor Studio"}
+          />
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">

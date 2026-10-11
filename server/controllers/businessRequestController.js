@@ -132,14 +132,31 @@ export async function listBusinessRequests(req, res) {
 
     const rows = await BusinessRequest.find(query).sort({ createdAt: -1 }).lean();
 
+    // Gather tailorClerkUserIds across all visible quotes to enrich authentic images
+    const allTailorUserIds = [...new Set(rows.flatMap(r => (r.quotes || []).map(q => q.tailorClerkUserId)).filter(Boolean))];
+    const tailorImgMap = new Map();
+    if (allTailorUserIds.length > 0) {
+      const users = await User.find({ clerkUserId: { $in: allTailorUserIds } }).select('clerkUserId avatar imageUrl').lean();
+      users.forEach(u => {
+        const img = u.avatar || u.imageUrl;
+        if (img) tailorImgMap.set(u.clerkUserId, img);
+      });
+    }
+
     const formatted = rows.map((r) => {
       const isOwner = r.clerkUserId === req.authUserId;
       const quotesCount = r.quotes?.length || 0;
 
+      // Enrich quotes with authentic Clerk avatar if missing
+      const enrichedQuotes = (r.quotes || []).map(q => ({
+        ...q,
+        tailorImage: q.tailorImage || (q.tailorClerkUserId ? tailorImgMap.get(q.tailorClerkUserId) : null) || null,
+      }));
+
       // Find my quote if tailor
       let myQuote = null;
       if (isTailor) {
-        myQuote = r.quotes?.find(
+        myQuote = enrichedQuotes.find(
           (q) =>
             q.tailorClerkUserId === req.authUserId ||
             (tailorProfile && q.tailorId && String(q.tailorId) === String(tailorProfile._id))
@@ -147,7 +164,7 @@ export async function listBusinessRequests(req, res) {
       }
 
       // If user is neither owner nor admin, mask competitor quotes list but provide stats
-      let visibleQuotes = r.quotes || [];
+      let visibleQuotes = enrichedQuotes;
       if (!isOwner && !isAdmin) {
         visibleQuotes = myQuote ? [myQuote] : [];
       }
@@ -158,7 +175,7 @@ export async function listBusinessRequests(req, res) {
         quotesCount,
         quotes: visibleQuotes,
         myQuote,
-        lowestQuote: r.quotes?.length ? Math.min(...r.quotes.map((q) => q.pricePerUnit || q.totalAmount / r.quantity)) : null,
+        lowestQuote: enrichedQuotes.length ? Math.min(...enrichedQuotes.map((q) => q.pricePerUnit || q.totalAmount / r.quantity)) : null,
       };
     });
 
@@ -301,6 +318,7 @@ export async function submitQuote(req, res) {
     // Fetch tailor studio details
     const tailor = await Tailor.findOne({ ownerClerkUserId: req.authUserId }).lean();
     const tailorName = tailor?.name || `${req.appUser?.firstName || ''} ${req.appUser?.lastName || ''}`.trim() || 'Artisan Workshop';
+    const tailorImage = tailor?.image || req.appUser?.avatar || req.appUser?.imageUrl || '';
     const tailorCity = tailor?.city || req.appUser?.primaryLocation?.city || 'Jaipur';
     const tailorPhone = tailor?.phone || req.appUser?.phone || '';
     const tailorVerified = Boolean(tailor?.verified);
@@ -314,6 +332,7 @@ export async function submitQuote(req, res) {
       tailorId: tailor?._id,
       tailorClerkUserId: req.authUserId,
       tailorName,
+      tailorImage,
       tailorCity,
       tailorPhone,
       tailorVerified,

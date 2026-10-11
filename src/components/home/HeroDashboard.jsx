@@ -15,6 +15,7 @@ import {
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../../context/AuthContext";
+import TailorAvatar from "../common/TailorAvatar";
 
 const HeroDashboard = ({ onSignUp }) => {
   const { t } = useTranslation();
@@ -150,19 +151,14 @@ const HeroDashboard = ({ onSignUp }) => {
               className="flex items-center gap-3 group"
             >
               {/* Tailor image / avatar */}
-              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-stone-200 bg-[#f7eee5]">
-                {topTailor?.image && !imageError ? (
-                  <img
-                    src={topTailor.image}
-                    alt={tailorName}
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    onError={() => setImageError(true)}
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center font-bold text-[#8f2338]">
-                    {initials}
-                  </div>
-                )}
+              <div className="relative shrink-0">
+                <TailorAvatar
+                  image={topTailor?.image}
+                  name={tailorName}
+                  size="lg"
+                  rounded="rounded-xl"
+                  alt={tailorName}
+                />
 
                 {/* Verified badge */}
                 {(topTailor?.verified || topTailor?.verificationStatus === "verified") && (

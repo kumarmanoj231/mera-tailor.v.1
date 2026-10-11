@@ -54,6 +54,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { getRoleMeta } from "../components/Navbar/RoleAvatarWithBadge";
 import AdminAnnouncementBroadcaster from "../components/admin/AdminAnnouncementBroadcaster";
+import TailorAvatar from "../components/common/TailorAvatar";
 
 // Custom Leaflet Pin Icons
 const verifiedIcon = L.divIcon({
@@ -1962,10 +1963,12 @@ export default function AdminPortal() {
                   >
                     <div className="flex items-center gap-4">
                       {/* Workshop Thumbnail */}
-                      <img
-                        src="https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=200&q=80"
+                      <TailorAvatar
+                        image={studio.image}
+                        name={studio.name}
+                        size="custom"
+                        className="h-16 w-20 rounded-xl"
                         alt={studio.name}
-                        className="h-16 w-20 rounded-xl object-cover shrink-0"
                       />
                       <div>
                         <h3 className="font-bold text-stone-900 text-sm">

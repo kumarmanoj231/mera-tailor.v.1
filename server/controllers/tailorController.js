@@ -53,6 +53,25 @@ export async function listTailors(req, res) {
 
     let rows = await Tailor.find(filter).lean();
 
+    // Map owner Clerk user avatars so tailor profiles reflect authentic Clerk images
+    const ownerIds = [...new Set(rows.map(t => t.ownerClerkUserId).filter(Boolean))];
+    if (ownerIds.length > 0) {
+      const ownerUsers = await User.find({ clerkUserId: { $in: ownerIds } })
+        .select('clerkUserId avatar imageUrl')
+        .lean();
+      const userImageMap = new Map();
+      ownerUsers.forEach(u => {
+        const img = u.avatar || u.imageUrl;
+        if (img) userImageMap.set(u.clerkUserId, img);
+      });
+      rows = rows.map(t => {
+        if (t.ownerClerkUserId && userImageMap.has(t.ownerClerkUserId)) {
+          return { ...t, image: userImageMap.get(t.ownerClerkUserId) };
+        }
+        return t;
+      });
+    }
+
     // Format coordinates and compute distance if center point is supplied
     rows = rows.map(t => {
       let coords = t.location?.coordinates;
@@ -113,7 +132,19 @@ export async function getTailor(req, res) {
       return res.status(404).json({ error: 'Tailor not found' });
     }
     const tailor = await Tailor.findById(req.params.id).lean();
-    tailor ? res.json(publicTailor(tailor)) : res.status(404).json({ error: 'Tailor not found' });
+    if (!tailor) return res.status(404).json({ error: 'Tailor not found' });
+
+    if (tailor.ownerClerkUserId) {
+      const ownerUser = await User.findOne({ clerkUserId: tailor.ownerClerkUserId })
+        .select('avatar imageUrl')
+        .lean();
+      const userImg = ownerUser?.avatar || ownerUser?.imageUrl;
+      if (userImg) {
+        tailor.image = userImg;
+      }
+    }
+
+    res.json(publicTailor(tailor));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -125,10 +156,11 @@ export async function getTailor(req, res) {
  */
 export async function getMyStudio(req, res) {
   try {
-    const tailor = await Tailor.findOne({ ownerClerkUserId: req.authUserId });
+    const user = req.appUser;
+    const userAvatar = user?.avatar || user?.imageUrl || '';
+    let tailor = await Tailor.findOne({ ownerClerkUserId: req.authUserId });
     if (!tailor) {
       // Return draft template without inserting a document into the database
-      const user = req.appUser;
       const defaultName = user.firstName ? `${user.firstName}'s Atelier` : 'My Tailoring Studio';
       return res.json({
         ownerClerkUserId: req.authUserId,
@@ -137,6 +169,7 @@ export async function getMyStudio(req, res) {
         city: user.locationLabel?.split(',')?.[0]?.trim() || 'Jaipur',
         country: 'India',
         phone: user.phone || '',
+        image: userAvatar,
         description: '',
         minPrice: 499,
         experience: 5,
@@ -153,7 +186,12 @@ export async function getMyStudio(req, res) {
         isDraft: true,
       });
     }
-    res.json(tailor);
+
+    const studioObj = tailor.toObject ? tailor.toObject() : tailor;
+    if (userAvatar) {
+      studioObj.image = userAvatar;
+    }
+    res.json(studioObj);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -222,8 +260,19 @@ export async function updateMyStudio(req, res) {
       }
     }
 
+    const userAvatar = req.appUser?.avatar || req.appUser?.imageUrl || '';
+    if (typeof b.image === 'string' && b.image.trim()) {
+      tailor.image = b.image.trim();
+    } else if (userAvatar && (!tailor.image || tailor.image.includes('unsplash.com'))) {
+      tailor.image = userAvatar;
+    }
+
     await tailor.save();
-    res.json(tailor);
+    const studioObj = tailor.toObject ? tailor.toObject() : tailor;
+    if (userAvatar && !studioObj.image) {
+      studioObj.image = userAvatar;
+    }
+    res.json(studioObj);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

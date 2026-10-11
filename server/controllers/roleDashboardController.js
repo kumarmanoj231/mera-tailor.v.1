@@ -11,8 +11,10 @@ export async function getTailorDashboard(req, res) {
       }
     }
 
+    const user = req.appUser || {};
+    const userAvatar = user.avatar || user.imageUrl || '';
+
     if (!tailor) {
-      const user = req.appUser || {};
       const tailorName = [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Master Artisan';
       const defaultStudioName = user.firstName ? `${user.firstName}'s Bespoke Atelier` : 'MeraTailor Atelier';
       const city = user.locationLabel?.split(',')?.[0]?.trim() || 'Jaipur';
@@ -26,6 +28,7 @@ export async function getTailorDashboard(req, res) {
         state: 'Rajasthan',
         country: 'India',
         phone: user.phone || '+91 98290 12345',
+        image: userAvatar,
         description: 'Master bespoke tailoring, fine embroidery, and precision garment alterations.',
         minPrice: 499,
         experience: 8,
@@ -46,6 +49,9 @@ export async function getTailorDashboard(req, res) {
         verified: false,
         verificationStatus: 'unverified',
       });
+    } else if (userAvatar && (!tailor.image || tailor.image.includes('unsplash.com'))) {
+      tailor.image = userAvatar;
+      await tailor.save();
     }
 
     let requests = await Order.find({ tailorId: tailor._id }).sort({ createdAt: -1 }).lean();
