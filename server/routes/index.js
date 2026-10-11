@@ -11,6 +11,7 @@ import adminRoutes from './adminRoutes.js';
 import roleDashboardRoutes from './roleDashboardRoutes.js';
 import voiceRoutes from './voiceRoutes.js';
 import webhookRoutes from './webhookRoutes.js';
+import notificationRoutes from './notificationRoutes.js';
 
 const router = Router();
 
@@ -34,7 +35,8 @@ router.use(
   businessRequestRoutes,
   adminRoutes,
   roleDashboardRoutes,
-  voiceRoutes
+  voiceRoutes,
+  notificationRoutes
 );
 
 export default router;

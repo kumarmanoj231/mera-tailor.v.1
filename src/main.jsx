@@ -10,6 +10,7 @@ import "./index.css";
 import "./i18n/i18n";
 
 import { AuthProvider } from "./context/AuthContext";
+import { NotificationProvider } from "./context/NotificationContext";
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -17,7 +18,9 @@ const app = (
     <BrowserRouter basename={import.meta.env.BASE_URL}>
       <AppContextProvider>
         <AuthProvider>
-          <App />
+          <NotificationProvider>
+            <App />
+          </NotificationProvider>
         </AuthProvider>
       </AppContextProvider>
     </BrowserRouter>

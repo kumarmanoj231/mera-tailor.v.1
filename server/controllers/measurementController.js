@@ -1,4 +1,5 @@
 import { Measurement } from '../models.js';
+import { createNotification } from './notificationController.js';
 
 export async function listMeasurements(req, res) {
   try {
@@ -49,6 +50,15 @@ export async function createMeasurement(req, res) {
       clerkUserId: req.authUserId,
     });
 
+    createNotification({
+      recipientClerkUserId: req.authUserId,
+      title: 'Measurement Profile Created',
+      message: `Profile '${cleanName}' for ${cleanGarment} has been saved to your account.`,
+      type: 'measurement',
+      link: '/dashboard',
+      metadata: { profileId: created._id, name: cleanName },
+    }).catch(() => {});
+
     res.status(201).json(created);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -88,6 +98,16 @@ export async function updateMeasurement(req, res) {
     );
 
     if (!item) return res.status(404).json({ error: 'Measurement profile not found.' });
+
+    createNotification({
+      recipientClerkUserId: req.authUserId,
+      title: 'Measurement Profile Updated',
+      message: `Profile '${item.name}' has been updated successfully.`,
+      type: 'measurement',
+      link: '/dashboard',
+      metadata: { profileId: item._id, name: item.name },
+    }).catch(() => {});
+
     res.json(item);
   } catch (error) {
     res.status(400).json({ error: error.message });

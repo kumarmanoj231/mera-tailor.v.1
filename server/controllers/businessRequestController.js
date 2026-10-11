@@ -1,4 +1,5 @@
 import { BusinessRequest, Tailor, User } from '../models.js';
+import { createNotification } from './notificationController.js';
 
 const escapeRegex = value => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -70,6 +71,15 @@ export async function createBusinessRequest(req, res) {
       quotes: [],
       status: 'open',
     });
+
+    createNotification({
+      recipientClerkUserId: req.authUserId,
+      title: 'Bulk Requirement Published',
+      message: `Your requirement for '${saved.organisation || saved.requirement}' (${saved.quantity} units) has been published to artisans.`,
+      type: 'bid',
+      link: '/bulk',
+      metadata: { requestId: saved._id },
+    }).catch(() => {});
 
     res.status(201).json({
       message: 'Bulk requirement published to artisan marketplace.',
@@ -328,6 +338,18 @@ export async function submitQuote(req, res) {
 
     await item.save();
 
+    // Notify business client that a tailor submitted a quote
+    if (item.clerkUserId) {
+      createNotification({
+        recipientClerkUserId: item.clerkUserId,
+        title: 'New Quotation Received',
+        message: `${tailor.name || 'An atelier'} submitted a quote of ₹${quotePayload.totalPrice} for '${item.organisation || item.requirement}'.`,
+        type: 'bid',
+        link: '/bulk',
+        metadata: { requestId: item._id, quoteId: quotePayload._id, totalPrice: quotePayload.totalPrice },
+      }).catch(() => {});
+    }
+
     res.status(200).json({
       message: existingIndex >= 0 ? 'Quotation updated successfully.' : 'Quotation submitted successfully to client.',
       quote: quotePayload,
@@ -378,6 +400,20 @@ export async function updateQuoteStatus(req, res) {
     }
 
     await item.save();
+
+    // Notify tailor of quote status change (awarded, shortlisted, rejected)
+    Tailor.findById(quote.tailorId).select('ownerClerkUserId').lean().then(t => {
+      if (t?.ownerClerkUserId) {
+        createNotification({
+          recipientClerkUserId: t.ownerClerkUserId,
+          title: `Tender Quote ${status === 'accepted' ? 'Awarded! 🎉' : status.charAt(0).toUpperCase() + status.slice(1)}`,
+          message: `Your quote for '${item.organisation || item.requirement}' has been ${status} by the client.`,
+          type: 'bid',
+          link: '/bulk',
+          metadata: { requestId: item._id, quoteId: quote._id, status },
+        }).catch(() => {});
+      }
+    }).catch(() => {});
 
     res.json({
       message: `Quotation status updated to ${status}.`,

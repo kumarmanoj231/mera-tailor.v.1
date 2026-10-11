@@ -1,5 +1,6 @@
 import { BusinessRequest, Measurement, Order, Tailor, User } from '../models.js';
 import { clerkClient } from '@clerk/express';
+import { createNotification } from './notificationController.js';
 
 export const publicUser = user => ({
   id: user._id?.toString?.() || user.clerkUserId,
@@ -78,6 +79,14 @@ export async function completeOnboarding(req, res) {
         console.warn('Clerk role metadata mirror warning:', error.message);
       });
 
+    createNotification({
+      recipientClerkUserId: req.authUserId,
+      title: 'Welcome to MeraTailor',
+      message: `Your ${role} profile is now active! You can now explore tailored services, bookings, and fittings.`,
+      type: 'general',
+      link: role === 'admin' ? '/admin' : '/dashboard',
+    }).catch(() => {});
+
     return res.json(publicUser(user));
   } catch (error) {
     return res.status(400).json({ error: error.message });
@@ -142,6 +151,14 @@ export async function updateProfile(req, res) {
           console.warn('Clerk name mirror warning:', error.message);
         });
     }
+
+    createNotification({
+      recipientClerkUserId: req.authUserId,
+      title: 'Profile Updated',
+      message: 'Your personal account profile details were successfully updated.',
+      type: 'profile',
+      link: '/dashboard',
+    }).catch(() => {});
 
     res.json(publicUser(user));
   } catch (error) {

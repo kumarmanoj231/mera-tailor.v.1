@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import LanguageToggle from "./LanguageToggle";
 import NavIconButton from "./NavIconButton";
 import RoleAvatarWithBadge from "./RoleAvatarWithBadge";
+import NotificationBell from "../notifications/NotificationBell";
 
 const DesktopActions = ({
   language,
@@ -51,10 +52,13 @@ const DesktopActions = ({
       )}
 
       {/* =====================================================
-          AUTHENTICATED USER: SINGLE DASHBOARD NAV ICON & AVATAR
+          AUTHENTICATED USER: NOTIFICATIONS, DASHBOARD & AVATAR
       ====================================================== */}
       {isSignedIn ? (
         <div className="flex items-center gap-2 border-l border-stone-200/80 pl-2">
+          {/* Real-time Notification Bell */}
+          <NotificationBell />
+
           {/* Single clean dashboard nav icon, dynamically linked to /admin for admin */}
           <NavIconButton
             to={dashboardRoute}

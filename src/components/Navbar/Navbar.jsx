@@ -10,6 +10,7 @@ import MobileMenu from "./MobileMenu";
 import LanguageToggle from "./LanguageToggle";
 import NavIconButton from "./NavIconButton";
 import RoleAvatarWithBadge from "./RoleAvatarWithBadge";
+import NotificationBell from "../notifications/NotificationBell";
 
 const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -118,6 +119,10 @@ const Navbar = () => {
               type="dashboard"
               mobile
             />
+          )}
+
+          {isSignedIn && (
+            <NotificationBell mobile />
           )}
 
           {isSignedIn && (

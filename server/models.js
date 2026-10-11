@@ -219,6 +219,27 @@ const businessRequestSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+const notificationSchema = new mongoose.Schema(
+  {
+    recipientClerkUserId: { type: String, required: true, index: true },
+    title: { type: String, required: true, trim: true, maxlength: 140 },
+    message: { type: String, required: true, trim: true, maxlength: 600 },
+    type: {
+      type: String,
+      enum: ['order', 'quote', 'status', 'bid', 'measurement', 'profile', 'announcement', 'general'],
+      default: 'general',
+      index: true,
+    },
+    link: { type: String, trim: true, maxlength: 255 },
+    read: { type: Boolean, default: false, index: true },
+    metadata: { type: mongoose.Schema.Types.Mixed },
+  },
+  { timestamps: true },
+);
+
+notificationSchema.index({ recipientClerkUserId: 1, read: 1, createdAt: -1 });
+notificationSchema.index({ recipientClerkUserId: 1, createdAt: -1 });
+
 export const Tailor = mongoose.models.Tailor || mongoose.model("Tailor", tailorSchema, "tailors");
 export const User = mongoose.models.User || mongoose.model("User", userSchema, "users");
 export const Order = mongoose.models.Order || mongoose.model("Order", orderSchema, "orders");
@@ -226,3 +247,6 @@ export const Measurement =
   mongoose.models.Measurement || mongoose.model("Measurement", measurementSchema, "measurements");
 export const BusinessRequest =
   mongoose.models.BusinessRequest || mongoose.model("BusinessRequest", businessRequestSchema, "business_requests");
+export const Notification =
+  mongoose.models.Notification || mongoose.model("Notification", notificationSchema, "notifications");
+

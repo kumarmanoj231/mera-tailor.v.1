@@ -35,6 +35,17 @@ const resources = {
         guest: "Guest",
         dashboard: "Dashboard",
         adminPortal: "Admin portal",
+        notifications: "Notifications",
+        markAllRead: "Mark all as read",
+        clearAll: "Clear all",
+        noNotifications: "No notifications yet",
+      },
+
+      notifications: {
+        new: "new",
+        confirmClear: "Clear all notifications permanently?",
+        allCaughtUp: "All caught up!",
+        loading: "Loading updates…",
       },
 
       discovery: { eyebrow: "DISCOVER", title: "Find Tailors", intro: "Search skilled tailoring professionals around any location. Choose your search area and radius.", locationPlaceholder: "Choose a city, area or postal code", searchArea: "Search this area", useLocation: "Use current location", queryPlaceholder: "Garment, tailor, area, city…", search: "Search", radius: "Search radius", category: "Category", allCategories: "All categories", hideMap: "Hide map", showMap: "Show map", sort: "Sort", recommended: "Recommended", distance: "Distance", rating: "Rating", understood: "Request understood:", submitRequest: "Search this request", searching: "Searching…", withinDays: "within {{count}} days", voiceRequestError: "We could not use that voice request. Please try again.", chooseLocationFirst: "Choose an area or allow location access to search nearby tailors.", locationUnavailable: "Location is unavailable in this browser. Search by area instead.", voiceUnavailable: "Voice input is unavailable here. Type your request instead.", voiceError: "We couldn't hear that. Please try again or type your request.", placeSearchError: "Place search failed.", directoryError: "The tailor directory could not be loaded.", invalidDirectory: "The tailor directory returned invalid map data.", currentLocation: "Current location", mapCenter: "Map center {{center}}", tailorsWithin: "{{count}} tailors within {{radius}} km", kmAway: "{{distance}} km away", newRating: "New", searchVoice: "Speak your request", chooseLocation: "Choose an area to discover nearby tailors", chooseLocationHelp: "Choose a city, area or postal code above, or use current location. Your profile location is not saved unless you confirm it.", noResults: "No tailors found in this radius. Increase the radius or search another area.", locationError: "We couldn't find that place. Try a city, area or postal code.", locationDenied: "Location permission was not granted. Search by city or area instead.", categoryNames: { "Men's Wear": "Men's Wear", "Ladies Wear": "Ladies Wear", "Formal Wear": "Formal Wear", "Ethnic Wear": "Ethnic Wear", Shirt: "Shirt", Pants: "Pants", Dress: "Dress", Suit: "Suit", Alteration: "Alteration" }, colorNames: { black: "black", white: "white", blue: "blue", red: "red", green: "green", yellow: "yellow", pink: "pink", maroon: "maroon", purple: "purple", orange: "orange", brown: "brown", grey: "grey" } },
@@ -881,6 +892,17 @@ const resources = {
         guest: "अतिथि",
         dashboard: "डैशबोर्ड",
         adminPortal: "एडमिन पोर्टल",
+        notifications: "सूचनाएं",
+        markAllRead: "सभी पढ़ी हुई मार्क करें",
+        clearAll: "सभी हटाएं",
+        noNotifications: "अभी कोई सूचना नहीं है",
+      },
+
+      notifications: {
+        new: "नई",
+        confirmClear: "क्या सभी सूचनाएं स्थायी रूप से हटाएं?",
+        allCaughtUp: "सब कुछ पढ़ा जा चुका है!",
+        loading: "सूचनाएं लोड हो रही हैं…",
       },
 
       discovery: { eyebrow: "खोजें", title: "दर्जी खोजें", intro: "किसी भी जगह के आसपास कुशल दर्जी खोजें। अपना क्षेत्र और दूरी चुनें।", locationPlaceholder: "शहर, क्षेत्र या पिन कोड चुनें", searchArea: "यह क्षेत्र खोजें", useLocation: "वर्तमान लोकेशन इस्तेमाल करें", queryPlaceholder: "कपड़ा, दर्जी, क्षेत्र, शहर…", search: "खोजें", radius: "खोज की दूरी", category: "श्रेणी", allCategories: "सभी श्रेणियाँ", hideMap: "मैप छिपाएँ", showMap: "मैप दिखाएँ", sort: "क्रम", recommended: "सुझाए गए", distance: "दूरी", rating: "रेटिंग", understood: "आपकी जरूरत समझी:", submitRequest: "यह जरूरत खोजें", searching: "खोज रहे हैं…", withinDays: "{{count}} दिनों के अंदर", voiceRequestError: "आवाज़ वाला अनुरोध पढ़ा नहीं जा सका। कृपया फिर कोशिश करें।", chooseLocationFirst: "पास के दर्जी खोजने के लिए क्षेत्र चुनें या लोकेशन की अनुमति दें।", locationUnavailable: "इस ब्राउज़र में लोकेशन उपलब्ध नहीं है। क्षेत्र से खोजें।", voiceUnavailable: "यहाँ आवाज़ से इनपुट उपलब्ध नहीं है। अपनी ज़रूरत लिखें।", voiceError: "आवाज़ सुनाई नहीं दी। फिर कोशिश करें या अपनी ज़रूरत लिखें।", placeSearchError: "जगह की खोज नहीं हो सकी।", directoryError: "दर्जी सूची लोड नहीं हो सकी।", invalidDirectory: "दर्जी सूची का मैप डेटा सही नहीं है।", currentLocation: "वर्तमान लोकेशन", mapCenter: "मैप केंद्र {{center}}", tailorsWithin: "{{radius}} किमी के अंदर {{count}} दर्जी", kmAway: "{{distance}} किमी दूर", newRating: "नया", searchVoice: "अपनी ज़रूरत बोलें", chooseLocation: "पास के दर्जी खोजने के लिए क्षेत्र चुनें", chooseLocationHelp: "ऊपर शहर, क्षेत्र या पिन कोड चुनें या वर्तमान लोकेशन इस्तेमाल करें। पुष्टि किए बिना प्रोफ़ाइल में लोकेशन सेव नहीं होगी।", noResults: "इस दूरी में दर्जी नहीं मिले। दूरी बढ़ाएँ या दूसरा क्षेत्र खोजें।", locationError: "यह जगह नहीं मिली। शहर, क्षेत्र या पिन कोड आज़माएँ।", locationDenied: "लोकेशन अनुमति नहीं मिली। शहर या क्षेत्र से खोजें।", categoryNames: { "Men's Wear": "पुरुषों के कपड़े", "Ladies Wear": "महिलाओं के कपड़े", "Formal Wear": "फॉर्मल कपड़े", "Ethnic Wear": "पारंपरिक कपड़े", Shirt: "शर्ट", Pants: "पैंट", Dress: "ड्रेस", Suit: "सूट", Alteration: "अल्टरशन" }, colorNames: { black: "काला", white: "सफेद", blue: "नीला", red: "लाल", green: "हरा", yellow: "पीला", pink: "गुलाबी", maroon: "मैरून", purple: "बैंगनी", orange: "नारंगी", brown: "भूरा", grey: "ग्रे" } },

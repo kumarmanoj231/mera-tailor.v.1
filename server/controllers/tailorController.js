@@ -1,4 +1,5 @@
 import { BusinessRequest, Order, Tailor, User } from '../models.js';
+import { createNotification } from './notificationController.js';
 
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const publicTailor = ({ ownerClerkUserId, verifiedBy, __v, ...tailor }) => tailor;
@@ -256,6 +257,18 @@ export async function submitB2BBid(req, res) {
     if (businessReq.status === 'submitted') businessReq.status = 'reviewing';
     await businessReq.save();
 
+    // Notify business user about new proposal
+    if (businessReq.clerkUserId) {
+      createNotification({
+        recipientClerkUserId: businessReq.clerkUserId,
+        title: 'New Bid on Bulk Requirement',
+        message: `${tailor.name || 'An artisan'} submitted a bid of ₹${newBid.amount} for '${businessReq.organisation || businessReq.requirement || 'Bulk Order'}'.`,
+        type: 'bid',
+        link: '/bulk',
+        metadata: { requestId: businessReq._id, tailorId: tailor._id, amount: newBid.amount },
+      }).catch(() => {});
+    }
+
     res.json({
       success: true,
       message: 'B2B proposal submitted successfully!',
@@ -289,6 +302,16 @@ export async function applyTailorVerification(req, res) {
     }
 
     await tailor.save();
+
+    // Confirmation notification to tailor
+    createNotification({
+      recipientClerkUserId: req.authUserId,
+      title: 'Verification Under Review',
+      message: 'Your atelier verification application has been submitted to the administration team.',
+      type: 'general',
+      link: '/dashboard',
+    }).catch(() => {});
+
     res.json({
       success: true,
       message: 'Verification application submitted to administrator successfully.',

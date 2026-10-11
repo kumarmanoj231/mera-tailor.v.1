@@ -44,6 +44,7 @@ import {
   Lock,
   Globe,
   Save,
+  Megaphone,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "react-toastify";
@@ -52,6 +53,7 @@ import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { getRoleMeta } from "../components/Navbar/RoleAvatarWithBadge";
+import AdminAnnouncementBroadcaster from "../components/admin/AdminAnnouncementBroadcaster";
 
 // Custom Leaflet Pin Icons
 const verifiedIcon = L.divIcon({
@@ -318,7 +320,7 @@ export default function AdminPortal() {
   // Active Tab from SearchParams: 'dashboard' | 'verifications' | 'users' | 'tailors' | 'bulk' | 'settings'
   const [searchParams, setSearchParams] = useSearchParams();
   const urlTab = searchParams.get("tab");
-  const validTabs = ["dashboard", "verifications", "users", "tailors", "bulk", "settings", "profile"];
+  const validTabs = ["dashboard", "verifications", "users", "tailors", "bulk", "announcements", "settings", "profile"];
   const initialTab = validTabs.includes(urlTab) ? (urlTab === "profile" ? "settings" : urlTab) : "dashboard";
   const [tab, setTab] = useState(initialTab);
 
@@ -997,6 +999,7 @@ export default function AdminPortal() {
     { id: "users", label: isHi ? "उपयोगकर्ता" : "Users", icon: Users, count: stats.totalUsers },
     { id: "tailors", label: isHi ? "टेलर स्टूडियो" : "Tailor Studios", icon: Store, count: stats.totalTailors },
     { id: "bulk", label: isHi ? "थोक ऑर्डर और RFQ" : "Bulk Orders & RFQs", icon: Layers, count: stats.totalBulk },
+    { id: "announcements", label: isHi ? "घोषणाएं" : "Broadcast", icon: Megaphone },
     { id: "settings", label: isHi ? "सेटिंग्स" : "Settings", icon: Settings },
   ];
 
@@ -2171,7 +2174,16 @@ export default function AdminPortal() {
         )}
 
         {/* =========================================================
-            TAB 6: ADMIN SETTINGS & PROFILE
+            TAB 6: PLATFORM ANNOUNCEMENTS BROADCASTER
+        ========================================================== */}
+        {tab === "announcements" && (
+          <div className="space-y-6 animate-fadeIn">
+            <AdminAnnouncementBroadcaster />
+          </div>
+        )}
+
+        {/* =========================================================
+            TAB 7: ADMIN SETTINGS & PROFILE
         ========================================================== */}
         {tab === "settings" && (
           <div className="space-y-6 animate-fadeIn">

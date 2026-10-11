@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import { Measurement, Order, Tailor } from '../models.js';
+import { createNotification } from './notificationController.js';
 
 function buildOrderQuery(paramId, extra = {}) {
   const isObjectId = mongoose.isValidObjectId(paramId);
@@ -112,6 +113,29 @@ export async function createOrder(req, res) {
       status: 'Request Sent',
       history: [['Request Sent', now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })]],
     });
+
+    // Notify tailor of new order request
+    if (tailor.ownerClerkUserId) {
+      createNotification({
+        recipientClerkUserId: tailor.ownerClerkUserId,
+        title: 'New Stitching Request',
+        message: `Customer requested '${garment}' (${quantity}x). Review specifications and submit a quote.`,
+        type: 'order',
+        link: '/dashboard',
+        metadata: { orderId: order.id, garment, quantity },
+      }).catch(() => {});
+    }
+
+    // Confirmation notification to customer
+    createNotification({
+      recipientClerkUserId: req.authUserId,
+      title: 'Order Request Placed',
+      message: `Your stitching request #${order.id} for '${garment}' has been sent to ${tailor.name}.`,
+      type: 'order',
+      link: '/orders',
+      metadata: { orderId: order.id, garment, tailorId: tailor._id },
+    }).catch(() => {});
+
     res.status(201).json(order);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -135,6 +159,17 @@ export async function sendOrderQuote(req, res) {
     order.status = 'Quote Received';
     order.history.push(['Quote Received', new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })]);
     await order.save();
+
+    // Notify customer that quote was provided
+    createNotification({
+      recipientClerkUserId: order.clerkUserId,
+      title: 'Tailor Quote Received',
+      message: `${order.tailorName || 'The atelier'} submitted a quote of ₹${quotePrice} for order #${order.id}.`,
+      type: 'quote',
+      link: '/orders',
+      metadata: { orderId: order.id, quotePrice },
+    }).catch(() => {});
+
     res.json(order);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -151,6 +186,17 @@ export async function declineOrder(req, res) {
     order.status = 'Cancelled';
     order.history.push(['Cancelled', new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }), 'Declined by Tailor']);
     await order.save();
+
+    // Notify customer that order was declined
+    createNotification({
+      recipientClerkUserId: order.clerkUserId,
+      title: 'Order Request Declined',
+      message: `${order.tailorName || 'The atelier'} was unable to accept order #${order.id}.`,
+      type: 'order',
+      link: '/orders',
+      metadata: { orderId: order.id },
+    }).catch(() => {});
+
     res.json(order);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -165,6 +211,21 @@ export async function acceptOrderQuote(req, res) {
     order.status = 'Accepted';
     order.history.push(['Accepted', new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })]);
     await order.save();
+
+    // Notify tailor that customer accepted quote
+    Tailor.findById(order.tailorId).select('ownerClerkUserId').lean().then(t => {
+      if (t?.ownerClerkUserId) {
+        createNotification({
+          recipientClerkUserId: t.ownerClerkUserId,
+          title: 'Quote Accepted by Customer',
+          message: `Customer accepted your quote of ₹${order.quotePrice} for order #${order.id}. Production can now begin.`,
+          type: 'quote',
+          link: '/dashboard',
+          metadata: { orderId: order.id, quotePrice: order.quotePrice },
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+
     res.json(order);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -211,6 +272,20 @@ export async function cancelCustomerOrder(req, res) {
     ]);
     await order.save();
 
+    // Notify tailor that customer cancelled the order
+    Tailor.findById(order.tailorId).select('ownerClerkUserId').lean().then(t => {
+      if (t?.ownerClerkUserId) {
+        createNotification({
+          recipientClerkUserId: t.ownerClerkUserId,
+          title: 'Order Cancelled by Customer',
+          message: `Order #${order.id} (${order.garment}) was cancelled by the customer. Reason: ${reason}.`,
+          type: 'order',
+          link: '/dashboard',
+          metadata: { orderId: order.id, reason },
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+
     res.json({
       success: true,
       message: 'Order successfully cancelled and stored in past orders.',
@@ -240,6 +315,17 @@ export async function updateOrderStatus(req, res) {
     order.status = nextStatus;
     order.history.push([nextStatus, new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })]);
     await order.save();
+
+    // Notify customer about order progress/status change
+    createNotification({
+      recipientClerkUserId: order.clerkUserId,
+      title: `Order Status: ${nextStatus}`,
+      message: `Your order #${order.id} for '${order.garment}' is now '${nextStatus}'.`,
+      type: 'status',
+      link: '/orders',
+      metadata: { orderId: order.id, nextStatus },
+    }).catch(() => {});
+
     res.json(order);
   } catch (error) {
     res.status(400).json({ error: error.message });

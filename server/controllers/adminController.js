@@ -1,6 +1,7 @@
 import { clerkClient } from '@clerk/express';
 import { randomBytes } from 'node:crypto';
 import { BusinessRequest, Order, Tailor, User } from '../models.js';
+import { createNotification } from './notificationController.js';
 
 const roles = ['customer', 'tailor', 'business', 'admin'];
 const publicUser = user => ({
@@ -170,6 +171,18 @@ export async function verifyTailor(req, res) {
     }
 
     await tailor.save();
+
+    if (tailor.ownerClerkUserId) {
+      createNotification({
+        recipientClerkUserId: tailor.ownerClerkUserId,
+        title: 'Atelier Verified!',
+        message: `Congratulations! ${tailor.name} has been approved as an official verified studio on MeraTailor.`,
+        type: 'announcement',
+        link: '/dashboard',
+        metadata: { tailorId: tailor._id },
+      }).catch(() => {});
+    }
+
     res.json({ success: true, tailor });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -192,6 +205,18 @@ export async function rejectTailor(req, res) {
     tailor.verificationNotes = req.body?.notes || req.body?.reason || 'Verification rejected by Admin';
 
     await tailor.save();
+
+    if (tailor.ownerClerkUserId) {
+      createNotification({
+        recipientClerkUserId: tailor.ownerClerkUserId,
+        title: 'Verification Status Update',
+        message: `Your studio verification application was rejected. Notes: ${tailor.verificationNotes}`,
+        type: 'general',
+        link: '/dashboard',
+        metadata: { tailorId: tailor._id },
+      }).catch(() => {});
+    }
+
     res.json({ success: true, tailor });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -539,6 +564,16 @@ export async function verifyBusiness(req, res) {
     user.role = 'business';
 
     await user.save();
+
+    createNotification({
+      recipientClerkUserId: user.clerkUserId,
+      title: 'Business Account Verified!',
+      message: 'Your organization has been officially verified. You can now post bulk requirements and manage b2b tenders.',
+      type: 'announcement',
+      link: '/bulk',
+      metadata: { businessUserId: user._id },
+    }).catch(() => {});
+
     res.json({ success: true, user: publicUser(user), businessProfile: user.businessProfile });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -562,6 +597,16 @@ export async function rejectBusiness(req, res) {
     user.businessProfile.rejectionReason = req.body?.reason || 'Business verification rejected by administrator';
 
     await user.save();
+
+    createNotification({
+      recipientClerkUserId: user.clerkUserId,
+      title: 'Business Verification Update',
+      message: `Your business verification application was not approved. Reason: ${user.businessProfile.rejectionReason}`,
+      type: 'general',
+      link: '/bulk',
+      metadata: { businessUserId: user._id },
+    }).catch(() => {});
+
     res.json({ success: true, user: publicUser(user), businessProfile: user.businessProfile });
   } catch (error) {
     res.status(400).json({ error: error.message });
