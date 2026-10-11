@@ -37,6 +37,12 @@ import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
 import { parseVoiceRequest } from "../utils/voiceRequest";
 import VoiceSearchModal from "../components/voice/VoiceSearchModal";
+import {
+  getUnifiedLocation,
+  setUnifiedLocation,
+  isGuestLocationPromptDismissed,
+  dismissGuestLocationPrompt,
+} from "../utils/locationService";
 
 const DEFAULT_CENTER = [26.9124, 75.7873]; // Jaipur Central Discovery
 
@@ -243,7 +249,7 @@ function SmartBoundsFitter({ items, center, shouldFit }) {
 export default function FindTailors() {
   const { t, i18n } = useTranslation();
   const isHi = i18n.language === "hi";
-  const { isSignedIn, openSignUp, getToken } = useAuth();
+  const { isSignedIn, openSignUp, getToken, profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Search States
@@ -348,57 +354,88 @@ export default function FindTailors() {
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
 
-  // Auto-detect user location on mount if center is default
+  // Auto-detect & synchronize user location (profile if signed in, unified storage, or 1-time guest prompt)
   useEffect(() => {
-    // 1. Check if user already has saved location in profile or sessionStorage
-    const storedSearchLocation = sessionStorage.getItem("meratailor.search-location");
-    if (storedSearchLocation) {
-      try {
-        const parsedLoc = JSON.parse(storedSearchLocation);
-        if (parsedLoc.latitude && parsedLoc.longitude) {
-          setCenter([parsedLoc.latitude, parsedLoc.longitude]);
-          setPlace(parsedLoc.label || (isHi ? "सहेजा गया स्थान" : "Saved Location"));
-          setLocationSelected(true);
-          searchTailorsWithCoords(parsedLoc.latitude, parsedLoc.longitude);
-          return;
+    // 1. Signed-in profile location & radius
+    if (isSignedIn && profile) {
+      const profLoc = getUnifiedLocation(profile);
+      if (profLoc) {
+        setCenter([profLoc.latitude, profLoc.longitude]);
+        setPlace(profLoc.label);
+        setLocationQuery(profLoc.label);
+        setLocationSelected(true);
+        if (profLoc.radius && !searchParams.get("radius")) {
+          setRadius(profLoc.radius);
         }
-      } catch (e) {}
+        if (profLoc.sortBy && !searchParams.get("sort")) {
+          setSort(profLoc.sortBy);
+        }
+        setShowLocationPrompt(false);
+        searchTailorsWithCoords(profLoc.latitude, profLoc.longitude, profLoc.radius);
+        return;
+      }
     }
 
-    // 2. Try browser geolocation
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          setCenter([lat, lng]);
-          setLocationSelected(true);
-          try {
-            const rev = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
-            );
-            const data = await rev.json();
-            if (data && data.display_name) {
-              setPlace(data.display_name.split(",").slice(0, 3).join(","));
-            } else {
-              setPlace(isHi ? "मेरा वर्तमान स्थान" : "My Current Location");
-            }
-          } catch {
-            setPlace(isHi ? "मेरा वर्तमान स्थान" : "My Current Location");
-          }
-          searchTailorsWithCoords(lat, lng);
-        },
-        (err) => {
-          // If denied or unavailable, show the friendly location prompt banner/modal
-          console.info("User location unavailable:", err.message);
-          setShowLocationPrompt(true);
-        },
-        { timeout: 7000 }
-      );
-    } else {
-      setShowLocationPrompt(true);
+    // 2. Previously stored unified location (across Home, FindTailors, etc.)
+    const stored = getUnifiedLocation();
+    if (stored) {
+      setCenter([stored.latitude, stored.longitude]);
+      setPlace(stored.label);
+      setLocationQuery(stored.label);
+      setLocationSelected(true);
+      if (stored.radius && !searchParams.get("radius")) {
+        setRadius(stored.radius);
+      }
+      setShowLocationPrompt(false);
+      searchTailorsWithCoords(stored.latitude, stored.longitude, stored.radius);
+      return;
     }
-  }, []);
+
+    // 3. For guest (not signed in): ask one time
+    if (!isSignedIn) {
+      if (!isGuestLocationPromptDismissed()) {
+        setShowLocationPrompt(true);
+      }
+    } else {
+      // Signed-in user without saved location in profile: try browser geolocation once
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            setCenter([lat, lng]);
+            setLocationSelected(true);
+            let placeName = isHi ? "मेरा वर्तमान स्थान" : "My Current Location";
+            try {
+              const rev = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+              );
+              const data = await rev.json();
+              if (data?.display_name) {
+                placeName = data.display_name.split(",").slice(0, 3).join(",");
+              }
+            } catch {}
+            setPlace(placeName);
+            setLocationQuery(placeName);
+            getToken().then((token) => {
+              setUnifiedLocation(
+                { latitude: lat, longitude: lng, label: placeName, radius, accuracyMeters: pos.coords.accuracy },
+                token
+              );
+            });
+            searchTailorsWithCoords(lat, lng);
+          },
+          (err) => {
+            console.info("User location unavailable:", err.message);
+            setShowLocationPrompt(true);
+          },
+          { timeout: 7000 }
+        );
+      } else {
+        setShowLocationPrompt(true);
+      }
+    }
+  }, [isSignedIn, profile]);
 
   // Voice Coachmark Hover / Auto-dismiss state
   const [showVoiceHelp, setShowVoiceHelp] = useState(false);
@@ -506,10 +543,20 @@ export default function FindTailors() {
         const lat = parseFloat(data[0].lat);
         const lng = parseFloat(data[0].lon);
         if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          const placeName = data[0].display_name.split(",").slice(0, 3).join(",");
           setCenter([lat, lng]);
-          setPlace(data[0].display_name.split(",").slice(0, 3).join(","));
+          setPlace(placeName);
           setLocationSelected(true);
           setShowAllLocations(false);
+          dismissGuestLocationPrompt();
+          setShowLocationPrompt(false);
+          if (isSignedIn) {
+            getToken().then((token) => {
+              setUnifiedLocation({ latitude: lat, longitude: lng, label: placeName, radius }, token);
+            });
+          } else {
+            setUnifiedLocation({ latitude: lat, longitude: lng, label: placeName, radius });
+          }
           searchTailorsWithCoords(lat, lng);
           return;
         }
@@ -536,18 +583,34 @@ export default function FindTailors() {
         setCenter([lat, lng]);
         setLocationSelected(true);
         setShowAllLocations(false);
+        dismissGuestLocationPrompt();
+        setShowLocationPrompt(false);
+        let placeName = isHi ? "मेरा वर्तमान स्थान" : "My Current Location";
         try {
           const rev = await fetch(
             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
           );
           const data = await rev.json();
           if (data && data.display_name) {
-            setPlace(data.display_name.split(",").slice(0, 3).join(","));
-          } else {
-            setPlace(isHi ? "मेरा वर्तमान स्थान" : "My Current Location");
+            placeName = data.display_name.split(",").slice(0, 3).join(",");
           }
-        } catch {
-          setPlace(isHi ? "मेरा वर्तमान स्थान" : "My Current Location");
+        } catch {}
+        setPlace(placeName);
+        if (isSignedIn) {
+          getToken().then((token) => {
+            setUnifiedLocation(
+              { latitude: lat, longitude: lng, label: placeName, radius, accuracyMeters: pos.coords.accuracy },
+              token
+            );
+          });
+        } else {
+          setUnifiedLocation({
+            latitude: lat,
+            longitude: lng,
+            label: placeName,
+            radius,
+            accuracyMeters: pos.coords.accuracy,
+          });
         }
         searchTailorsWithCoords(lat, lng);
       },
@@ -561,10 +624,20 @@ export default function FindTailors() {
 
   // Handle Preset City Select
   function handleSelectCityPreset(preset) {
+    const placeName = `${preset.city}, India`;
     setCenter([preset.lat, preset.lng]);
-    setPlace(`${preset.city}, India`);
+    setPlace(placeName);
     setLocationSelected(true);
     setShowAllLocations(false);
+    dismissGuestLocationPrompt();
+    setShowLocationPrompt(false);
+    if (isSignedIn) {
+      getToken().then((token) => {
+        setUnifiedLocation({ latitude: preset.lat, longitude: preset.lng, label: placeName, radius }, token);
+      });
+    } else {
+      setUnifiedLocation({ latitude: preset.lat, longitude: preset.lng, label: placeName, radius });
+    }
     searchTailorsWithCoords(preset.lat, preset.lng);
   }
 
@@ -1010,7 +1083,10 @@ export default function FindTailors() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowLocationPrompt(false)}
+                  onClick={() => {
+                    dismissGuestLocationPrompt();
+                    setShowLocationPrompt(false);
+                  }}
                   className="rounded-xl border border-amber-300/80 bg-white px-2.5 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100/50"
                 >
                   ✕

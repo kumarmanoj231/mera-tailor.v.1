@@ -205,21 +205,23 @@ export default function Orders() {
 
   const formatOrderDate = (dateString) => {
     try {
-      const d = new Date(dateString);
+      const d = dateString ? new Date(dateString) : new Date();
+      if (isNaN(d.getTime())) return new Date().toLocaleDateString();
       return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
     } catch {
-      return "6/10/2026";
+      return new Date().toLocaleDateString();
     }
   };
 
   const formatShortDate = (dateString, addDays = 0) => {
     try {
-      const d = new Date(dateString);
+      const d = dateString ? new Date(dateString) : new Date();
+      if (isNaN(d.getTime())) return "—";
       d.setDate(d.getDate() + addDays);
       const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       return `${d.getDate()} ${months[d.getMonth()]}`;
     } catch {
-      return `${6 + addDays} Oct`;
+      return "—";
     }
   };
 
@@ -427,7 +429,7 @@ export default function Orders() {
             ) : (
               filteredOrders.map((order) => {
                 const currentStepIdx = getStatusStepIndex(order.status);
-                const orderRef = order.id || order._id?.slice(-8).toUpperCase() || "MT-3E3484C3";
+                const orderRef = order.id || (order._id ? order._id.slice(-8).toUpperCase() : "MT-ORDER");
                 const orderDate = formatOrderDate(order.createdAt);
                 const isCompleted = order.status === "Completed" || order.status === "Ready";
 
@@ -565,17 +567,27 @@ export default function Orders() {
                             className="inline-flex items-center gap-1 font-sans text-xs font-bold text-stone-900 hover:text-[#8f2338] transition"
                           >
                             <MapPin size={13} className="text-[#8f2338]" />
-                            <span>{order.tailorName || "Royal Jaipur"}</span>
+                            <span>{order.tailorName || (order.status === "Completed" ? "undefined" : t("dashboardPage.masterStudio", "Master Studio"))}</span>
                             <ChevronRight size={13} />
                           </Link>
 
                           {/* Attribute Tags */}
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             {/* Color tag */}
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 border border-stone-200 px-2.5 py-0.5 text-[11px] font-medium text-stone-700">
-                              <span>🎨</span>
-                              <span>Color: {order.color || "blackcotton"}</span>
-                            </span>
+                            {order.color && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 border border-stone-200 px-2.5 py-0.5 text-[11px] font-medium text-stone-700">
+                                <span>🎨</span>
+                                <span>Color: {order.color}</span>
+                              </span>
+                            )}
+
+                            {/* Fabric tag */}
+                            {order.fabric && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 border border-stone-200 px-2.5 py-0.5 text-[11px] font-medium text-stone-700">
+                                <span>🧵</span>
+                                <span>{order.fabric}</span>
+                              </span>
+                            )}
 
                             {/* Flexible / timeline tag */}
                             <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[11px] font-bold text-amber-800">
@@ -593,7 +605,11 @@ export default function Orders() {
                             {isHi ? "दर्जी कोटेशन" : "Tailor quote"}
                           </span>
                           <strong className="text-2xl font-black text-[#8f2338]">
-                            ₹{order.quotePrice != null ? order.quotePrice : order.price != null ? order.price : 190}
+                            {order.quotePrice != null
+                              ? `₹${order.quotePrice}`
+                              : order.price != null
+                              ? `₹${order.price}`
+                              : (isHi ? "समीक्षाधीन" : "Awaiting Review")}
                           </strong>
                         </div>
 
@@ -790,7 +806,9 @@ export default function Orders() {
 
                 <div>
                   <span className="text-[10px] uppercase font-bold text-stone-400">Tailoring Studio</span>
-                  <p className="font-bold text-stone-900 mt-0.5">{selectedOrder.tailorName || "Studio Atelier"}</p>
+                  <p className="font-bold text-stone-900 mt-0.5">
+                    {selectedOrder.tailorName || (selectedOrder.status === "Completed" ? "undefined" : t("dashboardPage.masterStudio", "Master Studio"))}
+                  </p>
                 </div>
 
                 {selectedOrder.notes && (
@@ -825,7 +843,11 @@ export default function Orders() {
                 <div className="border-t border-stone-100 pt-3 flex items-center justify-between">
                   <span className="font-bold text-stone-700">Total Quotation</span>
                   <strong className="text-xl font-black text-[#8f2338]">
-                    ₹{selectedOrder.quotePrice || selectedOrder.price || 0}
+                    {selectedOrder.quotePrice != null
+                      ? `₹${selectedOrder.quotePrice}`
+                      : selectedOrder.price != null
+                      ? `₹${selectedOrder.price}`
+                      : (isHi ? "समीक्षाधीन" : "Awaiting Review")}
                   </strong>
                 </div>
               </div>

@@ -480,11 +480,23 @@ export default function TailorDetail() {
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div>
-                  <span className="text-xs text-stone-500">Selected Garment</span>
-                  <p className="font-semibold text-stone-900">
-                    {form.quantity} × {selectedService?.name || form.garment}
-                  </p>
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-xl bg-rose-50 border border-stone-200 overflow-hidden shrink-0 flex items-center justify-center p-1">
+                    <img
+                      src={placedOrder.image || "/assets/kurta.png"}
+                      alt="Garment"
+                      className="h-full w-full object-contain"
+                      onError={(e) => {
+                        e.currentTarget.src = "/assets/kurta.png";
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <span className="text-xs text-stone-500">Selected Garment</span>
+                    <p className="font-semibold text-stone-900">
+                      {form.quantity} × {selectedService?.name || form.garment}
+                    </p>
+                  </div>
                 </div>
                 <div>
                   <span className="text-xs text-stone-500">{t('orderFlow.totalEstimate')}</span>

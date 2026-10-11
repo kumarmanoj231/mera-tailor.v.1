@@ -17,11 +17,12 @@ import { useAuth } from "../../context/AuthContext";
 import VoiceSearchModal from "../voice/VoiceSearchModal";
 
 import HeroDashboard from "./HeroDashboard";
+import { getUnifiedLocation, setUnifiedLocation } from "../../utils/locationService";
 
 const HeroSection = ({ onSignUp }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { isSignedIn, getToken, openSignUp } = useAuth();
+  const { isSignedIn, getToken, openSignUp, profile } = useAuth();
 
   const [location, setLocation] = React.useState(null);
   const [locationLoading, setLocationLoading] = React.useState(false);
@@ -177,34 +178,29 @@ const HeroSection = ({ onSignUp }) => {
     );
   };
 
+  // Auto-detect & synchronize unified location from profile or local storage across app
+  React.useEffect(() => {
+    const existing = getUnifiedLocation(profile);
+    if (existing) {
+      setLocation({
+        latitude: existing.latitude,
+        longitude: existing.longitude,
+        locality: existing.label,
+        address: existing.label,
+      });
+    }
+  }, [profile]);
+
   const saveLocationForSearch = async () => {
     if (!location) return;
-    const searchLocationData = {
+    const label = [location.locality, location.city, location.state].filter(Boolean).join(", ") || location.address || "My Location";
+    const token = isSignedIn ? await getToken() : null;
+    await setUnifiedLocation({
       latitude: location.latitude,
       longitude: location.longitude,
-      label: [location.locality, location.city, location.state].filter(Boolean).join(", "),
-    };
-    sessionStorage.setItem("meratailor.search-location", JSON.stringify(searchLocationData));
-
-    if (isSignedIn) {
-      try {
-        const token = await getToken();
-        await fetch("/api/me/location", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            latitude: location.latitude,
-            longitude: location.longitude,
-            label: searchLocationData.label,
-            source: "browser",
-            accuracyMeters: location.accuracyMeters,
-            consent: true,
-          }),
-        });
-      } catch {
-        // Continue to search even if backend sync fails
-      }
-    }
+      label,
+      accuracyMeters: location.accuracyMeters,
+    }, token);
     navigate("/find-tailors");
   };
 
