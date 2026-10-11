@@ -10,6 +10,7 @@ import NotificationBell from "../notifications/NotificationBell";
 const DesktopActions = ({
   language,
   onChangeLanguage,
+  onSignIn,
   onSignUp,
   userRole,
 }) => {
@@ -82,9 +83,16 @@ const DesktopActions = ({
         </div>
       ) : (
         /* ===================================================
-           GUEST ACTIONS (GET STARTED)
+           GUEST ACTIONS (SIGN IN & GET STARTED)
         ==================================================== */
         <div className="flex items-center gap-2 border-l border-stone-200/80 pl-2">
+          <button
+            type="button"
+            onClick={onSignIn}
+            className="rounded-xl px-3 py-2 text-xs font-semibold text-stone-700 hover:text-stone-900 transition hover:bg-stone-100/80 cursor-pointer"
+          >
+            {t("navbar.signIn", "Sign in")}
+          </button>
           <button
             type="button"
             onClick={onSignUp}

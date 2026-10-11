@@ -23,6 +23,7 @@ const MobileMenu = ({
   isHomePage,
   language,
   onChangeLanguage,
+  onSignIn,
   onSignUp,
   onClose,
   userRole,
@@ -160,13 +161,24 @@ const MobileMenu = ({
           </div>
         ) : (
           /* =================================================
-              GUEST AUTHENTICATION ACTION BAR (GET STARTED)
+              GUEST AUTHENTICATION ACTION BAR (SIGN IN & GET STARTED)
           ================================================== */
-          <div className="pt-2 border-t border-stone-100">
+          <div className="pt-2 border-t border-stone-100 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onSignIn?.();
+              }}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white py-2.5 text-xs font-bold text-stone-700 shadow-xs hover:bg-stone-50 cursor-pointer"
+            >
+              <LogIn size={15} />
+              <span>{t("navbar.signIn", "Sign in")}</span>
+            </button>
             <button
               type="button"
               onClick={onSignUp}
-              className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#8f2338] py-2.5 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] active:scale-95"
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#8f2338] py-2.5 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] active:scale-95 cursor-pointer"
             >
               <UserPlus size={15} />
               <span>{t("navbar.getStarted", "Get Started")}</span>

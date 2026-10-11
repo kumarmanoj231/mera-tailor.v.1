@@ -26,7 +26,14 @@ export async function syncAppUser(req, res, next) {
     const isBootstrappedAdmin = adminIds.includes(externalUser.id);
     if (isBootstrappedAdmin) { profile.role = 'admin'; profile.onboardingCompleted = true; }
     const update = { $set: profile, $setOnInsert: { preferredLanguage: 'en' } };
-    if (!isBootstrappedAdmin) update.$setOnInsert.role = 'customer';
+    if (!isBootstrappedAdmin) {
+      const metaRole = externalUser.publicMetadata?.appRole;
+      if (['customer', 'tailor', 'business'].includes(metaRole)) {
+        update.$setOnInsert.role = metaRole;
+      } else {
+        update.$setOnInsert.role = 'customer';
+      }
+    }
     req.appUser = await User.findOneAndUpdate(
       { clerkUserId: externalUser.id },
       update,

@@ -15,7 +15,7 @@ import NotificationBell from "../notifications/NotificationBell";
 const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { i18n, t } = useTranslation();
-  const { openSignUp, isSignedIn, getToken, profile } = useAuth();
+  const { openSignUp, openSignIn, isSignedIn, getToken, profile } = useAuth();
   const location = useLocation();
 
   const isHomePage = location.pathname === "/";
@@ -61,6 +61,11 @@ const Navbar = () => {
     }
   };
 
+  const handleSignIn = () => {
+    setMobileOpen(false);
+    openSignIn();
+  };
+
   const handleSignUp = () => {
     setMobileOpen(false);
     openSignUp();
@@ -89,6 +94,7 @@ const Navbar = () => {
         <DesktopActions
           language={i18n.language}
           onChangeLanguage={changeLanguage}
+          onSignIn={handleSignIn}
           onSignUp={handleSignUp}
           userRole={userRole}
         />
@@ -150,6 +156,7 @@ const Navbar = () => {
         isHomePage={isHomePage}
         language={i18n.language}
         onChangeLanguage={changeLanguage}
+        onSignIn={handleSignIn}
         onSignUp={handleSignUp}
         onClose={closeMobileMenu}
         userRole={userRole}

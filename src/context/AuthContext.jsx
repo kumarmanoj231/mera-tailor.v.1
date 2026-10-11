@@ -228,11 +228,11 @@ function ClerkSession({ children }) {
         }
 
         const nextProfile = await response.json();
-        const selectedRole = localStorage.getItem('meraTailor.pendingRole');
 
-        if (active && nextProfile.onboardingCompleted && selectedRole) {
+        if (active && nextProfile.onboardingCompleted) {
           localStorage.removeItem('meraTailor.pendingRole');
           localStorage.removeItem('meraTailor.pendingAuthMode');
+          setAuthMode(null);
         }
 
         if (active) {
@@ -262,14 +262,23 @@ function ClerkSession({ children }) {
   }, [isSignedIn, getToken]);
 
   const completeAuth = (role) => {
-    if (role) localStorage.setItem('meraTailor.pendingRole', role);
-    else localStorage.removeItem('meraTailor.pendingRole');
+    if (role && roleChoices.includes(role)) {
+      localStorage.setItem('meraTailor.pendingRole', role);
+    } else {
+      localStorage.removeItem('meraTailor.pendingRole');
+    }
     localStorage.setItem('meraTailor.pendingAuthMode', 'signUp');
     setAuthMode(null);
     setPendingRole(null);
 
-    const redirect = `${window.location.origin}/onboarding`;
-    clerk.openSignUp({ forceRedirectUrl: redirect, signInForceRedirectUrl: redirect });
+    const onboardingUrl = `${window.location.origin}/onboarding`;
+    const dashboardUrl = `${window.location.origin}/dashboard`;
+    clerk.openSignUp({
+      forceRedirectUrl: onboardingUrl,
+      fallbackRedirectUrl: onboardingUrl,
+      signInForceRedirectUrl: dashboardUrl,
+      signInFallbackRedirectUrl: dashboardUrl,
+    });
   };
 
   const refreshProfile = async () => {
@@ -293,13 +302,26 @@ function ClerkSession({ children }) {
   };
 
   const handleOpenSignUp = (role) => {
-    setPendingRole(role || null);
+    if (isSignedIn && profile?.onboardingCompleted) {
+      const dest = profile.role === 'admin' ? '/admin' : '/dashboard';
+      if (window.location.pathname !== dest) {
+        window.location.href = dest;
+      }
+      return;
+    }
+    setPendingRole(role && roleChoices.includes(role) ? role : null);
     setAuthMode('signUp');
   };
 
-  const handleOpenSignIn = (role) => {
-    setPendingRole(role || null);
-    setAuthMode('signUp');
+  const handleOpenSignIn = () => {
+    setAuthMode(null);
+    setPendingRole(null);
+    const dashboardUrl = `${window.location.origin}/dashboard`;
+    clerk.openSignIn({
+      forceRedirectUrl: dashboardUrl,
+      fallbackRedirectUrl: dashboardUrl,
+      signUpForceRedirectUrl: `${window.location.origin}/onboarding`,
+    });
   };
 
   const value = {
@@ -338,20 +360,23 @@ function MissingClerkSession({ children }) {
   const [message, setMessage] = useState('');
 
   const choose = (role) => {
-    if (role) localStorage.setItem('meraTailor.pendingRole', role);
+    if (role && roleChoices.includes(role)) {
+      localStorage.setItem('meraTailor.pendingRole', role);
+    }
     setAuthMode(null);
     setPendingRole(null);
     setMessage('Add VITE_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY to .env to enable secure sign-in.');
   };
 
   const handleOpenSignUp = (role) => {
-    setPendingRole(role || null);
+    setPendingRole(role && roleChoices.includes(role) ? role : null);
     setAuthMode('signUp');
   };
 
-  const handleOpenSignIn = (role) => {
-    setPendingRole(role || null);
-    setAuthMode('signUp');
+  const handleOpenSignIn = () => {
+    setAuthMode(null);
+    setPendingRole(null);
+    setMessage('Add VITE_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY to .env to enable secure sign-in.');
   };
 
   const value = {

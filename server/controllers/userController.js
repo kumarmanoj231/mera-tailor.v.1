@@ -16,6 +16,7 @@ export const publicUser = user => ({
   preferredLanguage: user.preferredLanguage || 'en',
   role: user.role || 'customer',
   onboardingCompleted: Boolean(user.onboardingCompleted),
+  roleInconsistent: !['customer', 'tailor', 'business', 'admin'].includes(user.role),
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
   savedTailorsCount: Array.isArray(user.savedTailors) ? user.savedTailors.length : 0,
@@ -54,8 +55,27 @@ export async function completeOnboarding(req, res) {
   }
 
   try {
-    if (req.appUser.onboardingCompleted) {
-      return res.json(publicUser(req.appUser));
+    const existingUser = req.appUser;
+
+    // 1. Role Immutability: If onboarding is already completed, the role is permanent and cannot be changed
+    if (existingUser?.onboardingCompleted) {
+      if (existingUser.role && existingUser.role !== role) {
+        return res.status(409).json({
+          error: `Account role is permanent and cannot be changed. Your registered role is ${existingUser.role}.`,
+          code: 'ROLE_IMMUTABLE',
+          currentRole: existingUser.role,
+        });
+      }
+      return res.json(publicUser(existingUser));
+    }
+
+    // 2. If user already has a non-customer role assigned (tailor/business/admin), prevent altering it
+    if (existingUser?.role && ['tailor', 'business', 'admin'].includes(existingUser.role) && existingUser.role !== role) {
+      return res.status(409).json({
+        error: `Account role is permanent and cannot be changed. Your registered role is ${existingUser.role}.`,
+        code: 'ROLE_IMMUTABLE',
+        currentRole: existingUser.role,
+      });
     }
 
     const values = { role, onboardingCompleted: true };
@@ -70,6 +90,43 @@ export async function completeOnboarding(req, res) {
     );
 
     req.appUser = user;
+
+    // 3. Idempotently create role-specific profile records
+    if (role === 'tailor') {
+      let tailor = await Tailor.findOne({ ownerClerkUserId: req.authUserId });
+      if (!tailor) {
+        const tailorName = [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Master Artisan';
+        const defaultStudioName = user.firstName ? `${user.firstName}'s Bespoke Atelier` : 'MeraTailor Atelier';
+        const city = user.locationLabel?.split(',')?.[0]?.trim() || 'Jaipur';
+
+        await Tailor.create({
+          ownerClerkUserId: req.authUserId,
+          name: defaultStudioName,
+          owner: tailorName,
+          area: user.locationLabel?.split(',')?.[1]?.trim() || 'Central Market',
+          city,
+          state: 'Rajasthan',
+          country: 'India',
+          phone: user.phone || '',
+          description: '',
+          minPrice: 499,
+          experience: 0,
+          rating: 0,
+          reviews: 0,
+          status: 'Available',
+          capacitySlots: 10,
+          activeSlotsBooked: 0,
+          categories: [],
+          languages: ['Hindi', 'English'],
+          services: [],
+          location: user.primaryLocation || { type: 'Point', coordinates: [75.7873, 26.9124] },
+          verified: false,
+          verificationStatus: 'unverified',
+        });
+      }
+    } else if (role === 'business') {
+      await getOrSyncBusinessProfile(req.authUserId, user);
+    }
 
     // Mirror to Clerk public metadata asynchronously
     clerkClient.users

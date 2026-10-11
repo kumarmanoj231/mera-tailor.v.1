@@ -599,11 +599,6 @@ export async function updateBusinessProfile(req, res) {
       verified: Boolean(business.verified),
     };
 
-    // Auto-promote role to 'business' if currently 'customer'
-    if (user.role === 'customer') {
-      user.role = 'business';
-    }
-
     await user.save();
 
     res.json({
