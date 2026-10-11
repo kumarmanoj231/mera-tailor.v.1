@@ -1,5 +1,15 @@
 import { randomUUID } from 'node:crypto';
+import mongoose from 'mongoose';
 import { Measurement, Order, Tailor } from '../models.js';
+
+function buildOrderQuery(paramId, extra = {}) {
+  const isObjectId = mongoose.isValidObjectId(paramId);
+  const idQuery = isObjectId
+    ? { $or: [{ id: paramId }, { _id: paramId }] }
+    : { id: paramId };
+  if (Object.keys(extra).length === 0) return idQuery;
+  return { $and: [idQuery, extra] };
+}
 
 export async function listOrders(req, res) {
   try {
@@ -29,7 +39,7 @@ export async function listOrders(req, res) {
 
 export async function getOrder(req, res) {
   try {
-    const order = await Order.findOne({ id: req.params.id }).lean();
+    const order = await Order.findOne(buildOrderQuery(req.params.id)).lean();
     if (!order) return res.status(404).json({ error: 'Order not found' });
     const isOwner = String(order.clerkUserId) === String(req.authUserId);
     const isTailor = await orderBelongsToTailor(req, order);
@@ -116,7 +126,7 @@ async function orderBelongsToTailor(req, order) {
 
 export async function sendOrderQuote(req, res) {
   try {
-    const order = await Order.findOne({ id: req.params.id });
+    const order = await Order.findOne(buildOrderQuery(req.params.id));
     if (!order || !(await orderBelongsToTailor(req, order))) return res.status(404).json({ error: 'Order request not found.' });
     if (!['Request Sent', 'Quote Received'].includes(order.status)) return res.status(409).json({ error: 'This order is no longer waiting for a quote.' });
     const quotePrice = Number(req.body?.quotePrice);
@@ -133,7 +143,7 @@ export async function sendOrderQuote(req, res) {
 
 export async function declineOrder(req, res) {
   try {
-    const order = await Order.findOne({ id: req.params.id });
+    const order = await Order.findOne(buildOrderQuery(req.params.id));
     if (!order || !(await orderBelongsToTailor(req, order))) return res.status(404).json({ error: 'Order request not found.' });
     if (['In Production', 'Ready for Pickup', 'Completed'].includes(order.status)) {
       return res.status(400).json({ error: 'Orders already in production or completed cannot be declined.' });
@@ -149,7 +159,7 @@ export async function declineOrder(req, res) {
 
 export async function acceptOrderQuote(req, res) {
   try {
-    const order = await Order.findOne({ id: req.params.id, clerkUserId: req.authUserId });
+    const order = await Order.findOne(buildOrderQuery(req.params.id, { clerkUserId: req.authUserId }));
     if (!order) return res.status(404).json({ error: 'Order request not found.' });
     if (order.status !== 'Quote Received' || order.quotePrice == null) return res.status(409).json({ error: 'There is no tailor quote to accept yet.' });
     order.status = 'Accepted';
@@ -169,7 +179,7 @@ export async function acceptOrderQuote(req, res) {
  */
 export async function cancelCustomerOrder(req, res) {
   try {
-    const order = await Order.findOne({ id: req.params.id });
+    const order = await Order.findOne(buildOrderQuery(req.params.id));
     if (!order) return res.status(404).json({ error: 'Order not found.' });
 
     const isOwner = String(order.clerkUserId) === String(req.authUserId);
@@ -213,7 +223,7 @@ export async function cancelCustomerOrder(req, res) {
 
 export async function updateOrderStatus(req, res) {
   try {
-    const order = await Order.findOne({ id: req.params.id });
+    const order = await Order.findOne(buildOrderQuery(req.params.id));
     if (!order || !(await orderBelongsToTailor(req, order))) return res.status(404).json({ error: 'Order request not found.' });
     const nextStatus = String(req.body?.status || '');
     const transitions = {
@@ -238,7 +248,7 @@ export async function updateOrderStatus(req, res) {
 
 export async function deleteOrder(req, res) {
   try {
-    const order = await Order.findOne({ id: req.params.id });
+    const order = await Order.findOne(buildOrderQuery(req.params.id));
     if (!order) return res.status(404).json({ error: 'Order request not found.' });
 
     const isOwner = String(order.clerkUserId) === String(req.authUserId);

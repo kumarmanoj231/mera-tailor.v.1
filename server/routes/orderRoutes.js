@@ -12,12 +12,13 @@ import {
 } from '../controllers/orderController.js';
 import { requireAuth, requireRole, syncAppUser } from '../middleware/authMiddleware.js';
 import { validateOrderId } from '../middleware/validate.js';
+import { orderCreationLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
 const signedIn = [requireAuth, syncAppUser];
 
 router.get('/orders', ...signedIn, listOrders);
-router.post('/orders', ...signedIn, requireRole('customer', 'admin'), createOrder);
+router.post('/orders', orderCreationLimiter, ...signedIn, requireRole('customer', 'admin'), createOrder);
 
 router.get('/orders/:id', ...signedIn, validateOrderId, getOrder);
 router.delete('/orders/:id', ...signedIn, validateOrderId, deleteOrder);

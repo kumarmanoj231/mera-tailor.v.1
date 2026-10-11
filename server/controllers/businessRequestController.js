@@ -1,5 +1,7 @@
 import { BusinessRequest, Tailor, User } from '../models.js';
 
+const escapeRegex = value => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
  * POST /api/business-requests
  * Create a new bulk apparel tender / RFQ (Business or Admin)
@@ -115,7 +117,7 @@ export async function listBusinessRequests(req, res) {
       query.category = req.query.category;
     }
     if (req.query.city && req.query.city !== 'all') {
-      query.city = new RegExp(req.query.city, 'i');
+      query.city = new RegExp(escapeRegex(req.query.city), 'i');
     }
 
     const rows = await BusinessRequest.find(query).sort({ createdAt: -1 }).lean();

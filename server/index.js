@@ -8,10 +8,21 @@ import { fileURLToPath } from 'node:url';
 import apiRoutes from './routes/index.js';
 import { connectDatabase } from './config/database.js';
 import { getHealth } from './controllers/healthController.js';
+import { globalApiLimiter } from './middleware/rateLimiter.js';
 
 const app = express();
 const projectDir = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(projectDir, '../dist');
+
+// Defensive HTTP Security Headers
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-XSS-Protection', '0');
+  res.setHeader('Permissions-Policy', 'geolocation=(self), microphone=(self)');
+  next();
+});
 
 // Direct public health check for Render & uptime monitors (always returns 200)
 app.get(['/health', '/api/health'], getHealth);
@@ -20,9 +31,21 @@ const clerkPublishableKey = process.env.CLERK_PUBLISHABLE_KEY || process.env.VIT
 if (process.env.CLERK_SECRET_KEY && clerkPublishableKey) {
   app.use(clerkMiddleware({ secretKey: process.env.CLERK_SECRET_KEY, publishableKey: clerkPublishableKey }));
 }
+
 app.use(cors());
-app.use(express.json());
-app.use('/api', apiRoutes);
+
+// Parse JSON while preserving raw body for crypto webhook signature verification
+app.use(
+  express.json({
+    limit: '2mb',
+    verify: (req, _res, buf) => {
+      req.rawBody = buf?.toString('utf8');
+    },
+  })
+);
+
+// Apply rate limiter to all /api endpoints
+app.use('/api', globalApiLimiter, apiRoutes);
 app.all('/api/*', (_req, res) => res.status(404).json({ error: 'API route not found' }));
 
 if (process.env.NODE_ENV === 'production' || fs.existsSync(path.resolve(distDir, 'index.html'))) {

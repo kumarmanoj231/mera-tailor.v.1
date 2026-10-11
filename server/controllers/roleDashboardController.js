@@ -49,135 +49,12 @@ export async function getTailorDashboard(req, res) {
     }
 
     let requests = await Order.find({ tailorId: tailor._id }).sort({ createdAt: -1 }).lean();
-    if (requests.length === 0) {
-      const now = Date.now();
-      const initialOrders = [
-        {
-          id: `MT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-          clerkUserId: req.authUserId,
-          tailorId: tailor._id,
-          tailorName: tailor.name,
-          garment: 'Two-Piece Italian Suit',
-          category: 'Suits & Blazers',
-          quantity: 1,
-          color: 'Midnight Blue',
-          fabric: 'Poly-Wool Blend',
-          deadline: 'In 3 days',
-          notes: 'Slim peak lapel with double vent and pick stitching.',
-          price: 3499,
-          quotePrice: 3499,
-          status: 'In Production',
-          history: [['Request Sent', '01 Oct 2026'], ['In Production', '03 Oct 2026']],
-          createdAt: new Date(now - 4 * 24 * 60 * 60 * 1000),
-        },
-        {
-          id: `MT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-          clerkUserId: req.authUserId,
-          tailorId: tailor._id,
-          tailorName: tailor.name,
-          garment: 'Designer Silk Kurti & Palazzo',
-          category: 'Ethnic Wear',
-          quantity: 2,
-          color: 'Emerald Green',
-          fabric: 'Chanderi Silk',
-          deadline: 'In 5 days',
-          notes: 'Gota-patti embroidery on border and sleeves.',
-          price: 2400,
-          quotePrice: 2400,
-          status: 'Accepted',
-          history: [['Request Sent', '02 Oct 2026'], ['Accepted', '04 Oct 2026']],
-          createdAt: new Date(now - 3 * 24 * 60 * 60 * 1000),
-        },
-        {
-          id: `MT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-          clerkUserId: req.authUserId,
-          tailorId: tailor._id,
-          tailorName: tailor.name,
-          garment: 'Embroidered Wedding Sherwani',
-          category: 'Ethnic Wear',
-          quantity: 1,
-          color: 'Royal Ivory',
-          fabric: 'Raw Silk',
-          deadline: 'Delivered',
-          notes: 'Hand zardozi work on collar and cuffs.',
-          price: 7500,
-          quotePrice: 7500,
-          status: 'Completed',
-          history: [['Request Sent', '20 Sep 2026'], ['In Production', '24 Sep 2026'], ['Completed', '30 Sep 2026']],
-          createdAt: new Date(now - 14 * 24 * 60 * 60 * 1000),
-        },
-        {
-          id: `MT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-          clerkUserId: req.authUserId,
-          tailorId: tailor._id,
-          tailorName: tailor.name,
-          garment: 'Custom Formal Shirts (Pack of 3)',
-          category: "Men's Wear",
-          quantity: 3,
-          color: 'Pastel Blue & White',
-          fabric: 'Egyptian Cotton',
-          deadline: 'In 7 days',
-          notes: 'Spread collar with monogram on left cuff.',
-          price: 1800,
-          quotePrice: 1800,
-          status: 'Request Sent',
-          history: [['Request Sent', '05 Oct 2026']],
-          createdAt: new Date(now - 1 * 24 * 60 * 60 * 1000),
-        },
-      ];
-      await Order.insertMany(initialOrders);
-      requests = await Order.find({ tailorId: tailor._id }).sort({ createdAt: -1 }).lean();
-    }
 
     let bulkRequirements = await BusinessRequest.find({
       status: { $in: ['submitted', 'reviewing', 'quoted'] },
     })
       .sort({ createdAt: -1 })
       .lean();
-
-    if (bulkRequirements.length === 0) {
-      const initialBulk = [
-        {
-          clerkUserId: 'b2b_school_admin',
-          organisation: "St. Xavier's Academy",
-          requirement: 'Complete summer school uniform sets with embroidery crest (Shirts, Trousers & Skirts).',
-          quantity: 250,
-          timeline: '30 days',
-          city: 'Jaipur, Rajasthan',
-          estBudget: 62500,
-          notes: 'Standard quality poly-cotton blend, color fastness required.',
-          status: 'submitted',
-        },
-        {
-          clerkUserId: 'b2b_hospitality_admin',
-          organisation: 'Meridian Hospitality Group',
-          requirement: 'Poly-viscose corporate blazers with customized lining and matching slim-fit formal trousers.',
-          quantity: 80,
-          timeline: '20 days',
-          city: 'Delhi NCR',
-          estBudget: 96000,
-          notes: 'Formal staff uniform for front-desk and concierge team.',
-          status: 'reviewing',
-        },
-        {
-          clerkUserId: 'b2b_boutique_admin',
-          organisation: 'Ananya Designer Boutique',
-          requirement: 'Chanderi silk festive kurtis with gota-patti border hemming and matching elasticated palazzos.',
-          quantity: 150,
-          timeline: '15 days',
-          city: 'Jaipur, Rajasthan',
-          estBudget: 45000,
-          notes: 'High finish stitching for upcoming festival collection.',
-          status: 'quoted',
-        },
-      ];
-      await BusinessRequest.insertMany(initialBulk);
-      bulkRequirements = await BusinessRequest.find({
-        status: { $in: ['submitted', 'reviewing', 'quoted'] },
-      })
-        .sort({ createdAt: -1 })
-        .lean();
-    }
 
     const completedOrders = requests.filter(r => r.status === 'Completed');
     const inProductionOrders = requests.filter(r => r.status === 'In Production');
@@ -233,7 +110,7 @@ export async function getTailorDashboard(req, res) {
     const serviceList = Array.isArray(tailor.services) && tailor.services.length ? tailor.services : [];
     const avgLeadDays = serviceList.length
       ? Math.round((serviceList.reduce((acc, s) => acc + (s.days || 5), 0) / serviceList.length) * 10) / 10
-      : 4.2;
+      : 0;
 
     res.json({
       tailor: tailor.toObject ? tailor.toObject() : tailor,
@@ -246,7 +123,7 @@ export async function getTailorDashboard(req, res) {
         earnings7d,
         earnings30d,
         earnings90d,
-        weeklyData: [w1 || 3200, w2 || 4800, w3 || 7500, w4 || (totalRevenue - (w1 + w2 + w3) || 5200)],
+        weeklyData: [w1, w2, w3, w4],
       },
       pipeline: {
         newInquiries: newInquiries.length,
