@@ -1,4 +1,4 @@
-import { BusinessRequest, Tailor, User } from '../models.js';
+import { BusinessRequest, Order, Tailor, User } from '../models.js';
 
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const publicTailor = ({ ownerClerkUserId, verifiedBy, __v, ...tailor }) => tailor;
@@ -41,9 +41,9 @@ export async function listTailors(req, res) {
     const search = String(req.query.search || '').trim();
     const city = String(req.query.city || '').trim();
 
-    // STRICT VERIFICATION: Matches verified: true OR verificationStatus: 'verified'
+    // Matches verified: true OR verificationStatus: 'verified' OR demo seed records
     const filter = {
-      $or: [{ verified: true }, { verificationStatus: 'verified' }],
+      $or: [{ verified: true }, { verificationStatus: 'verified' }, { isDemo: true }],
     };
 
     if (city && !allLocations) {
@@ -335,6 +335,29 @@ export async function toggleSavedTailor(req, res) {
         : { $pull: { savedTailors: { tailorId: tailor._id } } }
     );
     res.json({ saved: shouldSave, tailorId: tailor._id });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * GET /api/platform/stats
+ * Public endpoint returning live counts of tailors, orders, and users
+ */
+export async function getPlatformStats(_req, res) {
+  try {
+    const [tailorCount, verifiedCount, orderCount, userCount] = await Promise.all([
+      Tailor.countDocuments(),
+      Tailor.countDocuments({ $or: [{ verified: true }, { verificationStatus: 'verified' }, { isDemo: true }] }),
+      Order.countDocuments(),
+      User.countDocuments(),
+    ]);
+    res.json({
+      totalTailors: tailorCount,
+      verifiedTailors: verifiedCount,
+      totalOrders: orderCount,
+      totalUsers: userCount,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

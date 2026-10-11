@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   applyTailorVerification,
   getMyStudio,
+  getPlatformStats,
   getTailor,
   listSavedTailors,
   listTailors,
@@ -14,7 +15,8 @@ import { validateObjectId } from '../middleware/validate.js';
 
 const router = Router();
 
-// Public Discovery: Lists only admin-verified tailors
+// Public Platform Statistics & Discovery
+router.get('/platform/stats', getPlatformStats);
 router.get('/tailors', listTailors);
 
 // Authenticated Tailor Studio Management & Verification

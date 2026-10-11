@@ -1,33 +1,59 @@
-import React from "react";
-import { ShieldCheck, Users, Scissors, Award, Clock } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Users, Scissors, Award, Clock } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 const TrustMetricsSection = () => {
   const { t } = useTranslation();
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadStats() {
+      try {
+        const res = await fetch("/api/platform/stats");
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted) setStats(data);
+        }
+      } catch (err) {
+        console.warn("Could not load live platform stats:", err);
+      }
+    }
+    loadStats();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const tailorCount = stats?.verifiedTailors || stats?.totalTailors;
+  const tailorDisplay = tailorCount && tailorCount > 0 ? `${tailorCount}+` : "Verified";
+
+  const orderCount = stats?.totalOrders;
+  const orderDisplay = orderCount && orderCount > 0 ? `${orderCount}+` : "Guaranteed";
 
   const metrics = [
     {
       icon: <Scissors className="text-[#8f2338]" size={20} />,
-      value: "420+",
-      label: t("home.trustVerifiedTailors", "420+ Verified Tailors"),
+      value: tailorDisplay,
+      label: t("home.trustVerifiedTailors", "Verified Tailor Studios"),
       subtext: t("home.trustVerifiedSub", "Master artisans in your locality"),
     },
     {
       icon: <Award className="text-amber-600" size={20} />,
-      value: "99.2%",
-      label: t("home.trustFitAccuracy", "99.2% Fit Accuracy"),
-      subtext: t("home.trustFitSub", "Guaranteed alteration coverage"),
+      value: "100%",
+      label: t("home.trustFitAccuracy", "Fit Guarantee"),
+      subtext: t("home.trustFitSub", "Free alteration & fitting assurance"),
     },
     {
       icon: <Users className="text-emerald-700" size={20} />,
-      value: "18,500+",
-      label: t("home.trustOrdersDelivered", "18,500+ Orders Delivered"),
+      value: orderDisplay,
+      label: orderCount && orderCount > 0 ? t("home.trustOrdersDelivered", "Orders Delivered") : t("home.doorstepFitting", "Doorstep Pickup"),
       subtext: t("home.trustOrdersSub", "Retail & bulk uniforms"),
     },
     {
       icon: <Clock className="text-blue-600" size={20} />,
       value: "3–5 Days",
-      label: t("home.trustAvgTurnaround", "3–5 Days Turnaround"),
+      label: t("home.trustAvgTurnaround", "Quick Turnaround"),
       subtext: t("home.trustAvgSub", "Express delivery available"),
     },
   ];

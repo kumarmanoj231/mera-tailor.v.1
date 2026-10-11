@@ -157,45 +157,6 @@ const CATEGORIES_DATA = [
   },
 ];
 
-const DEFAULT_RECOMMENDED_TAILORS = [
-  {
-    _id: "rec-1",
-    name: "Royal Jaipur Heritage Atelier",
-    area: "C block, Jaipur",
-    city: "Jaipur",
-    rating: 4.8,
-    reviews: 120,
-    minPrice: 499,
-  },
-  {
-    _id: "rec-2",
-    name: "Master Ramesh Bespoke Studio",
-    area: "MI Road, Jaipur",
-    city: "Jaipur",
-    rating: 4.9,
-    reviews: 145,
-    minPrice: 499,
-  },
-  {
-    _id: "rec-3",
-    name: "Jaipur Zari & Silk House",
-    area: "Bapu Bazaar, Jaipur",
-    city: "Jaipur",
-    rating: 4.8,
-    reviews: 98,
-    minPrice: 499,
-  },
-  {
-    _id: "rec-4",
-    name: "Imperial Precision Tailors",
-    area: "Mansarovar, Jaipur",
-    city: "Jaipur",
-    rating: 4.7,
-    reviews: 112,
-    minPrice: 499,
-  },
-];
-
 export default function CustomerHomeSection() {
   const { i18n } = useTranslation();
   const isHi = i18n.language === "hi";
@@ -206,21 +167,23 @@ export default function CustomerHomeSection() {
   const [orders, setOrders] = useState([]);
   const [measurements, setMeasurements] = useState([]);
   const [savedTailorIds, setSavedTailorIds] = useState(new Set());
-  const [savedCount, setSavedCount] = useState(1);
-  const [recommendedTailors, setRecommendedTailors] = useState(DEFAULT_RECOMMENDED_TAILORS);
+  const [savedCount, setSavedCount] = useState(0);
+  const [recommendedTailors, setRecommendedTailors] = useState([]);
+  const [loadingTailors, setLoadingTailors] = useState(true);
 
   // Customer Name and Location formatted cleanly
   const rawName = profile?.firstName || user?.firstName || profile?.name?.split(" ")[0] || "Customer";
   const displayName = rawName.toUpperCase();
   const userLocation = profile?.city
-    ? `${profile.city}${profile?.area ? `, ${profile.area}` : ", Jaipur Municipal Corporation"}`
-    : (isHi ? "जयपुर, नगर निगम" : "Jaipur, Jaipur Municipal Corporation");
+    ? `${profile.city}${profile?.area ? `, ${profile.area}` : ""}`
+    : (isHi ? "लोकेशन सेट नहीं है" : "Location not set");
 
   useEffect(() => {
     let active = true;
 
     async function loadDashboardData() {
       try {
+        setLoadingTailors(true);
         const token = await getToken();
         if (token) {
           const res = await fetch("/api/users/dashboard", {
@@ -232,7 +195,7 @@ export default function CustomerHomeSection() {
               setOrders(data.orders || []);
               setMeasurements(data.measurements || []);
               const savedList = data.savedTailors || [];
-              setSavedCount(savedList.length || 1);
+              setSavedCount(savedList.length);
               setSavedTailorIds(new Set(savedList.map((t) => t._id || t.id)));
             }
           }
@@ -242,12 +205,14 @@ export default function CustomerHomeSection() {
         const tailorRes = await fetch("/api/tailors?limit=4");
         if (tailorRes.ok) {
           const tList = await tailorRes.json();
-          if (active && Array.isArray(tList) && tList.length > 0) {
+          if (active && Array.isArray(tList)) {
             setRecommendedTailors(tList.slice(0, 4));
           }
         }
       } catch (err) {
         console.warn("Failed to load customer home data:", err);
+      } finally {
+        if (active) setLoadingTailors(false);
       }
     }
 
@@ -753,95 +718,134 @@ export default function CustomerHomeSection() {
           </Link>
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {recommendedTailors.map((tailor) => {
-            const isSaved = savedTailorIds.has(tailor._id);
-            const tailorRating = tailor.rating || 4.8;
-            const tailorReviews = tailor.reviews || 120;
-            const tailorArea = tailor.area || tailor.city || "C block, Jaipur";
-            const tailorPrice = tailor.minPrice || 499;
+        {loadingTailors ? (
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((n) => (
+              <div key={n} className="h-72 animate-pulse rounded-2xl border border-stone-200 bg-stone-100/70 p-4" />
+            ))}
+          </div>
+        ) : recommendedTailors.length === 0 ? (
+          <div className="mt-6 rounded-2xl border border-dashed border-stone-300 bg-white p-8 text-center">
+            <Scissors className="mx-auto text-stone-400 mb-2" size={28} />
+            <h4 className="text-sm font-bold text-stone-800">
+              {isHi ? "अभी आपके इलाके में कोई टेलर उपलब्ध नहीं है" : "No tailoring studios listed in this area yet"}
+            </h4>
+            <p className="mt-1 text-xs text-stone-500">
+              {isHi
+                ? "पूरे शहर के कारीगर देखने के लिए एक्सप्लोर मैप पर जाएं।"
+                : "Explore master artisans across other districts on the discovery map."}
+            </p>
+            <Link
+              to="/find-tailors"
+              className="mt-3.5 inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e]"
+            >
+              <span>{isHi ? "नक्शे पर खोजें" : "Explore on Map"}</span>
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {recommendedTailors.map((tailor) => {
+              const isSaved = savedTailorIds.has(tailor._id);
+              const tailorRating = Number(tailor.rating) > 0 ? Number(tailor.rating).toFixed(1) : null;
+              const tailorReviews = Number(tailor.reviews) > 0 ? tailor.reviews : null;
+              const tailorArea = [tailor.area, tailor.city].filter(Boolean).join(", ") || (isHi ? "स्थानीय स्टूडियो" : "Local Studio");
+              const tailorPrice = tailor.minPrice || tailor.services?.[0]?.price || null;
+              const studioImage = tailor.image || tailor.heroImage;
 
-            return (
-              <div
-                key={tailor._id}
-                className="group relative flex flex-col justify-between rounded-2xl border border-stone-200/90 bg-white p-4 transition-all duration-200 hover:-translate-y-1 hover:border-[#8f2338]/40 hover:shadow-md"
-              >
-                <div>
-                  {/* Studio Image Thumbnail / Card Header */}
-                  <div className="relative h-40 w-full overflow-hidden rounded-xl bg-stone-100 flex items-center justify-center border border-stone-100">
-                    {tailor.heroImage ? (
-                      <img
-                        src={tailor.heroImage}
-                        alt={tailor.name}
-                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center text-stone-300">
-                        <ImageIcon size={34} strokeWidth={1.2} />
+              return (
+                <div
+                  key={tailor._id}
+                  className="group relative flex flex-col justify-between rounded-2xl border border-stone-200/90 bg-white p-4 transition-all duration-200 hover:-translate-y-1 hover:border-[#8f2338]/40 hover:shadow-md"
+                >
+                  <div>
+                    {/* Studio Image Thumbnail / Card Header */}
+                    <div className="relative h-40 w-full overflow-hidden rounded-xl bg-stone-100 flex items-center justify-center border border-stone-100">
+                      {studioImage ? (
+                        <img
+                          src={studioImage}
+                          alt={tailor.name || "Tailor Studio"}
+                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center text-stone-300">
+                          <ImageIcon size={34} strokeWidth={1.2} />
+                        </div>
+                      )}
+
+                      {/* Bookmark / Heart Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleToggleSaveTailor(e, tailor._id)}
+                        title={isSaved ? "Remove from bookmarks" : "Save studio"}
+                        className="absolute top-2.5 right-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 backdrop-blur-xs shadow-xs transition hover:scale-110 active:scale-95"
+                      >
+                        <Heart
+                          size={15}
+                          className={isSaved ? "fill-[#8f2338] text-[#8f2338]" : "text-stone-400 hover:text-stone-600"}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Studio Info */}
+                    <div className="mt-3">
+                      <h3 className="font-sans text-sm font-bold text-stone-900 truncate group-hover:text-[#8f2338] transition">
+                        {tailor.name}
+                      </h3>
+
+                      {/* Rating row */}
+                      <div className="mt-1 flex items-center gap-1.5 text-xs text-stone-500">
+                        {tailorRating ? (
+                          <div className="flex items-center gap-1 font-bold text-stone-800">
+                            <Star size={12} fill="currentColor" className="text-amber-500" />
+                            <span>{tailorRating}</span>
+                          </div>
+                        ) : (
+                          <span className="rounded bg-emerald-50 px-1 py-0.5 text-[10px] font-semibold text-emerald-700">
+                            {isHi ? "नया" : "New"}
+                          </span>
+                        )}
+                        {tailorReviews && (
+                          <span className="text-stone-400">({tailorReviews} {isHi ? "समीक्षाएं" : "reviews"})</span>
+                        )}
                       </div>
-                    )}
 
-                    {/* Bookmark / Heart Button */}
-                    <button
-                      type="button"
-                      onClick={(e) => handleToggleSaveTailor(e, tailor._id)}
-                      title={isSaved ? "Remove from bookmarks" : "Save studio"}
-                      className="absolute top-2.5 right-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 backdrop-blur-xs shadow-xs transition hover:scale-110 active:scale-95"
-                    >
-                      <Heart
-                        size={15}
-                        className={isSaved ? "fill-[#8f2338] text-[#8f2338]" : "text-stone-400 hover:text-stone-600"}
-                      />
-                    </button>
+                      {/* Location */}
+                      <p className="mt-1 flex items-center gap-1 text-xs text-stone-500 truncate">
+                        <MapPin size={12} className="text-[#8f2338] shrink-0" />
+                        <span className="truncate">{tailorArea}</span>
+                      </p>
+
+                      {/* Starting Price */}
+                      <div className="mt-3 flex items-center justify-between border-t border-stone-100 pt-2.5 text-xs">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                          {isHi ? "शुरुआती दर" : "STARTING"}
+                        </span>
+                        <strong className="text-sm font-black text-stone-900">
+                          {tailorPrice ? `₹${tailorPrice}` : (isHi ? "अनुरोध पर" : "Bespoke")}
+                        </strong>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Studio Info */}
+                  {/* View Studio Button */}
                   <div className="mt-3">
-                    <h3 className="font-sans text-sm font-bold text-stone-900 truncate group-hover:text-[#8f2338] transition">
-                      {tailor.name}
-                    </h3>
-
-                    {/* Rating row */}
-                    <div className="mt-1 flex items-center gap-1 text-xs text-stone-500">
-                      <div className="flex items-center gap-1 font-bold text-stone-800">
-                        <Star size={12} fill="currentColor" className="text-amber-500" />
-                        <span>{tailorRating}</span>
-                      </div>
-                      <span className="text-stone-400">({tailorReviews} {isHi ? "समीक्षाएं" : "reviews"})</span>
-                    </div>
-
-                    {/* Location */}
-                    <p className="mt-1 flex items-center gap-1 text-xs text-stone-500 truncate">
-                      <MapPin size={12} className="text-[#8f2338] shrink-0" />
-                      <span className="truncate">{tailorArea}</span>
-                    </p>
-
-                    {/* Starting Price */}
-                    <div className="mt-3 flex items-center justify-between border-t border-stone-100 pt-2.5 text-xs">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                        {isHi ? "शुरुआती दर" : "STARTING"}
-                      </span>
-                      <strong className="text-sm font-black text-stone-900">
-                        ₹{tailorPrice}
-                      </strong>
-                    </div>
+                    <Link
+                      to={tailor._id ? `/tailors/${encodeURIComponent(tailor._id)}` : "/find-tailors"}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#8f2338] py-2 text-xs font-bold text-white shadow-xs transition hover:bg-[#781c2e] active:scale-95"
+                    >
+                      <span>{isHi ? "स्टूडियो देखें" : "View Studio"}</span>
+                      <ArrowRight size={13} />
+                    </Link>
                   </div>
                 </div>
-
-                {/* View Studio Button */}
-                <div className="mt-3">
-                  <Link
-                    to={`/tailors/${encodeURIComponent(tailor._id)}`}
-                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#8f2338] py-2 text-xs font-bold text-white shadow-xs transition hover:bg-[#781c2e] active:scale-95"
-                  >
-                    <span>{isHi ? "स्टूडियो देखें" : "View Studio"}</span>
-                    <ArrowRight size={13} />
-                  </Link>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* =========================================================
