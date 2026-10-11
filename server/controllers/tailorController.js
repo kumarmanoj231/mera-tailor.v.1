@@ -305,8 +305,16 @@ export async function applyTailorVerification(req, res) {
 export async function listSavedTailors(req, res) {
   try {
     const user = req.appUser;
-    const ids = (user.savedTailors || []).map(item => item.tailorId?.toString?.() || item.tailorId);
-    const rows = await Tailor.find({ _id: { $in: ids } }).lean();
+    const ids = (user.savedTailors || []).map(item => item.tailorId?.toString?.() || item.tailorId).filter(Boolean);
+    const rows = ids.length ? await Tailor.find({ _id: { $in: ids } }).lean() : [];
+    
+    // Clean user document if any saved tailor was deleted
+    if (rows.length !== ids.length) {
+      const validIdSet = new Set(rows.map(t => String(t._id)));
+      const filteredSaved = (user.savedTailors || []).filter(item => validIdSet.has(String(item.tailorId)));
+      await User.updateOne({ clerkUserId: req.authUserId }, { $set: { savedTailors: filteredSaved } });
+    }
+
     res.json(rows.map(publicTailor));
   } catch (error) {
     res.status(500).json({ error: error.message });

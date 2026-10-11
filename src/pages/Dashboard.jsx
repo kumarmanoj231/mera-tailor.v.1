@@ -1057,32 +1057,9 @@ export default function Dashboard() {
 
   const isHi = i18n.language === "hi";
 
-  const sampleFallbackOrder = {
-    id: "MT-3E3484C3",
-    _id: "sample-mt-3e3484c3",
-    garment: "Alteration & Hemming",
-    category: "Alteration",
-    tailorName: "Royal Jaipur",
-    area: "C block, Jaipur",
-    quotePrice: 190,
-    price: 190,
-    status: "In Progress",
-    placedDate: "5 Oct",
-    inProgressDate: "6 Oct",
-  };
-
-  const displayOrder = orders.length > 0 ? orders[0] : sampleFallbackOrder;
-
-  const sampleFallbackSavedTailor = {
-    _id: "sample-royal-jaipur",
-    id: "sample-royal-jaipur",
-    name: "Royal Jaipur",
-    area: "C block",
-    city: "Jaipur",
-    rating: 4.8,
-  };
-
-  const displaySavedStudio = savedTailors.length > 0 ? savedTailors[0] : sampleFallbackSavedTailor;
+  // Clean real data bindings - zero mock or dummy fallbacks
+  const displayOrder = orders.length > 0 ? orders[0] : null;
+  const displaySavedStudio = savedTailors.length > 0 ? savedTailors[0] : null;
 
   /* =========================================================
      AUTH / GUEST VIEW
@@ -1353,9 +1330,9 @@ export default function Dashboard() {
                 ]
               : [
                   { id: "overview", label: t("dashboardPage.overview", "Overview"), icon: Home, count: null },
-                  { id: "orders", label: t("dashboardPage.orders", "Orders"), icon: ShoppingBag, count: orders.length > 0 ? orders.length : 1 },
+                  { id: "orders", label: t("dashboardPage.orders", "Orders"), icon: ShoppingBag, count: orders.length },
                   { id: "measurements", label: t("dashboardPage.measurements", "Measurements"), icon: Tag, count: measurements.length },
-                  { id: "saved", label: t("dashboardPage.savedTailors", "Saved Tailors"), icon: Bookmark, count: savedTailors.length > 0 ? savedTailors.length : 1 },
+                  { id: "saved", label: t("dashboardPage.savedTailors", "Saved Tailors"), icon: Bookmark, count: savedTailors.length },
                   { id: "profile", label: t("dashboardPage.profileSettings", "Profile & Settings"), icon: Settings, count: null },
                 ]
             ).map((tab) => {
@@ -1517,111 +1494,135 @@ export default function Dashboard() {
                       onClick={() => setActiveTab("orders")}
                       className="text-xs font-bold text-[#8f2338] hover:underline"
                     >
-                      {t("dashboardPage.viewAll", "View All")} ({orders.length > 0 ? orders.length : 1}) →
+                      {t("dashboardPage.viewAll", "View All")} ({orders.length}) →
                     </button>
                   </div>
 
-                  <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                    {/* Garment Swatch / Thumbnail */}
-                    <div className="h-24 w-24 sm:h-28 sm:w-28 rounded-2xl bg-[#fdf2f4] p-2 flex items-center justify-center shrink-0 border border-rose-100">
-                      <img
-                        src="/assets/kurta.png"
-                        alt="Garment"
-                        className="h-full w-full object-contain"
-                      />
-                    </div>
-
-                    {/* Order Details & Stepper */}
-                    <div className="flex-1 w-full">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="text-[11px] font-bold text-stone-400">
-                            #{displayOrder.id}
-                          </p>
-                          <h3 className="font-sans text-base font-bold text-stone-900">
-                            {displayOrder.garment || displayOrder.category}
-                          </h3>
-                          <p className="text-xs text-stone-600 mt-0.5">
-                            <span className="font-semibold text-[#8f2338]">Studio {displayOrder.tailorName || "Royal Jaipur"}</span>
-                            <span className="text-stone-400 mx-1.5">·</span>
-                            <span className="inline-flex items-center gap-1 text-stone-500">
-                              <MapPin size={11} className="text-[#8f2338]" /> {displayOrder.area || "C block, Jaipur"}
-                            </span>
-                          </p>
-                        </div>
-
-                        <span className="rounded-full bg-rose-50 border border-rose-200 px-3 py-1 text-xs font-bold text-[#8f2338] shrink-0">
-                          {displayOrder.status || "In Progress"}
-                        </span>
+                  {displayOrder ? (
+                    <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                      {/* Garment Swatch / Thumbnail */}
+                      <div className="h-24 w-24 sm:h-28 sm:w-28 rounded-2xl bg-[#fdf2f4] p-2 flex items-center justify-center shrink-0 border border-rose-100">
+                        <img
+                          src="/assets/kurta.png"
+                          alt="Garment"
+                          className="h-full w-full object-contain"
+                        />
                       </div>
 
-                      {/* Stepper with connecting line */}
-                      <div className="relative mt-4 pt-1 pb-1">
-                        {/* Connecting Line */}
-                        <div className="absolute top-[10px] left-[8%] right-[8%] h-[2px] bg-stone-200 -z-0">
-                          <div
-                            className="h-full bg-[#8f2338] transition-all duration-500"
-                            style={{
-                              width:
-                                displayOrder.status === "Completed"
-                                  ? "100%"
-                                  : displayOrder.status === "Ready for Pickup"
-                                  ? "66%"
-                                  : "33%",
-                            }}
-                          />
+                      {/* Order Details & Stepper */}
+                      <div className="flex-1 w-full">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-[11px] font-bold text-stone-400">
+                              #{displayOrder.id}
+                            </p>
+                            <h3 className="font-sans text-base font-bold text-stone-900">
+                              {displayOrder.garment || displayOrder.category}
+                            </h3>
+                            <p className="text-xs text-stone-600 mt-0.5">
+                              <span className="font-semibold text-[#8f2338]">Studio {displayOrder.tailorName || "Artisan Studio"}</span>
+                              {displayOrder.area && (
+                                <>
+                                  <span className="text-stone-400 mx-1.5">·</span>
+                                  <span className="inline-flex items-center gap-1 text-stone-500">
+                                    <MapPin size={11} className="text-[#8f2338]" /> {displayOrder.area}
+                                  </span>
+                                </>
+                              )}
+                            </p>
+                          </div>
+
+                          <span className="rounded-full bg-rose-50 border border-rose-200 px-3 py-1 text-xs font-bold text-[#8f2338] shrink-0">
+                            {displayOrder.status || "Request Sent"}
+                          </span>
                         </div>
 
-                        <div className="relative z-10 flex items-start justify-between text-center">
-                          {/* Node 1: Order Placed */}
-                          <div className="flex flex-col items-center">
-                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#8f2338] text-white text-[10px] font-bold shadow-xs">
-                              <Check size={11} className="stroke-[3]" />
+                        {/* Stepper with connecting line */}
+                        <div className="relative mt-4 pt-1 pb-1">
+                          <div className="absolute top-[10px] left-[8%] right-[8%] h-[2px] bg-stone-200 -z-0">
+                            <div
+                              className="h-full bg-[#8f2338] transition-all duration-500"
+                              style={{
+                                width:
+                                  displayOrder.status === "Completed"
+                                    ? "100%"
+                                    : displayOrder.status === "Ready for Pickup"
+                                    ? "66%"
+                                    : "33%",
+                              }}
+                            />
+                          </div>
+
+                          <div className="relative z-10 flex items-start justify-between text-center">
+                            {/* Node 1: Order Placed */}
+                            <div className="flex flex-col items-center">
+                              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#8f2338] text-white text-[10px] font-bold shadow-xs">
+                                <Check size={11} className="stroke-[3]" />
+                              </div>
+                              <p className="mt-1 text-[11px] font-bold text-stone-900">Order Placed</p>
+                              <p className="text-[10px] text-stone-400">{displayOrder.createdAt ? new Date(displayOrder.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "Recent"}</p>
                             </div>
-                            <p className="mt-1 text-[11px] font-bold text-stone-900">Order Placed</p>
-                            <p className="text-[10px] text-stone-400">{displayOrder.placedDate || "5 Oct"}</p>
-                          </div>
 
-                          {/* Node 2: In Progress */}
-                          <div className="flex flex-col items-center">
-                            <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#8f2338] bg-white shadow-xs">
-                              <div className="h-2 w-2 rounded-full bg-[#8f2338]" />
+                            {/* Node 2: In Progress */}
+                            <div className="flex flex-col items-center">
+                              <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${["In Production", "Ready for Pickup", "Completed"].includes(displayOrder.status) ? "border-[#8f2338] bg-[#8f2338] text-white" : "border-stone-300 bg-white"}`}>
+                                {["In Production", "Ready for Pickup", "Completed"].includes(displayOrder.status) && <Check size={11} />}
+                              </div>
+                              <p className="mt-1 text-[11px] font-bold text-stone-800">In Progress</p>
+                              <p className="text-[10px] text-stone-400">-</p>
                             </div>
-                            <p className="mt-1 text-[11px] font-bold text-[#8f2338]">In Progress</p>
-                            <p className="text-[10px] text-stone-400">{displayOrder.inProgressDate || "6 Oct"}</p>
-                          </div>
 
-                          {/* Node 3: Ready for Pickup */}
-                          <div className="flex flex-col items-center">
-                            <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-stone-300 bg-white" />
-                            <p className="mt-1 text-[11px] font-medium text-stone-500">Ready for Pickup</p>
-                            <p className="text-[10px] text-stone-400">-</p>
-                          </div>
+                            {/* Node 3: Ready for Pickup */}
+                            <div className="flex flex-col items-center">
+                              <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${["Ready for Pickup", "Completed"].includes(displayOrder.status) ? "border-[#8f2338] bg-[#8f2338] text-white" : "border-stone-300 bg-white"}`} />
+                              <p className="mt-1 text-[11px] font-medium text-stone-500">Ready for Pickup</p>
+                              <p className="text-[10px] text-stone-400">-</p>
+                            </div>
 
-                          {/* Node 4: Completed */}
-                          <div className="flex flex-col items-center">
-                            <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-stone-300 bg-white" />
-                            <p className="mt-1 text-[11px] font-medium text-stone-500">Completed</p>
-                            <p className="text-[10px] text-stone-400">-</p>
+                            {/* Node 4: Completed */}
+                            <div className="flex flex-col items-center">
+                              <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${displayOrder.status === "Completed" ? "border-emerald-600 bg-emerald-600 text-white" : "border-stone-300 bg-white"}`} />
+                              <p className="mt-1 text-[11px] font-medium text-stone-500">Completed</p>
+                              <p className="text-[10px] text-stone-400">-</p>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="mt-4 py-8 text-center rounded-2xl border border-dashed border-stone-200">
+                      <ShoppingBag size={28} className="mx-auto text-stone-300 mb-2" />
+                      <p className="text-xs font-bold text-stone-700">
+                        {isHi ? "कोई सक्रिय सिलाई ऑर्डर नहीं है" : "No active custom orders"}
+                      </p>
+                      <p className="text-[11px] text-stone-400 mt-0.5">
+                        {isHi ? "अपने सटीक नाप के लिए आस-पास के दर्जी खोजें।" : "Find tailors nearby to place custom stitching requests."}
+                      </p>
+                      <Link
+                        to="/find-tailors"
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e]"
+                      >
+                        <Search size={12} />
+                        <span>{isHi ? "दर्जी खोजें" : "Find Tailors"}</span>
+                      </Link>
+                    </div>
+                  )}
 
                   {/* Quote and Details footer */}
-                  <div className="mt-4 flex items-center justify-between border-t border-stone-100 pt-3 text-xs">
-                    <span className="font-semibold text-stone-700">
-                      {t("dashboardPage.quote", "Quote")}: <strong className="text-stone-900">₹{displayOrder.quotePrice || displayOrder.price || 190}</strong>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedOrderDetails(displayOrder)}
-                      className="font-bold text-[#8f2338] hover:underline"
-                    >
-                      {t("dashboardPage.detailsAndActions", "Details & Actions →")}
-                    </button>
-                  </div>
+                  {displayOrder && (
+                    <div className="mt-4 flex items-center justify-between border-t border-stone-100 pt-3 text-xs">
+                      <span className="font-semibold text-stone-700">
+                        {t("dashboardPage.quote", "Quote")}: <strong className="text-stone-900">₹{displayOrder.quotePrice || displayOrder.price || 0}</strong>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOrderDetails(displayOrder)}
+                        className="font-bold text-[#8f2338] hover:underline"
+                      >
+                        {t("dashboardPage.detailsAndActions", "Details & Actions →")}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* 4 Stat Highlights in a Row */}
@@ -1719,10 +1720,10 @@ export default function Dashboard() {
                       {t("dashboardPage.savedStudios", "Saved Studios")}
                     </p>
                     <p className="font-sans text-2xl font-bold text-stone-900">
-                      {savedTailors.length > 0 ? savedTailors.length : 1}
+                      {savedTailors.length}
                     </p>
                     <p className="text-[10px] text-stone-400 mt-0.5">
-                      Bookmarked ateliers
+                      {savedTailors.length === 0 ? "No saved ateliers" : `${savedTailors.length} bookmarked`}
                     </p>
                   </button>
                 </div>
@@ -1825,45 +1826,64 @@ export default function Dashboard() {
                     </Link>
                   </div>
 
-                  <div className="mt-4 rounded-2xl border border-stone-200 bg-[#fdfbf9] p-3.5 transition hover:border-[#8f2338]/30">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fdf2f4] text-[#8f2338] font-black text-sm shrink-0 border border-rose-100">
-                          {displaySavedStudio.name
-                            ? displaySavedStudio.name.slice(0, 2).toUpperCase()
-                            : "RJ"}
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-xs sm:text-sm text-stone-900 line-clamp-1">
-                            {displaySavedStudio.name || "Royal Jaipur"}
-                          </h4>
-                          <p className="text-[11px] text-stone-500 flex items-center gap-1 mt-0.5">
-                            <MapPin size={10} className="text-[#8f2338]" />
-                            {displaySavedStudio.area || displaySavedStudio.city || "C block"}
-                          </p>
-                          <div className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
-                            <Star size={10} className="fill-amber-400 text-amber-500" />
-                            <span>{displaySavedStudio.rating || 4.8}</span>
+                  {displaySavedStudio ? (
+                    <div className="mt-4 rounded-2xl border border-stone-200 bg-[#fdfbf9] p-3.5 transition hover:border-[#8f2338]/30">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fdf2f4] text-[#8f2338] font-black text-sm shrink-0 border border-rose-100">
+                            {displaySavedStudio.name
+                              ? displaySavedStudio.name.slice(0, 2).toUpperCase()
+                              : "ST"}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-xs sm:text-sm text-stone-900 line-clamp-1">
+                              {displaySavedStudio.name}
+                            </h4>
+                            <p className="text-[11px] text-stone-500 flex items-center gap-1 mt-0.5">
+                              <MapPin size={10} className="text-[#8f2338]" />
+                              {displaySavedStudio.area || displaySavedStudio.city || "Local Atelier"}
+                            </p>
+                            <div className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                              <Star size={10} className="fill-amber-400 text-amber-500" />
+                              <span>{displaySavedStudio.rating ? Number(displaySavedStudio.rating).toFixed(1) : "New"}</span>
+                            </div>
                           </div>
                         </div>
+
+                        <Heart size={16} className="text-[#8f2338] fill-[#8f2338] shrink-0 mt-1" />
                       </div>
 
-                      <Heart size={16} className="text-[#8f2338] fill-[#8f2338] shrink-0 mt-1" />
+                      <div className="mt-3 flex justify-end">
+                        <Link
+                          to={
+                            displaySavedStudio._id
+                              ? `/tailors/${encodeURIComponent(displaySavedStudio._id)}`
+                              : "/find-tailors"
+                          }
+                          className="inline-flex items-center gap-1 text-xs font-bold text-stone-700 border border-stone-200 rounded-xl px-3 py-1.5 hover:bg-stone-50 transition"
+                        >
+                          <span>{t("dashboardPage.viewStudio", "View Studio")} →</span>
+                        </Link>
+                      </div>
                     </div>
-
-                    <div className="mt-3 flex justify-end">
+                  ) : (
+                    <div className="mt-4 py-8 text-center rounded-2xl border border-dashed border-stone-200">
+                      <Bookmark size={28} className="mx-auto text-stone-300 mb-2" />
+                      <p className="text-xs font-bold text-stone-700">
+                        {isHi ? "कोई सहेजा गया दर्जी नहीं" : "No saved studios yet"}
+                      </p>
+                      <p className="text-[11px] text-stone-400 mt-0.5">
+                        {isHi ? "मनपसंद स्टूडियो को बुकमार्क करें।" : "Bookmark favorite ateliers on the map to find them here."}
+                      </p>
                       <Link
-                        to={
-                          displaySavedStudio._id && !displaySavedStudio._id.startsWith("sample")
-                            ? `/tailors/${encodeURIComponent(displaySavedStudio._id)}`
-                            : "/find-tailors"
-                        }
-                        className="inline-flex items-center gap-1 text-xs font-bold text-stone-700 border border-stone-200 rounded-xl px-3 py-1.5 hover:bg-stone-50 transition"
+                        to="/find-tailors"
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e]"
                       >
-                        <span>{t("dashboardPage.viewStudio", "View Studio")} →</span>
+                        <Search size={12} />
+                        <span>{isHi ? "दर्जी खोजें" : "Explore Studios"}</span>
                       </Link>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
 

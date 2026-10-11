@@ -7,6 +7,20 @@ export async function listOrders(req, res) {
     if (req.query.status === 'active') rows = rows.filter(o => !['Completed', 'Cancelled'].includes(o.status));
     if (req.query.status === 'quotes') rows = rows.filter(o => o.status === 'Quote Received');
     if (req.query.status === 'history') rows = rows.filter(o => ['Completed', 'Cancelled'].includes(o.status));
+
+    // Verify tailor existence
+    const tailorIds = [...new Set(rows.map(r => r.tailorId).filter(Boolean))];
+    const liveTailors = tailorIds.length ? await Tailor.find({ _id: { $in: tailorIds } }).select('_id').lean() : [];
+    const liveSet = new Set(liveTailors.map(t => String(t._id)));
+
+    rows = rows.map(order => {
+      const exists = order.tailorId && liveSet.has(String(order.tailorId));
+      if (!exists && order.status === 'Completed') {
+        return { ...order, tailorName: 'undefined' };
+      }
+      return order;
+    });
+
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -23,6 +37,14 @@ export async function getOrder(req, res) {
     if (!isOwner && !isTailor && !isAdmin) {
       return res.status(403).json({ error: 'You do not have access to this order.' });
     }
+
+    if (order.tailorId) {
+      const tailorExists = await Tailor.exists({ _id: order.tailorId });
+      if (!tailorExists && order.status === 'Completed') {
+        order.tailorName = 'undefined';
+      }
+    }
+
     res.json(order);
   } catch (error) {
     res.status(500).json({ error: error.message });

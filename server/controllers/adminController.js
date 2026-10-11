@@ -263,9 +263,51 @@ export async function updateAdminTailor(req, res) {
 
 export async function deleteAdminTailor(req, res) {
   try {
-    const result = await Tailor.deleteOne({ _id: req.params.id });
-    if (!result.deletedCount) return res.status(404).json({ error: 'Tailor not found.' });
-    res.json({ deleted: true });
+    const tailorId = req.params.id;
+    const tailor = await Tailor.findById(tailorId);
+    if (!tailor) return res.status(404).json({ error: 'Tailor not found.' });
+
+    // 1. Remove this tailor from all users' savedTailors arrays
+    await User.updateMany(
+      { 'savedTailors.tailorId': tailor._id },
+      { $pull: { savedTailors: { tailorId: tailor._id } } }
+    );
+
+    // 2. Cascade update for orders:
+    // If order was already Completed, set tailorName to 'undefined' or '(Deleted Atelier)'
+    await Order.updateMany(
+      { tailorId: tailor._id, status: 'Completed' },
+      { $set: { tailorName: 'undefined' } }
+    );
+
+    // If order was active/in-progress and tailor gets deleted, cancel it so customer is informed
+    await Order.updateMany(
+      { tailorId: tailor._id, status: { $nin: ['Completed', 'Cancelled'] } },
+      {
+        $set: {
+          status: 'Cancelled',
+          tailorName: 'undefined',
+        },
+        $push: {
+          history: ['Cancelled', new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }), 'Tailor atelier account removed'],
+        },
+      }
+    );
+
+    // 3. Remove tailor bids/quotes from B2B bulk requests
+    await BusinessRequest.updateMany(
+      { 'quotes.tailorId': tailor._id },
+      { $pull: { quotes: { tailorId: tailor._id } } }
+    );
+
+    // 4. Delete the tailor document
+    await Tailor.deleteOne({ _id: tailor._id });
+
+    res.json({
+      success: true,
+      deleted: true,
+      message: 'Tailor deleted and all user saved references and orders synchronized.',
+    });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

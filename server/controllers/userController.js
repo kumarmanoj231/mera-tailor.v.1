@@ -195,11 +195,36 @@ export async function updateLocation(req, res) {
  */
 export async function getUserDashboard(req, res) {
   try {
-    const orders = await Order.find({ clerkUserId: req.authUserId }).sort({ createdAt: -1 }).lean();
+    let orders = await Order.find({ clerkUserId: req.authUserId }).sort({ createdAt: -1 }).lean();
     const measurements = await Measurement.find({ clerkUserId: req.authUserId }).sort({ updatedAt: -1, createdAt: -1 }).lean();
     const userDoc = await User.findOne({ clerkUserId: req.authUserId }).lean();
+    
+    // Find saved tailors that ACTUALLY still exist in database
     const savedIds = (userDoc?.savedTailors || []).map(item => item.tailorId).filter(Boolean);
     const savedTailors = savedIds.length ? await Tailor.find({ _id: { $in: savedIds } }).lean() : [];
+    
+    // Self-healing clean-up: if any tailor was deleted from database, clean userDoc.savedTailors
+    if (savedTailors.length !== savedIds.length) {
+      const existingIdSet = new Set(savedTailors.map(t => String(t._id)));
+      const cleanedSavedTailors = (userDoc?.savedTailors || []).filter(item => existingIdSet.has(String(item.tailorId)));
+      await User.updateOne({ clerkUserId: req.authUserId }, { $set: { savedTailors: cleanedSavedTailors } });
+    }
+
+    // Process orders: verify if tailor exists in DB
+    // If tailor was deleted and order is Completed, show 'undefined' in tailorName as requested
+    const orderTailorIds = [...new Set(orders.map(o => o.tailorId).filter(Boolean))];
+    const existingOrderTailors = orderTailorIds.length
+      ? await Tailor.find({ _id: { $in: orderTailorIds } }).select('_id name').lean()
+      : [];
+    const existingTailorMap = new Map(existingOrderTailors.map(t => [String(t._id), t.name]));
+
+    orders = orders.map(order => {
+      const tailorExists = order.tailorId && existingTailorMap.has(String(order.tailorId));
+      if (!tailorExists && order.status === 'Completed') {
+        return { ...order, tailorName: 'undefined' };
+      }
+      return order;
+    });
 
     res.json({
       user: publicUser(req.appUser),
@@ -540,6 +565,14 @@ export async function listUserSavedTailors(req, res) {
     const userDoc = await User.findOne({ clerkUserId: req.authUserId }).lean();
     const ids = (userDoc?.savedTailors || []).map(item => item.tailorId).filter(Boolean);
     const rows = ids.length ? await Tailor.find({ _id: { $in: ids } }).lean() : [];
+    
+    // Self-healing synchronization: remove any deleted tailors from User doc
+    if (rows.length !== ids.length) {
+      const liveIdSet = new Set(rows.map(t => String(t._id)));
+      const cleanList = (userDoc?.savedTailors || []).filter(item => liveIdSet.has(String(item.tailorId)));
+      await User.updateOne({ clerkUserId: req.authUserId }, { $set: { savedTailors: cleanList } });
+    }
+    
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
