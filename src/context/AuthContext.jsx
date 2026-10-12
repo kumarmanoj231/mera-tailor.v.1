@@ -396,7 +396,7 @@ function ClerkSession({ children }) {
     const cachedRole = profile?.role || (typeof window !== 'undefined' ? localStorage.getItem('meraTailor.userRole') : null);
     const defaultTarget = cachedRole === 'admin' ? '/admin' : '/dashboard';
 
-    if (isSignedIn) {
+    if (isSignedIn && !options.forcePrompt) {
       const dest = options.redirectUrl || defaultTarget;
       if (window.location.pathname !== dest) {
         window.location.href = dest;
@@ -413,6 +413,15 @@ function ClerkSession({ children }) {
       signUpForceRedirectUrl: `${window.location.origin}/onboarding`,
       oidcPrompt: 'select_account',
     });
+  };
+
+  const handleSwitchAccount = async () => {
+    localStorage.removeItem('meraTailor.userRole');
+    await clerk.signOut();
+    setProfile(null);
+    setProfileError('');
+    setIsProfileLoaded(false);
+    handleOpenSignIn({ forcePrompt: true });
   };
 
   const handleSignOut = async (...args) => {
@@ -444,6 +453,7 @@ function ClerkSession({ children }) {
     profileError,
     openSignIn: handleOpenSignIn,
     openSignUp: handleOpenSignUp,
+    switchAccount: handleSwitchAccount,
     signOut: handleSignOut,
     getToken,
     refreshProfile,
@@ -514,6 +524,7 @@ function MissingClerkSession({ children }) {
     retryProfile: async () => null,
     openSignIn: handleOpenSignIn,
     openSignUp: handleOpenSignUp,
+    switchAccount: async () => {},
   };
 
   return (

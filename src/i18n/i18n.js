@@ -22,6 +22,7 @@ const resources = {
         orders: "My Orders",
         language: "Language",
         signIn: "Sign in",
+        switchAccount: "Switch account",
         getStarted: "Get Started",
         joinMeraTailor: "Join MeraTailor",
         hello: "Hello",
@@ -870,6 +871,9 @@ const resources = {
 
         signIn:
           "लॉग इन",
+
+        switchAccount:
+          "खाता बदलें",
 
         getStarted:
           "शुरू करें",

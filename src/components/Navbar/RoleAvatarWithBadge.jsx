@@ -1,6 +1,6 @@
 import React from "react";
 import { UserButton } from "@clerk/react";
-import { ShieldCheck, Scissors, Building2, UserRound } from "lucide-react";
+import { ArrowLeftRight, ShieldCheck, Scissors, Building2, UserRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../../context/AuthContext";
 
@@ -88,7 +88,7 @@ export default function RoleAvatarWithBadge({
   afterSignOutUrl = "/",
 }) {
   const { t } = useTranslation();
-  const { isSignedIn, isProfileLoaded, profileError, user, profile } = useAuth();
+  const { isSignedIn, isProfileLoaded, profileError, user, profile, switchAccount } = useAuth();
   const rolePending = isSignedIn && !role && (!isProfileLoaded || (!profile && Boolean(profileError)) || !profile);
   const effectiveRole = rolePending ? "loading" : (role || "customer");
   const meta = getRoleMeta(effectiveRole, t);
@@ -146,7 +146,15 @@ export default function RoleAvatarWithBadge({
                   userButtonAvatarImage: "rounded-full object-cover",
                 },
               }}
-            />
+            >
+              <UserButton.MenuItems>
+                <UserButton.Action
+                  label={t("navbar.switchAccount", "Switch account")}
+                  labelIcon={<ArrowLeftRight size={16} />}
+                  onClick={switchAccount}
+                />
+              </UserButton.MenuItems>
+            </UserButton>
           ) : (
             <img
               src={avatarSrc}
