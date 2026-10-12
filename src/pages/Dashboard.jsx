@@ -3498,13 +3498,14 @@ export default function Dashboard() {
                               </div>
                             </div>
 
-                            {/* Production Milestone Stepper for In Production / Accepted orders */}
-                            {["Accepted", "In Production", "Ready for Pickup", "Completed"].includes(req.status) && (
+                            {/* Production Milestone Stepper: ONLY FOR ENTERPRISE & BULK ORDERS */}
+                            {req.orderType === "bulk" && ["Accepted", "In Production", "Ready for Pickup", "Completed"].includes(req.status) && (
                               <div className="mt-4 pt-3 border-t border-stone-200">
                                 <div className="flex items-center justify-between text-xs mb-2">
                                   <span className="font-semibold text-stone-700 flex items-center gap-1.5">
                                     <Scissors size={12} className="text-[#8f2338]" />
                                     <span>Milestone: <strong className="capitalize text-stone-900">{(req.productionStatus || "not_started").replace(/_/g, " ")}</strong></span>
+                                    <span className="rounded-full bg-amber-100 text-amber-900 text-[9px] font-bold px-1.5 py-0.2 uppercase">Enterprise Contract</span>
                                   </span>
                                   <div className="flex items-center gap-2">
                                     <button
@@ -3597,16 +3598,20 @@ export default function Dashboard() {
 
                             {req.status === "Quote Received" && (
                               <div className="mt-3 flex items-center justify-between border-t border-stone-200 pt-3 text-xs text-stone-500">
-                                <span>⏳ {t("dashboardPage.waitingCustomerAccept", "Price quote sent. Waiting for customer confirmation.")}</span>
+                                <span>⏳ {t("dashboardPage.waitingCustomerAccept", "Price quote sent. Waiting for confirmation.")}</span>
                                 <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => openOrderChat(req)}
-                                    className="text-xs font-bold text-stone-600 hover:text-[#8f2338] hover:underline"
-                                  >
-                                    Chat with Customer
-                                  </button>
-                                  <span className="text-stone-300">·</span>
+                                  {req.orderType === "bulk" && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => openOrderChat(req)}
+                                        className="text-xs font-bold text-stone-600 hover:text-[#8f2338] hover:underline"
+                                      >
+                                        Chat with Client
+                                      </button>
+                                      <span className="text-stone-300">·</span>
+                                    </>
+                                  )}
                                   <button
                                     type="button"
                                     disabled={actingId === req.id}
@@ -3622,16 +3627,18 @@ export default function Dashboard() {
                             {req.status === "Accepted" && (
                               <div className="mt-4 flex items-center justify-between border-t border-stone-200 pt-3">
                                 <span className="text-xs font-semibold text-emerald-800">
-                                  ✓ {t("dashboardPage.customerAcceptedQuote", "Customer accepted quote. Ready to begin work.")}
+                                  ✓ {t("dashboardPage.customerAcceptedQuote", "Quote accepted. Ready to begin work.")}
                                 </span>
                                 <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenMilestoneModal(req)}
-                                    className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50"
-                                  >
-                                    Set Milestone
-                                  </button>
+                                  {req.orderType === "bulk" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenMilestoneModal(req)}
+                                      className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50"
+                                    >
+                                      Set Milestone
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     disabled={actingId === req.id}
@@ -3650,13 +3657,15 @@ export default function Dashboard() {
                                   🧵 {t("dashboardPage.garmentInProduction", "Garment is currently in production.")}
                                 </span>
                                 <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenMilestoneModal(req)}
-                                    className="rounded-xl border border-[#8f2338] bg-rose-50 px-3.5 py-2 text-xs font-bold text-[#8f2338] hover:bg-rose-100"
-                                  >
-                                    Update Milestone Stage
-                                  </button>
+                                  {req.orderType === "bulk" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenMilestoneModal(req)}
+                                      className="rounded-xl border border-[#8f2338] bg-rose-50 px-3.5 py-2 text-xs font-bold text-[#8f2338] hover:bg-rose-100"
+                                    >
+                                      Update Milestone Stage
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     disabled={actingId === req.id}
@@ -3675,13 +3684,15 @@ export default function Dashboard() {
                                   📦 {t("dashboardPage.readyAwaitingDelivery", "Ready for customer collection or delivery.")}
                                 </span>
                                 <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenMilestoneModal(req)}
-                                    className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50"
-                                  >
-                                    Milestone
-                                  </button>
+                                  {req.orderType === "bulk" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenMilestoneModal(req)}
+                                      className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50"
+                                    >
+                                      Milestone
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     disabled={actingId === req.id}
@@ -3698,14 +3709,18 @@ export default function Dashboard() {
                               <div className="mt-3 flex items-center justify-between border-t border-stone-200 pt-3 text-xs text-stone-500">
                                 <span>{req.status === "Completed" ? "🎉 Order fulfilled successfully." : "Order was declined or cancelled."}</span>
                                 <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => openOrderChat(req)}
-                                    className="text-xs font-bold text-stone-500 hover:text-stone-800"
-                                  >
-                                    View Chat
-                                  </button>
-                                  <span className="text-stone-300">·</span>
+                                  {req.orderType === "bulk" && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => openOrderChat(req)}
+                                        className="text-xs font-bold text-stone-500 hover:text-stone-800"
+                                      >
+                                        View Chat
+                                      </button>
+                                      <span className="text-stone-300">·</span>
+                                    </>
+                                  )}
                                   <button
                                     type="button"
                                     disabled={actingId === req.id}
