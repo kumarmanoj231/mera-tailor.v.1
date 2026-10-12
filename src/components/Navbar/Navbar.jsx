@@ -9,7 +9,6 @@ import DesktopActions from "./DesktopActions";
 import MobileMenu from "./MobileMenu";
 import LanguageToggle from "./LanguageToggle";
 import NavIconButton from "./NavIconButton";
-import RoleAvatarWithBadge from "./RoleAvatarWithBadge";
 import NotificationBell from "../notifications/NotificationBell";
 
 const Navbar = () => {
@@ -107,22 +106,7 @@ const Navbar = () => {
             />
           )}
 
-          {isSignedIn && (
-            <NavIconButton
-              to={userRole === "admin" ? "/admin" : "/dashboard"}
-              label={userRole === "admin" ? t("navbar.adminPortal", "Admin Portal") : t("navbar.dashboard", "Dashboard")}
-              type="dashboard"
-              mobile
-            />
-          )}
-
           <NotificationBell mobile />
-
-          {isSignedIn && (
-            <div className="pl-0.5">
-              <RoleAvatarWithBadge role={userRole} size="sm" showPill={false} />
-            </div>
-          )}
 
           {/* Mobile Menu Toggle Button */}
           <button

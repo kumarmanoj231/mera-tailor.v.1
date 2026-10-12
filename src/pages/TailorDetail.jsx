@@ -58,7 +58,7 @@ export default function TailorDetail() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
-  const { isSignedIn, profile, getToken, openSignUp } = useAuth();
+  const { isSignedIn, profile, user, getToken, openSignIn, openSignUp } = useAuth();
 
   const [tailor, setTailor] = useState(null);
   const [measurements, setMeasurements] = useState([]);

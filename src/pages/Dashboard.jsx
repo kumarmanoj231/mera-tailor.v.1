@@ -1508,7 +1508,7 @@ export default function Dashboard() {
         ========================================================== */}
         <section className="relative overflow-hidden rounded-3xl border border-stone-200 bg-white p-6 sm:p-7 shadow-xs">
           {/* Atelier Illustration on right side */}
-          <div className="pointer-events-none absolute right-4 sm:right-16 md:right-32 top-0 bottom-0 w-64 md:w-80 overflow-hidden opacity-90 hidden sm:block">
+          <div className="pointer-events-none absolute right-4 top-0 bottom-16 w-64 overflow-hidden opacity-45 hidden 2xl:block">
             <img
               src="/assets/tailor_banner_illustration.jpg"
               alt="Tailoring atelier"
@@ -1721,7 +1721,7 @@ export default function Dashboard() {
           {/* =========================================================
               TABS NAVIGATION BAR
           ========================================================== */}
-          <nav className="relative z-10 mt-6 flex items-center gap-1.5 overflow-x-auto border-t border-stone-100 pt-3 text-xs scrollbar-thin">
+          <nav className="relative z-10 mt-6 grid grid-cols-2 gap-1.5 border-t border-stone-100 pt-3 text-xs sm:flex sm:items-center sm:overflow-x-auto scrollbar-thin">
             {(role === "tailor"
               ? [
                   { id: "overview", label: t("tailorDashboard.tabOverview", "Studio Command Center"), icon: Activity, count: null },
@@ -1753,14 +1753,14 @@ export default function Dashboard() {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 font-bold transition-all ${
+                  className={`inline-flex min-w-0 items-center gap-2 rounded-xl px-2.5 py-2 text-left font-bold transition-all sm:w-auto sm:shrink-0 sm:px-3.5 ${
                     isActive
                       ? "bg-[#8f2338] text-white shadow-xs font-bold"
                       : "bg-transparent text-stone-600 hover:bg-stone-100 hover:text-stone-900"
                   }`}
                 >
                   <Icon size={14} />
-                  <span>{tab.label}</span>
+                  <span className="min-w-0 break-words leading-tight">{tab.label}</span>
                   {tab.count !== null && (
                     <span
                       className={`rounded-full px-1.5 py-0.2 text-[10px] font-semibold ${

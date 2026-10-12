@@ -441,7 +441,7 @@ export default function Orders() {
         ========================================================== */}
         <section className="relative overflow-hidden rounded-3xl border border-stone-200/90 bg-white p-6 sm:p-8 shadow-xs">
           {/* Atelier Illustration on Right */}
-          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-80 lg:w-96 overflow-hidden opacity-90 hidden sm:block">
+          <div className="pointer-events-none absolute right-0 top-0 bottom-20 w-72 overflow-hidden opacity-40 hidden 2xl:block">
             <img
               src="/assets/tailor_banner_illustration.jpg"
               alt="Tailor atelier illustration"
@@ -512,9 +512,9 @@ export default function Orders() {
 
           {/* Filter Status & Order Type Tabs Strip */}
           {isSignedIn && (
-            <div className="relative z-10 mt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-stone-100 pt-5 pb-1">
+            <div className="relative z-10 mt-6 flex flex-col gap-3 border-t border-stone-100 pt-5 pb-1 xl:flex-row xl:items-center xl:justify-between">
               {/* Order Type Toggle (Bulk vs Individual) */}
-              <div className="flex items-center gap-1.5 bg-stone-100/80 p-1 rounded-2xl shrink-0 self-start">
+              <div className="flex max-w-full items-center gap-1.5 overflow-x-auto bg-stone-100/80 p-1 rounded-2xl shrink-0 self-start">
                 <button
                   type="button"
                   onClick={() => setOrderTypeFilter("all")}
@@ -553,7 +553,7 @@ export default function Orders() {
               </div>
 
               {/* Status Tabs */}
-              <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin">
+              <div className="flex max-w-full items-center gap-2 overflow-x-auto scrollbar-thin">
               {[
                 {
                   id: "all",
