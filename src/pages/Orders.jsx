@@ -354,8 +354,10 @@ export default function Orders() {
     [activeOrdersList]
   );
   const quoteCount = useMemo(
-    () => activeOrdersList.filter((o) => ["Quote Received", "Quote Ready"].includes(o.status)).length,
-    [activeOrdersList]
+    () => activeOrdersList.filter((o) =>
+      (isTailor ? ["Request Sent", "Quote Received", "Quote Ready"] : ["Quote Received", "Quote Ready"]).includes(o.status)
+    ).length,
+    [activeOrdersList, isTailor]
   );
   const completedCount = useMemo(
     () => activeOrdersList.filter((o) => ["Ready for Pickup", "Ready", "Delivered", "Completed"].includes(o.status)).length,
@@ -378,7 +380,9 @@ export default function Orders() {
     if (statusFilter === "active") {
       list = list.filter((o) => ["In Production", "Accepted", "Confirmed", "Request Sent", "Pending Review"].includes(o.status));
     } else if (statusFilter === "quotes") {
-      list = list.filter((o) => ["Quote Received", "Quote Ready", "Request Sent"].includes(o.status));
+      list = list.filter((o) =>
+        (isTailor ? ["Quote Received", "Quote Ready", "Request Sent"] : ["Quote Received", "Quote Ready"]).includes(o.status)
+      );
     } else if (statusFilter === "completed") {
       list = list.filter((o) => ["Ready for Pickup", "Ready", "Delivered", "Completed"].includes(o.status));
     } else if (statusFilter === "cancelled") {
@@ -571,7 +575,7 @@ export default function Orders() {
                       },
                       {
                         id: "active",
-                        label: isHi ? "सिलाई प्रगति पर" : "In Production",
+                  label: isHi ? "सक्रिय ऑर्डर" : "Active Orders",
                         count: activeCount,
                         icon: <Scissors size={14} />,
                       },
@@ -768,7 +772,13 @@ export default function Orders() {
                       </div>
                     </div>
 
-                    {/* 4-Stage Horizontal Stepper with Continuous Line matching mockup */}
+                    {order.status === "Cancelled" ? (
+                      <div className="flex items-center gap-3 border-b border-stone-100 bg-stone-50 px-5 py-5 text-sm text-stone-600 sm:px-8">
+                        <AlertCircle size={18} className="shrink-0 text-stone-500" />
+                        <p>This order was cancelled and will not move through production milestones.</p>
+                      </div>
+                    ) : (
+                    /* 4-Stage Horizontal Stepper with Continuous Line matching mockup */
                     <div className="border-b border-stone-100 bg-[#fdfbf9] px-4 sm:px-8 py-5">
                       <div className="relative flex items-center justify-between">
                         {/* Continuous Background Line */}
@@ -826,6 +836,7 @@ export default function Orders() {
                         })}
                       </div>
                     </div>
+                    )}
 
                     {/* Bottom Row: Garment Swatch, Studio / Client Link, Tags, Price Quote & Action Buttons */}
                     <div className="p-5 sm:px-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">

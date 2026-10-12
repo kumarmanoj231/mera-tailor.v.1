@@ -1323,7 +1323,7 @@ export default function Dashboard() {
         id: "verified",
         title: t("tailorDashboard.stepVerified", "Admin Studio Verification"),
         done: isVerified,
-        desc: t("tailorDashboard.stepVerifiedDesc", "Official verification badge to rank #1 on Find Tailors directory"),
+        desc: t("tailorDashboard.stepVerifiedDesc", "Admin-reviewed verification badge for eligibility in Find Tailors discovery"),
       },
     ];
     const completedCount = steps.filter((s) => s.done).length;
@@ -1619,7 +1619,7 @@ export default function Dashboard() {
 
                 <p className="mt-1 text-xs sm:text-sm text-stone-500 line-clamp-1 max-w-lg">
                   {role === "tailor"
-                    ? `${tailorData?.owner || profile?.firstName || "Master Artisan"} · ${tailorData?.city || "Jaipur"}, ${tailorData?.area || "Rajasthan"} · ${tailorData?.experience || 5} years experience`
+                    ? `${tailorData?.owner || profile?.firstName || "Studio owner"} · ${tailorData?.city || "Jaipur"}, ${tailorData?.area || "Rajasthan"} · ${tailorData?.experience || 5} years experience`
                     : role === "business"
                     ? `${businessProfile?.businessType || "B2B Commercial Procurement"} · ${businessProfile?.city || "Jaipur, India"} · ${businessProfile?.gstin ? `GSTIN: ${businessProfile.gstin}` : "GSTIN Compliance Pending"}`
                     : profile?.bio ||
@@ -2419,7 +2419,7 @@ export default function Dashboard() {
                     <li className="flex items-center gap-2.5">
                       <Scissors size={14} className="text-[#8f2338] shrink-0" />
                       <span>
-                        {t("tailorDashboard.masterArtisan", "Master Artisan")}:{" "}
+                        {t("tailorDashboard.masterArtisan", "Studio Owner")}: {" "}
                         <strong className="text-stone-800">{tailorData?.owner || profile?.firstName || "Master Tailor"}</strong>
                       </span>
                     </li>
@@ -2495,7 +2495,7 @@ export default function Dashboard() {
                           {tailorData?.name || "Verified Master Studio"}
                         </h4>
                         <p className="mt-1 text-xs text-stone-600 leading-relaxed">
-                          {t("tailorDashboard.verifiedActiveText", "Your workshop profile is 100% verified and active. Your studio enjoys priority top placement on Find Tailors and full access to B2B commercial orders.")}
+                          {t("tailorDashboard.verifiedActiveText", "Your workshop profile has passed admin review and is listed in Find Tailors. Customers can compare your services, location, and reviews.")}
                         </p>
                       </div>
                     </div>
@@ -2517,7 +2517,7 @@ export default function Dashboard() {
                     <div className="flex items-center justify-between border-b border-stone-100 pb-3">
                       <span className="text-xs font-bold uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
                         <Sparkles size={14} className="text-amber-500" />
-                        {t("tailorDashboard.rankingBoosterTitle", "Discovery Ranking Booster")}
+                        {t("tailorDashboard.rankingBoosterTitle", "Studio Profile Completeness")}
                       </span>
                       <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
                         {tailorChecklist.score}% {t("tailorDashboard.score", "Score")}
@@ -2527,7 +2527,7 @@ export default function Dashboard() {
                     {/* Progress Bar */}
                     <div>
                       <div className="flex justify-between text-[11px] text-stone-500 mb-1">
-                        <span>{t("tailorDashboard.profileCompleteness", "Search Listing Strength")}</span>
+                        <span>{t("tailorDashboard.profileCompleteness", "Profile completeness")}</span>
                         <span className="font-bold text-stone-800">{tailorChecklist.completedCount} of {tailorChecklist.totalCount} completed</span>
                       </div>
                       <div className="h-2 w-full rounded-full bg-stone-100 overflow-hidden">
@@ -2562,7 +2562,7 @@ export default function Dashboard() {
                       💡 <strong>{t("tailorDashboard.trendTipHeading", "How to Trend on Find Tailors")}:</strong>{" "}
                       {t(
                         "tailorDashboard.trendTipDesc",
-                        "Verified studios with complete rate cards and workshop GPS rank #1 in customer search results and receive up to 5× more quote inquiries."
+                        "Verified studios are eligible to appear in customer discovery. Keep your rate card and workshop location current so customers can compare your atelier."
                       )}
                     </div>
 
@@ -3008,7 +3008,7 @@ export default function Dashboard() {
                                 </span>
                               </div>
                               <p className="text-xs sm:text-sm text-emerald-800 mt-1 max-w-xl">
-                                {t("tailorDashboard.verifiedTrendingNotice", "Your atelier is officially verified by platform administration and actively trending on Find Tailors (/find-tailors).")}
+                                {t("tailorDashboard.verifiedTrendingNotice", "Your atelier has passed admin review and is eligible to appear in Find Tailors discovery.")}
                               </p>
                             </div>
                           </div>
@@ -3186,7 +3186,7 @@ export default function Dashboard() {
                               <div className="flex items-center gap-2">
                                 <ShieldCheck size={18} className="text-emerald-600" />
                                 <h3 className="font-serif text-base font-bold text-stone-900">
-                                  {t("tailorDashboard.rankingStrength", "Discovery Ranking Strength")}
+                                  {t("tailorDashboard.rankingStrength", "Discovery Profile Completeness")}
                                 </h3>
                               </div>
                               <span className="text-xs font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 rounded-lg">
@@ -3200,10 +3200,10 @@ export default function Dashboard() {
                               </div>
                               <div>
                                 <h4 className="font-serif text-base font-bold text-emerald-950">
-                                  Top Search Visibility Active
+                                  Customer Discovery Active
                                 </h4>
                                 <p className="mt-1 text-xs text-stone-600 leading-relaxed">
-                                  All studio profile details, service rate cards, workshop location, and artisan verification credentials are confirmed. Customers in your service radius find your atelier at the top of results.
+                                  Your studio is verified and listed in customer discovery. Search results are ordered by distance or rating, so ranking can vary by customer and location.
                                 </p>
                               </div>
                             </div>

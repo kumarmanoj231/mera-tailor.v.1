@@ -49,7 +49,7 @@ import { useAuth } from "../../context/AuthContext";
 export default function TailorHomeSection() {
   const { t, i18n } = useTranslation();
   const isHi = i18n.language === "hi";
-  const { profile, user, getToken } = useAuth();
+  const { profile, user, getToken, isSignedIn, isProfileLoaded } = useAuth();
   const navigate = useNavigate();
 
   const [activeSidebarTab, setActiveSidebarTab] = useState("home");
@@ -112,6 +112,12 @@ export default function TailorHomeSection() {
 
   // Load live tailor studio, orders, B2B RFQs, and earnings from database
   useEffect(() => {
+    if (!isProfileLoaded) return;
+    if (!isSignedIn) {
+      setLoading(false);
+      return;
+    }
+
     let isMounted = true;
 
     async function loadTailorData() {
@@ -175,24 +181,12 @@ export default function TailorHomeSection() {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [getToken]);
+  }, [getToken, isSignedIn, isProfileLoaded]);
 
   const isVerified = Boolean(
     tailorProfile?.verified === true || tailorProfile?.verificationStatus === "verified"
   );
   const isPending = tailorProfile?.verificationStatus === "pending";
-
-  // Real Database Earnings Calculations
-  const completedRevenue = ordersList
-    .filter((o) => o.status === "Completed")
-    .reduce((sum, o) => sum + (Number(o.quotePrice ?? o.price) || 0), 0);
-  const activePipelineRevenue = ordersList
-    .filter((o) => ["In Production", "Accepted", "Ready for Pickup", "Quote Received"].includes(o.status))
-    .reduce((sum, o) => sum + (Number(o.quotePrice ?? o.price) || 0), 0);
-  const totalRevenue =
-    liveEarnings?.totalEarnings !== undefined
-      ? liveEarnings.totalEarnings
-      : completedRevenue + activePipelineRevenue;
 
   // Real Database Pipeline Stage Counts
   const countInquiries =
@@ -231,56 +225,35 @@ export default function TailorHomeSection() {
       ? Math.round((tailorProfile.services.reduce((acc, s) => acc + (s.days || 5), 0) / tailorProfile.services.length) * 10) / 10
       : 0);
 
-  // Time-window dynamic revenue calculations from database
-  const displayedRevenue =
-    timeRange === "7d"
-      ? (liveEarnings?.earnings7d ?? 0)
-      : timeRange === "90d"
-      ? (liveEarnings?.earnings90d ?? 0)
-      : (liveEarnings?.earnings30d ?? totalRevenue);
-
-  const growthText =
-    totalRevenue > 0
-      ? `₹${totalRevenue.toLocaleString("en-IN")} total volume`
-      : "No order volume recorded";
-
-  // Dynamic SVG chart shapes based on active timeRange
-  const chartPoints =
-    timeRange === "7d"
-      ? {
-          path: "M 0,135 Q 100,110 200,85 T 350,45 T 500,20 L 500,150 L 0,150 Z",
-          line: "M 0,135 Q 100,110 200,85 T 350,45 T 500,20",
-          dots: [
-            { cx: 120, cy: 105 },
-            { cx: 250, cy: 75 },
-            { cx: 380, cy: 40 },
-            { cx: 500, cy: 20 },
-          ],
-          labels: ["Day 1-2", "Day 3-4", "Day 5-6", "Today (Day 7)"],
-        }
-      : timeRange === "90d"
-      ? {
-          path: "M 0,140 Q 90,130 180,95 T 320,60 T 440,25 L 500,10 L 500,150 L 0,150 Z",
-          line: "M 0,140 Q 90,130 180,95 T 320,60 T 440,25 L 500,10",
-          dots: [
-            { cx: 140, cy: 110 },
-            { cx: 280, cy: 75 },
-            { cx: 400, cy: 35 },
-            { cx: 500, cy: 10 },
-          ],
-          labels: ["Month 1 (Jul)", "Month 2 (Aug)", "Month 3 (Sep)", "Current (Oct)"],
-        }
-      : {
-          path: "M 0,130 Q 80,120 150,90 T 300,50 T 420,30 L 500,15 L 500,150 L 0,150 Z",
-          line: "M 0,130 Q 80,120 150,90 T 300,50 T 420,30 L 500,15",
-          dots: [
-            { cx: 150, cy: 90 },
-            { cx: 300, cy: 50 },
-            { cx: 420, cy: 30 },
-            { cx: 500, cy: 15 },
-          ],
-          labels: ["Week 1", "Week 2", "Week 3", "Week 4 (Current)"],
-        };
+  const chartRangeDays = Number(timeRange.replace("d", ""));
+  const chartBucketCount = chartRangeDays === 7 ? 7 : 6;
+  const chartNow = Date.now();
+  const chartStart = chartNow - chartRangeDays * 24 * 60 * 60 * 1000;
+  const chartBucketMs = (chartNow - chartStart) / chartBucketCount;
+  const chartValues = Array(chartBucketCount).fill(0);
+  const chartOrders = ordersList.filter((order) => {
+    if (order.status === "Cancelled") return false;
+    const createdAt = order.createdAt ? new Date(order.createdAt).getTime() : chartNow;
+    if (!Number.isFinite(createdAt) || createdAt < chartStart || createdAt > chartNow) return false;
+    const bucketIndex = Math.min(chartBucketCount - 1, Math.floor((createdAt - chartStart) / chartBucketMs));
+    chartValues[bucketIndex] += Number(order.quotePrice ?? order.price) || 0;
+    return true;
+  });
+  const displayedRevenue = chartValues.reduce((sum, value) => sum + value, 0);
+  const chartMax = Math.max(...chartValues, 0);
+  const chartDots = chartValues.map((value, index) => ({
+    cx: ((index + 0.5) / chartBucketCount) * 500,
+    cy: chartMax > 0 ? 130 - (value / chartMax) * 105 : 130,
+  }));
+  const chartPoints = {
+    dots: chartDots,
+    line: chartDots.map((point, index) => `${index === 0 ? "M" : "L"} ${point.cx} ${point.cy}`).join(" "),
+    path: `M 0 150 ${chartDots.map((point) => `L ${point.cx} ${point.cy}`).join(" ")} L 500 150 Z`,
+    labels: chartValues.map((_, index) => {
+      const periodDate = new Date(chartStart + (index + 0.5) * chartBucketMs);
+      return periodDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    }),
+  };
 
   // Quick Action Handlers
   function handleOpenStudioModal() {
@@ -558,7 +531,7 @@ export default function TailorHomeSection() {
                 <p className="mt-2.5 text-xs sm:text-sm text-stone-600 leading-relaxed max-w-lg">
                   {t(
                     "tailorDashboard.consoleSubtitle",
-                    "Manage your bespoke client orders, expand workshop capacity with high-value B2B batch orders, and grow your verified local ranking."
+                    "Manage client orders, update your studio services, and review new tailoring opportunities."
                   )}
                 </p>
 
@@ -697,14 +670,14 @@ export default function TailorHomeSection() {
                 </div>
               </div>
               <p className="mt-2.5 text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                Atelier Tier
+                Verification Status
               </p>
               <p className="font-sans text-base sm:text-lg font-bold text-stone-900 mt-0.5 flex items-center gap-1">
-                {isVerified ? "Verified Master" : "Standard"}
+                {isVerified ? "Verified" : "Not verified"}
                 {isVerified && <CheckCircle2 size={14} className="text-emerald-600 fill-emerald-100" />}
               </p>
               <p className="text-[10px] text-stone-400 mt-0.5">
-                {isVerified ? "Top Rank in Discovery" : "Unlock verified badge"}
+                {isVerified ? "Listed in Discovery" : "Apply for verification"}
               </p>
             </div>
 
@@ -719,7 +692,7 @@ export default function TailorHomeSection() {
                 Client Trust
               </p>
               <p className="font-sans text-base sm:text-lg font-bold text-stone-900 mt-0.5">
-                {tailorProfile?.rating ? `${tailorProfile.rating} ★` : "New Atelier"}
+                {tailorProfile?.rating ? `${tailorProfile.rating} ★` : "No rating yet"}
               </p>
               <p className="text-[10px] text-stone-400 mt-0.5">
                 {tailorProfile?.reviews ? `${tailorProfile.reviews} reviews` : "No reviews yet"}
@@ -795,7 +768,7 @@ export default function TailorHomeSection() {
                     Boost Your Workshop: Become a Verified MeraTailor Atelier
                   </h3>
                   <p className="mt-1 text-xs text-stone-600 leading-relaxed">
-                    Verified tailors receive up to 5x more customer bookings, appear at the top of local customer searches, and gain exclusive rights to submit bids on B2B contracts.
+                    Verified studios are eligible to appear in Find Tailors discovery. Keep your services and workshop location accurate so customers can compare your atelier.
                   </p>
                 </div>
               </div>
@@ -1205,7 +1178,7 @@ export default function TailorHomeSection() {
                     Workshop Capacity & Earnings Analytics
                   </h3>
                   <p className="text-xs text-stone-500">
-                    Real-time stitching velocity, revenue trends, and turnaround performance.
+                    Order value, workshop capacity, and service lead times.
                   </p>
                 </div>
               </div>
@@ -1231,28 +1204,30 @@ export default function TailorHomeSection() {
 
             {/* Graphs Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-              {/* Revenue Growth Trend Area Chart (7 cols) */}
+              {/* Order value by creation period (7 cols) */}
               <div className="lg:col-span-7 rounded-2xl border border-stone-100 bg-[#fdfbf9] p-5 shadow-2xs">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                      Estimated Revenue ({timeRange === "7d" ? "Past 7 Days" : timeRange === "30d" ? "Past 30 Days" : "Past 90 Days"})
+                      Non-cancelled order value · {timeRange === "7d" ? "Past 7 Days" : timeRange === "30d" ? "Past 30 Days" : "Past 90 Days"}
                     </span>
                     <p className="font-sans text-2xl font-black text-stone-900">
                       ₹{displayedRevenue.toLocaleString("en-IN")}{" "}
                       <span className="text-xs font-bold text-emerald-600 ml-1">
-                        {growthText}
+                        {chartOrders.length} {chartOrders.length === 1 ? "order" : "orders"}
                       </span>
                     </p>
                   </div>
-                  <span className="rounded-lg bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
-                    {displayedRevenue > 0 ? "Profitable" : "Active Atelier"}
+                  <span className="rounded-lg bg-stone-100 border border-stone-200 px-2 py-0.5 text-[11px] font-bold text-stone-700">
+                    Order value
                   </span>
                 </div>
 
-                {/* SVG Area Line Chart */}
-                <div className="h-44 w-full relative">
-                  <svg className="w-full h-full overflow-visible" viewBox="0 0 500 150">
+                {chartOrders.length > 0 ? (
+                  <>
+                    {/* Data-backed order value trend */}
+                    <div className="h-44 w-full relative">
+                      <svg className="w-full h-full overflow-visible" viewBox="0 0 500 150" role="img" aria-label={`Order value trend for the past ${chartRangeDays} days`}>
                     <defs>
                       <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#8f2338" stopOpacity="0.25" />
@@ -1282,16 +1257,22 @@ export default function TailorHomeSection() {
 
                     {/* Data Points */}
                     {chartPoints.dots.map((pt, i) => (
-                      <circle key={i} cx={pt.cx} cy={pt.cy} r="5" fill="#8f2338" stroke="#ffffff" strokeWidth="2" />
+                      <circle key={i} cx={pt.cx} cy={pt.cy} r="4" fill="#8f2338" stroke="#ffffff" strokeWidth="2" />
                     ))}
-                  </svg>
-                </div>
+                      </svg>
+                    </div>
 
-                <div className="flex justify-between text-[11px] font-semibold text-stone-400 mt-2 px-1">
-                  {chartPoints.labels.map((lbl, i) => (
-                    <span key={i}>{lbl}</span>
-                  ))}
-                </div>
+                    <div className="flex justify-between gap-1 text-[10px] font-semibold text-stone-400 mt-2 px-1">
+                      {chartPoints.labels.map((lbl, i) => (
+                        <span key={i}>{lbl}</span>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex h-44 items-center justify-center rounded-xl border border-dashed border-stone-200 bg-white/60 px-4 text-center text-xs text-stone-500">
+                    No non-cancelled orders in this period yet.
+                  </div>
+                )}
               </div>
 
               {/* Stitching Capacity & Speed Breakdown (5 cols) */}
@@ -1328,14 +1309,11 @@ export default function TailorHomeSection() {
 
                 <div className="rounded-2xl border border-stone-100 bg-[#fdfbf9] p-4 shadow-2xs">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="font-bold text-stone-700">Turnaround Speed</span>
+                    <span className="font-bold text-stone-700">Average Service Lead Time</span>
                     <span className="font-extrabold text-emerald-700">{avgLeadDays} Days Avg</span>
                   </div>
-                  <div className="mt-2 h-2.5 w-full rounded-full bg-stone-200 overflow-hidden">
-                    <div className="h-full bg-emerald-600 rounded-full" style={{ width: "90%" }} />
-                  </div>
                   <p className="mt-1.5 text-[11px] text-stone-500">
-                    Average turnaround across bespoke commissions and active batch production.
+                    Average turnaround listed across your rate-card services.
                   </p>
                 </div>
               </div>
@@ -1396,7 +1374,7 @@ export default function TailorHomeSection() {
               </div>
 
               <div className="rounded-2xl border border-rose-100 bg-[#fdf4f4] p-3.5 text-xs text-stone-700 leading-relaxed">
-                🛡️ <strong>What happens after submission:</strong> Administrators verify your shop address and phone. Once approved, your studio is featured with the green verified badge and ranks #1 on Find Tailors.
+                🛡️ <strong>What happens after submission:</strong> Administrators review your workshop details and contact information. Approved studios can appear in Find Tailors discovery; result order varies by location and customer rating.
               </div>
 
               <div className="flex justify-end gap-2.5 pt-2">
