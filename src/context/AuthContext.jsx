@@ -335,10 +335,16 @@ function ClerkSession({ children }) {
   };
 
   const handleOpenSignUp = (role) => {
-    if (isSignedIn && profile?.onboardingCompleted) {
-      const dest = profile.role === 'admin' ? '/admin' : '/dashboard';
-      if (window.location.pathname !== dest) {
-        window.location.href = dest;
+    if (isSignedIn) {
+      if (profile?.onboardingCompleted) {
+        const dest = profile.role === 'admin' ? '/admin' : '/dashboard';
+        if (window.location.pathname !== dest) {
+          window.location.href = dest;
+        }
+      } else {
+        if (window.location.pathname !== '/onboarding') {
+          window.location.href = '/onboarding';
+        }
       }
       return;
     }
@@ -346,13 +352,23 @@ function ClerkSession({ children }) {
     setAuthMode('signUp');
   };
 
-  const handleOpenSignIn = () => {
+  const handleOpenSignIn = (options = {}) => {
     setAuthMode(null);
     setPendingRole(null);
-    const cachedRole = typeof window !== 'undefined' ? localStorage.getItem('meraTailor.userRole') : null;
-    const targetUrl = cachedRole === 'admin'
-      ? `${window.location.origin}/admin`
-      : `${window.location.origin}/dashboard`;
+    const cachedRole = profile?.role || (typeof window !== 'undefined' ? localStorage.getItem('meraTailor.userRole') : null);
+    const defaultTarget = cachedRole === 'admin' ? '/admin' : '/dashboard';
+
+    if (isSignedIn) {
+      const dest = options.redirectUrl || defaultTarget;
+      if (window.location.pathname !== dest) {
+        window.location.href = dest;
+      }
+      return;
+    }
+
+    const redirectPath = options.redirectUrl || (window.location.pathname !== '/login' ? window.location.pathname : defaultTarget);
+    const targetUrl = redirectPath.startsWith('http') ? redirectPath : `${window.location.origin}${redirectPath}`;
+
     clerk.openSignIn({
       forceRedirectUrl: targetUrl,
       fallbackRedirectUrl: targetUrl,

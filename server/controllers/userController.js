@@ -15,6 +15,9 @@ export const publicUser = user => ({
   imageUrl: user.imageUrl || user.avatar || '',
   preferredLanguage: user.preferredLanguage || 'en',
   role: user.role || 'customer',
+  roleConfirmed: Boolean(user.roleConfirmed || user.onboardingCompleted || user.role === 'admin'),
+  accountStatus: user.accountStatus || (user.disabled ? 'suspended' : 'active'),
+  profileCompleted: Boolean(user.profileCompleted || user.onboardingCompleted),
   onboardingCompleted: Boolean(user.onboardingCompleted),
   roleInconsistent: !['customer', 'tailor', 'business', 'admin'].includes(user.role),
   createdAt: user.createdAt,
@@ -78,7 +81,13 @@ export async function completeOnboarding(req, res) {
       });
     }
 
-    const values = { role, onboardingCompleted: true };
+    const values = {
+      role,
+      roleConfirmed: true,
+      profileCompleted: true,
+      accountStatus: 'active',
+      onboardingCompleted: true,
+    };
     if (['en', 'hi'].includes(req.body.preferredLanguage)) {
       values.preferredLanguage = req.body.preferredLanguage;
     }

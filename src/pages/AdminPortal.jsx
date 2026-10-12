@@ -1127,7 +1127,7 @@ export default function AdminPortal() {
               Please sign in with administrator credentials to access the master management center.
             </p>
             <button
-              onClick={openSignUp}
+              onClick={openSignIn}
               className="mt-6 w-full rounded-xl bg-[#8f2338] hover:bg-[#761c30] text-white py-3 text-xs font-bold shadow-xs transition cursor-pointer"
             >
               Sign In as Admin

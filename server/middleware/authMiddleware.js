@@ -24,8 +24,13 @@ export async function syncAppUser(req, res, next) {
     };
     const adminIds = (process.env.CLERK_ADMIN_IDS || '').split(',').map(value => value.trim()).filter(Boolean);
     const isBootstrappedAdmin = adminIds.includes(externalUser.id);
-    if (isBootstrappedAdmin) { profile.role = 'admin'; profile.onboardingCompleted = true; }
-    const update = { $set: profile, $setOnInsert: { preferredLanguage: 'en' } };
+    if (isBootstrappedAdmin) {
+      profile.role = 'admin';
+      profile.roleConfirmed = true;
+      profile.onboardingCompleted = true;
+      profile.profileCompleted = true;
+    }
+    const update = { $set: profile, $setOnInsert: { preferredLanguage: 'en', accountStatus: 'active' } };
     if (!isBootstrappedAdmin) {
       const metaRole = externalUser.publicMetadata?.appRole;
       if (['customer', 'tailor', 'business'].includes(metaRole)) {

@@ -466,7 +466,7 @@ export default function Bulk() {
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             {!isSignedIn ? (
               <button
-                onClick={openSignUp}
+                onClick={openSignIn}
                 className="rounded-xl bg-[#8f2338] text-white px-6 py-3 text-xs sm:text-sm font-bold shadow-xs hover:bg-[#761c30] transition"
               >
                 Sign In as Business or Atelier

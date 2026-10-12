@@ -14,21 +14,32 @@ import TailorHomeSection from "../components/home/TailorHomeSection";
 import BusinessHomeSection from "../components/home/BusinessHomeSection";
 import AdminHomeSection from "../components/home/AdminHomeSection";
 import CustomerHomeSection from "../components/home/CustomerHomeSection";
+import DashboardSkeleton from "../components/common/DashboardSkeleton";
 
 const Home = () => {
-  const { openSignUp, isSignedIn, profile, user } = useAuth();
+  const { openSignUp, isSignedIn, isProfileLoaded, profile, user } = useAuth();
 
   const handleSignUp = () => {
     openSignUp();
   };
 
-  const userRole = isSignedIn ? (profile?.role || user?.publicMetadata?.appRole || "customer") : "guest";
+  const cachedRole = typeof window !== "undefined" ? localStorage.getItem("meraTailor.userRole") : null;
+  const userRole = isSignedIn
+    ? (profile?.role || cachedRole || user?.publicMetadata?.appRole || (isProfileLoaded ? "customer" : null))
+    : "guest";
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#fbf9f5] text-[#111827] selection:bg-[#f59e0b] selection:text-stone-900">
       <Navbar />
 
       <main>
+        {/* Loading skeleton while profile is resolving */}
+        {isSignedIn && !isProfileLoaded && !userRole && (
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+            <DashboardSkeleton />
+          </div>
+        )}
+
         {/* =====================================================
             1. TAILOR VIEW: Atelier cockpit, pipeline, bulk feed
         ====================================================== */}

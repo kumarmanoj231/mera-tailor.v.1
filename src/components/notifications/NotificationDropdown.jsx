@@ -331,7 +331,7 @@ const NotificationDropdown = ({ onClose, triggerRef }) => {
                 type="button"
                 onClick={() => {
                   onClose();
-                  openSignUp();
+                  openSignIn();
                 }}
                 className="mt-4 rounded-xl bg-[#8f2338] px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-[#781c2e] active:scale-95 cursor-pointer"
               >

@@ -970,7 +970,7 @@ export default function TailorDetail() {
                     </div>
                     <button
                       type="button"
-                      onClick={openSignUp}
+                      onClick={openSignIn}
                       className="shrink-0 rounded-xl bg-[#8f2338] px-4 py-2 text-xs font-bold text-white shadow-2xs hover:bg-[#761c30] transition cursor-pointer"
                     >
                       Sign In to Review →
@@ -1182,7 +1182,7 @@ export default function TailorDetail() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => openSignUp()}
+                      onClick={() => openSignIn()}
                       className="shrink-0 rounded-xl bg-[#8f2338] px-3 py-1.5 text-xs font-bold text-white shadow-2xs hover:bg-[#781c2e] transition"
                     >
                       Sign In

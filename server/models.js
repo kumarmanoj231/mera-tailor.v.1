@@ -66,6 +66,13 @@ const userSchema = new mongoose.Schema(
       enum: ["customer", "tailor", "business", "admin"],
       default: "customer",
     },
+    roleConfirmed: { type: Boolean, default: false },
+    accountStatus: {
+      type: String,
+      enum: ["active", "pending", "suspended"],
+      default: "active",
+    },
+    profileCompleted: { type: Boolean, default: false },
     onboardingCompleted: { type: Boolean, default: false },
     disabled: { type: Boolean, default: false },
     primaryLocation: { type: pointSchema, default: undefined },

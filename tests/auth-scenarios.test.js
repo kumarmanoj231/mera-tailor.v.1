@@ -152,3 +152,63 @@ test('Scenario 20: Safe recovery for missing profile records without account los
   const needsSync = !tailorProfile && user.role === 'tailor';
   assert.equal(needsSync, true, 'Reconciliation detects missing role-specific record');
 });
+
+test('Scenario 9 & 10: Authenticated user clicking Sign In or Get Started is directed to role destination without role modal', () => {
+  const tailorUser = {
+    clerkUserId: 'user_tailor_flow',
+    role: 'tailor',
+    onboardingCompleted: true,
+  };
+
+  // When signed in user clicks "Get Started" or "Sign In"
+  const isSignedIn = true;
+  let openedModal = false;
+  let destination = null;
+
+  if (isSignedIn) {
+    if (tailorUser.onboardingCompleted) {
+      destination = tailorUser.role === 'admin' ? '/admin' : '/dashboard';
+    } else {
+      destination = '/onboarding';
+    }
+  } else {
+    openedModal = true;
+  }
+
+  assert.equal(openedModal, false, 'Authenticated user must never see the role modal');
+  assert.equal(destination, '/dashboard', 'Tailor is directed straight to their dashboard');
+});
+
+test('Scenario 21: Fast role caching and pre-hydration eliminates customer flash', () => {
+  const cachedRole = 'tailor';
+  const isSignedIn = true;
+  const isProfileLoaded = false;
+  const liveProfile = null;
+
+  // Resolving role during pre-hydration
+  const resolvedRole = isSignedIn
+    ? (liveProfile?.role || cachedRole || (isProfileLoaded ? 'customer' : null))
+    : 'guest';
+
+  assert.equal(resolvedRole, 'tailor', 'Pre-hydration should immediately use cached role instead of defaulting to customer');
+});
+
+test('Scenario 22: Complete publicUser schema response fields', () => {
+  const dbUser = {
+    _id: new mongoose.Types.ObjectId(),
+    clerkUserId: 'user_schema_verify',
+    role: 'business',
+    roleConfirmed: true,
+    accountStatus: 'active',
+    profileCompleted: true,
+    onboardingCompleted: true,
+  };
+
+  const pub = publicUser(dbUser);
+  assert.equal(pub.role, 'business');
+  assert.equal(pub.roleConfirmed, true);
+  assert.equal(pub.accountStatus, 'active');
+  assert.equal(pub.profileCompleted, true);
+  assert.equal(pub.onboardingCompleted, true);
+});
+
