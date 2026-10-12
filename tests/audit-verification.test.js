@@ -34,6 +34,11 @@ test('Security & Validation: validateOrderId dual lookup support', () => {
   validateOrderId({ params: { id: 'MT-A1B2C3D4' } }, {}, () => { passed1 = true; });
   assert.equal(passed1, true, 'MT- custom ID should pass validation');
 
+  // Test MT-B2B- style bulk contract ID
+  let passedB2B = false;
+  validateOrderId({ params: { id: 'MT-B2B-ACD00E34' } }, {}, () => { passedB2B = true; });
+  assert.equal(passedB2B, true, 'MT-B2B- custom ID should pass validation');
+
   // Test MongoDB 24-hex ObjectId
   let passed2 = false;
   validateOrderId({ params: { id: '507f1f77bcf86cd799439011' } }, {}, () => { passed2 = true; });

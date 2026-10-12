@@ -6,7 +6,7 @@ import { createNotification } from './notificationController.js';
 function buildOrderQuery(paramId, extra = {}) {
   const isObjectId = mongoose.isValidObjectId(paramId);
   const idQuery = isObjectId
-    ? { $or: [{ id: paramId }, { _id: paramId }] }
+    ? { $or: [{ id: paramId }, { _id: paramId }, { sourceRequirement: paramId }] }
     : { id: paramId };
   if (Object.keys(extra).length === 0) return idQuery;
   return { $and: [idQuery, extra] };
@@ -188,7 +188,10 @@ export async function createOrder(req, res) {
 
 async function orderBelongsToTailor(req, order) {
   if (req.appUser?.role === 'admin') return true;
-  const tailor = await Tailor.findOne({ ownerClerkUserId: req.authUserId }).select('_id').lean();
+  let tailor = await Tailor.findOne({ ownerClerkUserId: req.authUserId }).select('_id').lean();
+  if (!tailor && req.appUser?.phone) {
+    tailor = await Tailor.findOne({ phone: req.appUser.phone }).select('_id').lean();
+  }
   return Boolean(tailor && String(tailor._id) === String(order.tailorId));
 }
 
@@ -444,6 +447,10 @@ export async function updateProductionMilestone(req, res) {
   try {
     const order = await Order.findOne(buildOrderQuery(req.params.id));
     if (!order || !(await orderBelongsToTailor(req, order))) return res.status(404).json({ error: 'Order not found.' });
+
+    if (order.orderType !== 'bulk') {
+      return res.status(400).json({ error: 'Production milestones are only available for enterprise and bulk contracts.' });
+    }
 
     const milestone = String(req.body?.milestone || '').trim();
     const validMilestones = [

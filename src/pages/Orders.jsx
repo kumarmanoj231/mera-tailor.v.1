@@ -1052,8 +1052,8 @@ export default function Orders() {
                             <span>Messages</span>
                           </button>
 
-                          {/* Tailor Milestone Button if in production */}
-                          {isTailor && ["In Production", "Confirmed", "Accepted"].includes(order.status) && (
+                          {/* Tailor Milestone Button: ONLY FOR ENTERPRISE & BULK ORDERS */}
+                          {isTailor && order.orderType === "bulk" && ["In Production", "Confirmed", "Accepted"].includes(order.status) && (
                             <button
                               type="button"
                               onClick={() => {

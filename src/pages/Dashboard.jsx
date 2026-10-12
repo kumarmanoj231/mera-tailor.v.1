@@ -373,19 +373,51 @@ export default function Dashboard() {
   // Deep-link auto-selector when navigating to /dashboard?tab=orders&orderId=...
   useEffect(() => {
     const targetOrderId = searchParams.get("orderId");
-    if (targetOrderId && orders.length > 0) {
-      const match = orders.find(
-        (o) => o.id === targetOrderId || o._id === targetOrderId
-      );
-      if (match) {
-        if (role === "business") {
-          setSelectedContractDetails(match);
-        } else {
-          setSelectedOrderDetails(match);
-        }
+    if (!targetOrderId) return;
+
+    const allCandidates = [...orders, ...tailorRequests];
+    const match = allCandidates.find(
+      (o) =>
+        o.id === targetOrderId ||
+        String(o._id) === targetOrderId ||
+        String(o.sourceRequirement) === targetOrderId ||
+        (o.sourceRequirement && typeof o.sourceRequirement === "object" && String(o.sourceRequirement._id) === targetOrderId)
+    );
+
+    if (match) {
+      if (role === "business") {
+        setSelectedContractDetails(match);
+      } else {
+        setSelectedOrderDetails(match);
       }
+    } else if (isSignedIn) {
+      // Proactively fetch by target identifier if not yet in client state
+      let cancelled = false;
+      (async () => {
+        try {
+          const token = await getToken();
+          const res = await fetch(`/api/orders/${encodeURIComponent(targetOrderId)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok && !cancelled) {
+            const fetched = await res.json();
+            if (fetched && (fetched.id || fetched._id)) {
+              if (role === "business") {
+                setSelectedContractDetails(fetched);
+              } else {
+                setSelectedOrderDetails(fetched);
+              }
+            }
+          }
+        } catch {
+          // Ignore if order not found
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [searchParams, orders, role]);
+  }, [searchParams, orders, tailorRequests, role, isSignedIn, getToken]);
 
   /* =========================================================
      CRUD: PROFILE & PREFERENCES
@@ -818,11 +850,13 @@ export default function Dashboard() {
      ORDER CONVERSATION & DIRECT ATELIER CHAT
   ========================================================== */
   async function openOrderChat(order) {
+    if (!order) return;
     setChatOrder(order);
     setLoadingMessages(true);
     try {
       const token = await getToken();
-      const res = await fetch(`/api/orders/${encodeURIComponent(order.id || order._id)}/messages`, {
+      const orderRef = order._id || order.id;
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderRef)}/messages`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -841,7 +875,8 @@ export default function Dashboard() {
     setSendingMessage(true);
     try {
       const token = await getToken();
-      const res = await fetch(`/api/orders/${encodeURIComponent(chatOrder.id || chatOrder._id)}/messages`, {
+      const orderRef = chatOrder._id || chatOrder.id;
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderRef)}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ content: newMessageText.trim() }),
@@ -883,7 +918,8 @@ export default function Dashboard() {
     setIsUpdatingMilestone(true);
     try {
       const token = await getToken();
-      const res = await fetch(`/api/orders/${encodeURIComponent(milestoneModalOrder.id || milestoneModalOrder._id)}/milestone`, {
+      const orderRef = milestoneModalOrder._id || milestoneModalOrder.id;
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderRef)}/milestone`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -926,7 +962,8 @@ export default function Dashboard() {
     setActingId(order.id);
     try {
       const token = await getToken();
-      const res = await fetch(`/api/orders/${encodeURIComponent(order.id || order._id)}/status`, {
+      const orderRef = order._id || order.id;
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderRef)}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({

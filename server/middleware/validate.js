@@ -21,8 +21,8 @@ export function validateObjectId(paramName = 'id') {
  * Validates order reference identifiers (either MT-XXXXXXXX or 24 hex chars)
  */
 export function validateOrderId(req, res, next) {
-  const value = req.params.id;
-  const isCustomId = /^MT-[A-Z0-9]{6,12}$/i.test(value);
+  const value = String(req.params.id || '').trim();
+  const isCustomId = /^MT[-A-Za-z0-9_]{3,32}$/i.test(value);
   const isObjectId = /^[a-f\d]{24}$/i.test(value);
 
   if (!value || (!isCustomId && !isObjectId)) {
@@ -31,6 +31,7 @@ export function validateOrderId(req, res, next) {
       code: 'INVALID_ORDER_ID'
     });
   }
+  req.params.id = value;
   next();
 }
 
