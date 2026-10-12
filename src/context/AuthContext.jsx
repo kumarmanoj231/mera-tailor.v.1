@@ -328,6 +328,7 @@ function ClerkSession({ children }) {
       fallbackRedirectUrl: onboardingUrl,
       signInForceRedirectUrl: dashboardUrl,
       signInFallbackRedirectUrl: dashboardUrl,
+      oidcPrompt: 'select_account',
     });
   };
 
@@ -410,6 +411,7 @@ function ClerkSession({ children }) {
       forceRedirectUrl: targetUrl,
       fallbackRedirectUrl: targetUrl,
       signUpForceRedirectUrl: `${window.location.origin}/onboarding`,
+      oidcPrompt: 'select_account',
     });
   };
 
