@@ -22,15 +22,15 @@ const validRoles = ['customer', 'tailor', 'business'];
 
 export default function Onboarding() {
   const { t } = useTranslation();
-  const { isSignedIn, isLoaded, profile, getToken, refreshProfile, openSignUp } = useAuth();
+  const { isSignedIn, isLoaded, isProfileLoaded, profile, getToken, refreshProfile, openSignUp } = useAuth();
   const navigate = useNavigate();
 
   // Redirect returning users who already finished onboarding
   useEffect(() => {
-    if (isLoaded && isSignedIn && profile?.onboardingCompleted && profile?.role) {
+    if (isLoaded && isSignedIn && isProfileLoaded && profile?.onboardingCompleted && profile?.role) {
       navigate(profile.role === 'admin' ? '/admin' : '/dashboard', { replace: true });
     }
-  }, [isLoaded, isSignedIn, profile, navigate]);
+  }, [isLoaded, isSignedIn, isProfileLoaded, profile, navigate]);
 
   // Determine authoritative initial role
   const getInitialRole = () => {

@@ -289,6 +289,23 @@ const businessSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+const auditLogSchema = new mongoose.Schema(
+  {
+    action: { type: String, required: true, index: true },
+    adminClerkUserId: { type: String, required: true, index: true },
+    adminEmail: { type: String, trim: true },
+    targetUserId: { type: String, index: true },
+    targetClerkUserId: { type: String, index: true },
+    previousRole: { type: String },
+    newRole: { type: String },
+    details: { type: mongoose.Schema.Types.Mixed },
+    result: { type: String, enum: ['success', 'failure'], default: 'success' },
+  },
+  { timestamps: true }
+);
+
+auditLogSchema.index({ createdAt: -1 });
+
 export const Tailor = mongoose.models.Tailor || mongoose.model("Tailor", tailorSchema, "tailors");
 export const Business = mongoose.models.Business || mongoose.model("Business", businessSchema, "businesses");
 export const User = mongoose.models.User || mongoose.model("User", userSchema, "users");
@@ -301,4 +318,6 @@ export const Notification =
   mongoose.models.Notification || mongoose.model("Notification", notificationSchema, "notifications");
 export const Review =
   mongoose.models.Review || mongoose.model("Review", reviewSchema, "reviews");
+export const AuditLog =
+  mongoose.models.AuditLog || mongoose.model("AuditLog", auditLogSchema, "audit_logs");
 

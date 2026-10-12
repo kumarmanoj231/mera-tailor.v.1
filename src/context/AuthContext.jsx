@@ -165,26 +165,44 @@ function RoleChooser({ close, choose, initialRole }) {
         </label>
 
         {/* Footer Actions */}
-        <div className="mt-6 flex items-center justify-between gap-3 border-t border-stone-100 pt-4">
-          <button
-            type="button"
-            onClick={close}
-            className="rounded-xl px-4 py-2.5 text-xs font-semibold text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition cursor-pointer"
-          >
-            {t('common.cancel', 'Cancel')}
-          </button>
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-stone-100 pt-4">
+          <div className="flex items-center gap-1.5 text-xs text-stone-500">
+            <span>{t('authFlow.alreadyHaveAccount', 'Already registered?')}</span>
+            <button
+              type="button"
+              onClick={() => {
+                close();
+                if (typeof window !== 'undefined' && window.__meraTailorOpenSignIn) {
+                  window.__meraTailorOpenSignIn();
+                }
+              }}
+              className="font-bold text-[#8f2338] hover:underline cursor-pointer"
+            >
+              {t('navbar.signIn', 'Sign in here')}
+            </button>
+          </div>
 
-          <button
-            type="button"
-            disabled={!selectedRole || !isConfirmed}
-            onClick={() => choose(selectedRole)}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#8f2338] px-6 py-2.5 text-xs font-bold text-white shadow-xs transition hover:bg-[#781c2e] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
-          >
-            <span>
-              {t('navbar.getStarted', 'Get Started')}
-            </span>
-            <ArrowRight size={14} />
-          </button>
+          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+            <button
+              type="button"
+              onClick={close}
+              className="rounded-xl px-4 py-2 text-xs font-semibold text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition cursor-pointer"
+            >
+              {t('common.cancel', 'Cancel')}
+            </button>
+
+            <button
+              type="button"
+              disabled={!selectedRole || !isConfirmed}
+              onClick={() => choose(selectedRole)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#8f2338] px-5 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-[#781c2e] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+            >
+              <span>
+                {t('navbar.getStarted', 'Get Started')}
+              </span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
         </div>
 
         <p className="mt-4 text-[11px] text-stone-400 text-center">
@@ -333,6 +351,21 @@ function ClerkSession({ children }) {
     });
   };
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.__meraTailorOpenSignIn = handleOpenSignIn;
+      return () => {
+        delete window.__meraTailorOpenSignIn;
+      };
+    }
+  }, [clerk]);
+
+  const retryProfile = async () => {
+    setIsProfileLoaded(false);
+    setProfileError('');
+    return refreshProfile();
+  };
+
   const value = {
     isSignedIn: Boolean(isSignedIn),
     isLoaded,
@@ -345,6 +378,7 @@ function ClerkSession({ children }) {
     signOut: clerk.signOut,
     getToken,
     refreshProfile,
+    retryProfile,
   };
 
   return (
@@ -389,6 +423,15 @@ function MissingClerkSession({ children }) {
     setMessage('Add VITE_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY to .env to enable secure sign-in.');
   };
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.__meraTailorOpenSignIn = handleOpenSignIn;
+      return () => {
+        delete window.__meraTailorOpenSignIn;
+      };
+    }
+  }, []);
+
   const value = {
     isSignedIn: false,
     isLoaded: true,
@@ -398,6 +441,8 @@ function MissingClerkSession({ children }) {
     profileError: '',
     getToken: async () => null,
     signOut: () => {},
+    refreshProfile: async () => null,
+    retryProfile: async () => null,
     openSignIn: handleOpenSignIn,
     openSignUp: handleOpenSignUp,
   };

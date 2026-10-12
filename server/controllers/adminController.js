@@ -1,6 +1,6 @@
 import { clerkClient } from '@clerk/express';
 import { randomBytes } from 'node:crypto';
-import { Business, BusinessRequest, Order, Tailor, User } from '../models.js';
+import { Business, BusinessRequest, Order, Tailor, User, AuditLog } from '../models.js';
 import { createNotification } from './notificationController.js';
 import { getOrSyncBusinessProfile } from '../utils/businessProfileMigration.js';
 
@@ -96,12 +96,76 @@ export async function updateAdminUser(req, res) {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found.' });
-    if (user.clerkUserId === req.authUserId && (role && role !== 'admin' || disabled === true)) {
+
+    // 1. Prevent self-demotion or self-disabling
+    if (user.clerkUserId === req.authUserId && ((role && role !== 'admin') || disabled === true)) {
       return res.status(400).json({ error: 'You cannot disable or demote your own admin account.' });
     }
+
+    // 2. Prevent demoting or disabling the last active admin
+    if (user.role === 'admin' && ((role && role !== 'admin') || disabled === true)) {
+      const activeAdminCount = await User.countDocuments({ role: 'admin', disabled: { $ne: true } });
+      if (activeAdminCount <= 1) {
+        return res.status(400).json({ error: 'Cannot demote or disable the last active administrator on the platform.' });
+      }
+    }
+
+    const previousRole = user.role;
     const nextRole = role || user.role;
-    await clerkClient.users.updateUserMetadata(user.clerkUserId, { publicMetadata: { appRole: nextRole } });
-    user.role = nextRole;
+
+    if (role && role !== previousRole) {
+      await clerkClient.users.updateUserMetadata(user.clerkUserId, { publicMetadata: { appRole: nextRole } });
+      user.role = nextRole;
+
+      // Automatically create role-specific profile records if moving to tailor or business
+      if (nextRole === 'tailor') {
+        const tailorExists = await Tailor.findOne({ ownerClerkUserId: user.clerkUserId });
+        if (!tailorExists) {
+          const tailorName = [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Master Artisan';
+          await Tailor.create({
+            ownerClerkUserId: user.clerkUserId,
+            name: user.firstName ? `${user.firstName}'s Bespoke Atelier` : 'MeraTailor Atelier',
+            owner: tailorName,
+            city: user.locationLabel?.split(',')?.[0]?.trim() || 'Jaipur',
+            state: 'Rajasthan',
+            country: 'India',
+            phone: user.phone || '',
+            minPrice: 499,
+            experience: 0,
+            status: 'Available',
+            categories: [],
+            services: [],
+            verified: false,
+            verificationStatus: 'unverified',
+          });
+        }
+      } else if (nextRole === 'business') {
+        await getOrSyncBusinessProfile(user.clerkUserId, user);
+      }
+
+      // Record in Audit Log
+      await AuditLog.create({
+        action: 'ROLE_CHANGE',
+        adminClerkUserId: req.authUserId,
+        adminEmail: req.appUser?.email || '',
+        targetUserId: user._id.toString(),
+        targetClerkUserId: user.clerkUserId,
+        previousRole,
+        newRole: nextRole,
+        details: { requestedBy: req.appUser?.email || req.authUserId },
+        result: 'success',
+      }).catch(err => console.warn('AuditLog creation warning:', err.message));
+
+      // Notify target user
+      createNotification({
+        recipientClerkUserId: user.clerkUserId,
+        title: 'Account Role Updated',
+        message: `An administrator updated your account role from ${previousRole} to ${nextRole}.`,
+        type: 'profile',
+        link: nextRole === 'admin' ? '/admin' : '/dashboard',
+      }).catch(() => {});
+    }
+
     if (disabled !== undefined) user.disabled = Boolean(disabled);
     await user.save();
     res.json(publicUser(user));
@@ -117,12 +181,31 @@ export async function deleteAdminUser(req, res) {
     if (user.clerkUserId === req.authUserId) {
       return res.status(400).json({ error: 'You cannot delete your own admin account.' });
     }
+    if (user.role === 'admin') {
+      const adminCount = await User.countDocuments({ role: 'admin' });
+      if (adminCount <= 1) {
+        return res.status(400).json({ error: 'Cannot delete the last administrator on the platform.' });
+      }
+    }
     try {
       await clerkClient.users.deleteUser(user.clerkUserId);
     } catch {
       // User may already be removed in Clerk
     }
     await User.deleteOne({ _id: user._id });
+
+    // Record in Audit Log
+    await AuditLog.create({
+      action: 'USER_DELETION',
+      adminClerkUserId: req.authUserId,
+      adminEmail: req.appUser?.email || '',
+      targetUserId: user._id.toString(),
+      targetClerkUserId: user.clerkUserId,
+      previousRole: user.role,
+      newRole: 'deleted',
+      result: 'success',
+    }).catch(() => {});
+
     res.json({ deleted: true });
   } catch (error) {
     res.status(400).json({ error: error.message });

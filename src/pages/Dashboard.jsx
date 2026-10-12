@@ -49,6 +49,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import AdminPortal from "./AdminPortal";
 import TailorAvatar from "../components/common/TailorAvatar";
+import { PageContentSkeleton } from "../components/common/DashboardSkeleton";
 
 const money = (value) =>
   new Intl.NumberFormat("en-IN", {
@@ -1093,6 +1094,21 @@ export default function Dashboard() {
               <ArrowRight size={16} />
             </button>
           </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  /* =========================================================
+     ROLE-AWARE SKELETON LOADING VIEW (WITHOUT ARTIFICIAL DELAY)
+  ========================================================== */
+  if (loading && !profile) {
+    return (
+      <div className="min-h-screen bg-[#fbf9f5] text-[#111827]">
+        <Navbar />
+        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+          <PageContentSkeleton role={role} />
         </main>
         <Footer />
       </div>

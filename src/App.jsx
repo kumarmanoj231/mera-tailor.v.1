@@ -19,29 +19,56 @@ import TailorDetail from './pages/TailorDetail';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import DashboardSkeleton from './components/common/DashboardSkeleton';
 
 function RoleAccess({ roles, children }) {
-  const { isSignedIn, isLoaded, isProfileLoaded, profile, profileError } = useAuth();
+  const { isSignedIn, isLoaded, isProfileLoaded, profile, profileError, retryProfile } = useAuth();
   const { t } = useTranslation();
 
+  // 1. Initial authentication and profile role resolution state
   if (!isLoaded || (isSignedIn && !isProfileLoaded)) {
-    return (
-      <div className="grid min-h-[50vh] place-items-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-9 w-9 animate-spin rounded-full border-3 border-stone-200 border-t-[#8f2338]" />
-          <span className="text-xs font-semibold text-stone-600">
-            {t('authFlow.loadingPermissions', 'Loading account permissions…')}
-          </span>
-        </div>
-      </div>
-    );
+    // Determine expected role archetype hint based on route if available
+    const expectedRole = roles.includes('admin') && roles.length === 1
+      ? 'admin'
+      : roles.includes('tailor') && roles.length === 1
+      ? 'tailor'
+      : roles.includes('business') && roles.length === 1
+      ? 'business'
+      : 'customer';
+
+    return <DashboardSkeleton role={expectedRole} />;
   }
 
+  // 2. Retryable Error state if profile fetch failed
   if (isSignedIn && !profile && profileError) {
     return (
-      <div role="alert" className="m-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950 max-w-lg mx-auto shadow-xs">
-        <p className="font-bold text-sm mb-1">{t('common.error', 'Error')}</p>
-        <p className="text-xs text-amber-800 leading-relaxed">{t('authFlow.accountLoadError', { error: profileError })}</p>
+      <div className="min-h-[50vh] flex items-center justify-center p-6">
+        <div role="alert" className="rounded-3xl border border-amber-200 bg-amber-50/90 p-6 sm:p-8 text-amber-950 max-w-md w-full shadow-lg text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700 mb-3">
+            <span className="text-xl font-bold">!</span>
+          </div>
+          <h2 className="font-serif text-lg font-bold text-stone-900 mb-1">
+            {t('authFlow.syncErrorTitle', 'Unable to load account permissions')}
+          </h2>
+          <p className="text-xs text-amber-900 mb-5 leading-relaxed">
+            {t('authFlow.accountLoadError', { error: profileError })}
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => retryProfile()}
+              className="w-full sm:w-auto rounded-xl bg-[#8f2338] hover:bg-[#781c2e] px-5 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer"
+            >
+              {t('common.retry', 'Retry Connection')}
+            </button>
+            <a
+              href="/"
+              className="w-full sm:w-auto rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 transition text-center"
+            >
+              {t('navbar.home', 'Home')}
+            </a>
+          </div>
+        </div>
       </div>
     );
   }
