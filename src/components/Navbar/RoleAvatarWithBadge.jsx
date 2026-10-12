@@ -50,6 +50,17 @@ export const getRoleMeta = (role, t) => {
         dotColor: "bg-[#ea580c]",
         defaultAvatar: "/assets/roles/business.png",
       };
+    case "loading":
+      return {
+        label: t ? t("navbar.loading", "Loading...") : "Loading...",
+        sublabel: "Authenticating",
+        icon: UserRound,
+        ringClass: "ring-2 ring-stone-300 ring-offset-2 ring-offset-white animate-pulse",
+        badgeBg: "bg-stone-100 text-stone-600 border-stone-200",
+        cornerBg: "hidden",
+        dotColor: "bg-stone-400",
+        defaultAvatar: "/assets/roles/customer.png",
+      };
     case "customer":
     default:
       return {
@@ -71,14 +82,15 @@ export const getRoleMeta = (role, t) => {
  * (No text badges in the navbar)
  */
 export default function RoleAvatarWithBadge({
-  role = "customer",
+  role = null,
   size = "md", // "sm" | "md" | "lg"
   showPill = false,
   afterSignOutUrl = "/",
 }) {
   const { t } = useTranslation();
-  const { isSignedIn, user, profile } = useAuth();
-  const meta = getRoleMeta(role, t);
+  const { isSignedIn, isProfileLoaded, user, profile } = useAuth();
+  const effectiveRole = isSignedIn && !isProfileLoaded && !role ? "loading" : (role || "customer");
+  const meta = getRoleMeta(effectiveRole, t);
   const IconComponent = meta.icon;
 
   const sizeClasses = {
@@ -144,13 +156,15 @@ export default function RoleAvatarWithBadge({
         </div>
 
         {/* Pinned Corner Role Badge */}
-        <div
-          className={`absolute ${sizeClasses.cornerBadge} flex items-center justify-center rounded-full ring-white shadow-md pointer-events-none ${meta.cornerBg}`}
-          title={`Role: ${meta.label}`}
-          aria-label={`Role: ${meta.label}`}
-        >
-          <IconComponent size={sizeClasses.iconSize} strokeWidth={2.6} />
-        </div>
+        {effectiveRole !== "loading" && (
+          <div
+            className={`absolute ${sizeClasses.cornerBadge} flex items-center justify-center rounded-full ring-white shadow-md pointer-events-none ${meta.cornerBg}`}
+            title={`Role: ${meta.label}`}
+            aria-label={`Role: ${meta.label}`}
+          >
+            <IconComponent size={sizeClasses.iconSize} strokeWidth={2.6} />
+          </div>
+        )}
       </div>
     </div>
   );

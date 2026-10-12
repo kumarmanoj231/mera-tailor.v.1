@@ -65,16 +65,24 @@ export class ErrorBoundary extends React.Component {
                 : "An unexpected error interrupted this page. Please try refreshing or return to the main dashboard."}
             </p>
 
-            {process.env.NODE_ENV !== "production" && (
-              <div className="mb-6 text-left rounded-xl bg-stone-50 p-3.5 border border-stone-200 overflow-x-auto text-xs text-rose-800 font-mono">
-                <p className="font-bold mb-1">{errorMessage}</p>
+            <div className="mb-6 text-left rounded-xl bg-stone-50 p-3.5 border border-stone-200 overflow-x-auto text-xs font-mono">
+              <details className="cursor-pointer">
+                <summary className="font-bold text-rose-800 hover:text-rose-950 transition select-none flex items-center justify-between">
+                  <span>{errorMessage}</span>
+                  <span className="text-[10px] text-stone-500 font-normal ml-2 shrink-0">Click for details ▾</span>
+                </summary>
                 {this.state.errorInfo?.componentStack && (
-                  <pre className="text-[11px] leading-snug whitespace-pre-wrap text-stone-600">
-                    {this.state.errorInfo.componentStack.slice(0, 500)}
+                  <pre className="mt-2 text-[11px] leading-snug whitespace-pre-wrap text-stone-600 bg-white p-2 rounded border border-stone-200">
+                    {this.state.errorInfo.componentStack}
                   </pre>
                 )}
-              </div>
-            )}
+                {this.state.error?.stack && (
+                  <pre className="mt-2 text-[10px] leading-snug whitespace-pre-wrap text-stone-500 bg-white p-2 rounded border border-stone-200">
+                    {this.state.error.stack}
+                  </pre>
+                )}
+              </details>
+            </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <button

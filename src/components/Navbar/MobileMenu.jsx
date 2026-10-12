@@ -29,7 +29,7 @@ const MobileMenu = ({
   userRole,
 }) => {
   const { t } = useTranslation();
-  const { isSignedIn, user, profile } = useAuth();
+  const { isSignedIn, isProfileLoaded, user, profile } = useAuth();
   const roleMeta = getRoleMeta(userRole, t);
   const RoleIcon = roleMeta.icon;
 
@@ -123,7 +123,7 @@ const MobileMenu = ({
             </div>
 
             {/* CUSTOMER ONLY SHORTCUTS */}
-            {userRole === "customer" && (
+            {isSignedIn && isProfileLoaded && userRole === "customer" && (
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-stone-200/60">
                 <Link
                   to="/my-tailors"

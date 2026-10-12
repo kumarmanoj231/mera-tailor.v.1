@@ -85,6 +85,65 @@ function RoleAccess({ roles, children }) {
   return children;
 }
 
+function DashboardRoleRouter() {
+  const { isSignedIn, isLoaded, isProfileLoaded, profile, profileError, retryProfile } = useAuth();
+  const { t } = useTranslation();
+
+  // 1. If not authenticated with Clerk, render Dashboard directly (guest mode)
+  if (isLoaded && !isSignedIn) {
+    return <Dashboard />;
+  }
+
+  // 2. If Clerk is initializing, or signed in and authoritative profile is still resolving:
+  if (!isLoaded || (isSignedIn && !isProfileLoaded)) {
+    const cachedRole = typeof window !== 'undefined' ? localStorage.getItem('meraTailor.userRole') : null;
+    return <DashboardSkeleton role={cachedRole || 'customer'} />;
+  }
+
+  // 3. Retryable Error state if profile fetch failed
+  if (isSignedIn && !profile && profileError) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center p-6">
+        <div role="alert" className="rounded-3xl border border-amber-200 bg-amber-50/90 p-6 sm:p-8 text-amber-950 max-w-md w-full shadow-lg text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700 mb-3">
+            <span className="text-xl font-bold">!</span>
+          </div>
+          <h2 className="font-serif text-lg font-bold text-stone-900 mb-1">
+            {t('authFlow.syncErrorTitle', 'Unable to load account permissions')}
+          </h2>
+          <p className="text-xs text-amber-900 mb-5 leading-relaxed">
+            {t('authFlow.accountLoadError', { error: profileError })}
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => retryProfile()}
+              className="w-full sm:w-auto rounded-xl bg-[#8f2338] hover:bg-[#781c2e] px-5 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer"
+            >
+              {t('common.retry', 'Retry Connection')}
+            </button>
+            <a
+              href="/"
+              className="w-full sm:w-auto rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 transition text-center"
+            >
+              {t('navbar.home', 'Home')}
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 4. Authoritative profile loaded:
+  // If user is Admin -> Immediately redirect to /admin, NEVER mount Dashboard!
+  if (profile?.role === 'admin') {
+    return <Navigate to="/admin" replace />;
+  }
+
+  // If user is Tailor, Business, or Customer -> Mount Dashboard with authoritative profile!
+  return <Dashboard />;
+}
+
 function AuthFlowGuard() {
   const { isSignedIn, isLoaded, isProfileLoaded, profile } = useAuth();
   const { t } = useTranslation();
@@ -155,8 +214,7 @@ const App = () => {
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/terms" element={<Terms />} />
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+        <Route path="/dashboard" element={<ErrorBoundary><DashboardRoleRouter /></ErrorBoundary>} />
         <Route path="/admin" element={<RoleAccess roles={['admin']}><AdminPortal /></RoleAccess>} />
       </Routes>
     </ErrorBoundary>

@@ -56,7 +56,7 @@ const money = (value) =>
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(Number(value) || 0);
 
 const emptyMeasurement = {
   name: "",
@@ -99,7 +99,7 @@ const orderProgressPercent = {
 
 export default function Dashboard() {
   const { t, i18n } = useTranslation();
-  const { isSignedIn, user, profile, profileError, getToken, openSignUp, refreshProfile } = useAuth();
+  const { isSignedIn, isProfileLoaded, user, profile, profileError, getToken, openSignUp, refreshProfile } = useAuth();
 
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -204,7 +204,8 @@ export default function Dashboard() {
   const [ordersStatusFilter, setOrdersStatusFilter] = useState("all");
   const [measurementsSearch, setMeasurementsSearch] = useState("");
 
-  const role = profile?.role || "customer";
+  const cachedRole = typeof window !== "undefined" ? localStorage.getItem("meraTailor.userRole") : null;
+  const role = profile?.role || cachedRole || "customer";
 
   // Sync profileForm with profile
   useEffect(() => {
@@ -250,6 +251,15 @@ export default function Dashboard() {
       setLoading(false);
       return;
     }
+    // CRITICAL: Do not attempt fetching before authoritative profile is loaded
+    if (!isProfileLoaded || !profile) {
+      return;
+    }
+    if (profile.role === "admin") {
+      setLoading(false);
+      return;
+    }
+
     let active = true;
     setLoading(true);
 
@@ -257,16 +267,18 @@ export default function Dashboard() {
       try {
         const token = await getToken();
 
-        // 1. Fetch User Dashboard Data (Orders, Measurements, Saved Tailors)
-        const dashRes = await fetch("/api/users/dashboard", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (dashRes.ok) {
-          const dashData = await dashRes.json();
-          if (active) {
-            setOrders(dashData.orders || []);
-            setMeasurements(dashData.measurements || []);
-            setSavedTailors(dashData.savedTailors || []);
+        // 1. Fetch User Dashboard Data (Orders, Measurements, Saved Tailors) ONLY for customers
+        if (role === "customer") {
+          const dashRes = await fetch("/api/users/dashboard", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (dashRes.ok) {
+            const dashData = await dashRes.json();
+            if (active) {
+              setOrders(Array.isArray(dashData.orders) ? dashData.orders : []);
+              setMeasurements(Array.isArray(dashData.measurements) ? dashData.measurements : []);
+              setSavedTailors(Array.isArray(dashData.savedTailors) ? dashData.savedTailors : []);
+            }
           }
         }
 
@@ -279,21 +291,22 @@ export default function Dashboard() {
             const tData = await tailorRes.json();
             if (active) {
               setTailorData(tData.tailor || null);
-              setTailorRequests(tData.requests || []);
-              setTailorBulkFeed(tData.bulkRequirements || []);
-              setTailorAwardedTenders(tData.awardedTenders || []);
+              setTailorRequests(Array.isArray(tData.requests) ? tData.requests : []);
+              setTailorBulkFeed(Array.isArray(tData.bulkRequirements) ? tData.bulkRequirements : []);
+              setTailorAwardedTenders(Array.isArray(tData.awardedTenders) ? tData.awardedTenders : []);
             }
           }
         } else if (role === "business") {
-          const [bizRes, bpRes] = await Promise.all([
+          const [bizRes, bpRes, bDashRes] = await Promise.all([
             fetch("/api/business-requests", { headers: { Authorization: `Bearer ${token}` } }),
             fetch("/api/business/profile", { headers: { Authorization: `Bearer ${token}` } }),
+            fetch("/api/users/business-dashboard", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null),
           ]);
-          if (bizRes.ok) {
+          if (bizRes && bizRes.ok) {
             const bData = await bizRes.json();
             if (active) setBusinessRequests(Array.isArray(bData) ? bData : []);
           }
-          if (bpRes.ok) {
+          if (bpRes && bpRes.ok) {
             const bpData = await bpRes.json();
             if (active) {
               setBusinessProfile(bpData.businessProfile || null);
@@ -304,6 +317,12 @@ export default function Dashboard() {
                   companyName: bpData.businessProfile.companyName || "",
                 }));
               }
+            }
+          }
+          if (bDashRes && bDashRes.ok) {
+            const bDashData = await bDashRes.json();
+            if (active && Array.isArray(bDashData.orders)) {
+              setOrders(bDashData.orders);
             }
           }
         }
@@ -317,7 +336,7 @@ export default function Dashboard() {
     return () => {
       active = false;
     };
-  }, [isSignedIn, role, getToken]);
+  }, [isSignedIn, isProfileLoaded, profile, role, getToken]);
 
   /* =========================================================
      CRUD: PROFILE & PREFERENCES
@@ -1103,7 +1122,7 @@ export default function Dashboard() {
   /* =========================================================
      ROLE-AWARE SKELETON LOADING VIEW (WITHOUT ARTIFICIAL DELAY)
   ========================================================== */
-  if (loading && !profile) {
+  if (isSignedIn && (!profile || !isProfileLoaded || (loading && !profile))) {
     return (
       <div className="min-h-screen bg-[#fbf9f5] text-[#111827]">
         <Navbar />
@@ -1822,7 +1841,7 @@ export default function Dashboard() {
                     </div>
                   ) : (
                     <div className="mt-3 space-y-2">
-                      {measurements.slice(0, 2).map((m) => (
+                      {(measurements || []).slice(0, 2).map((m) => (
                         <div
                           key={m._id}
                           className="rounded-xl border border-stone-200 bg-[#fdfbf9] p-2.5 text-xs flex items-center justify-between"
@@ -2096,7 +2115,7 @@ export default function Dashboard() {
                         {t("dashboardPage.specialties", "Specialties")}
                       </p>
                       <div className="flex flex-wrap gap-1">
-                        {tailorData.categories.map((cat) => (
+                        {(tailorData?.categories || []).map((cat) => (
                           <span
                             key={cat}
                             className="rounded-lg bg-rose-50 border border-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-900"
@@ -2547,7 +2566,7 @@ export default function Dashboard() {
 
                     {profile?.searchPreferences?.categories?.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-1">
-                        {profile.searchPreferences.categories.map((cat) => (
+                        {(profile?.searchPreferences?.categories || []).map((cat) => (
                           <span
                             key={cat}
                             className="rounded-lg bg-rose-50 border border-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-900"
@@ -3363,7 +3382,7 @@ export default function Dashboard() {
                         <div>
                           <p className="text-[11px] font-bold text-stone-400 uppercase mb-2">{t("dashboardPage.specialties", "Garment Specialties")}</p>
                           <div className="flex flex-wrap gap-1.5">
-                            {tailorData.categories.map((cat) => (
+                            {(tailorData?.categories || []).map((cat) => (
                               <span
                                 key={cat}
                                 className="rounded-xl bg-rose-50 border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-900"
@@ -3411,7 +3430,7 @@ export default function Dashboard() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-stone-100">
-                              {tailorData.services.map((srv, idx) => (
+                              {(tailorData?.services || []).map((srv, idx) => (
                                 <tr key={idx} className="py-3">
                                   <td className="py-3 font-semibold text-stone-800">{srv.name}</td>
                                   <td className="py-3 font-bold text-[#8f2338]">{money(srv.price)}</td>
@@ -3458,7 +3477,7 @@ export default function Dashboard() {
                         </div>
 
                         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                          {tailorAwardedTenders.map((contract) => (
+                          {(tailorAwardedTenders || []).map((contract) => (
                             <div
                               key={contract._id}
                               className="rounded-2xl border border-emerald-200/90 bg-white p-4 shadow-2xs hover:shadow-md transition"
@@ -3543,7 +3562,7 @@ export default function Dashboard() {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {tailorBulkFeed.map((job) => (
+                        {(tailorBulkFeed || []).map((job) => (
                           <article
                             key={job._id}
                             className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-4 sm:p-5 hover:border-[#8f2338]/30 transition"
@@ -3927,7 +3946,7 @@ export default function Dashboard() {
                           </div>
                         ) : (
                           <div className="space-y-3.5">
-                            {businessRequests.slice(0, 3).map((bReq) => {
+                            {(businessRequests || []).slice(0, 3).map((bReq) => {
                               const quotesCount = bReq.quotes?.length || 0;
                               return (
                                 <article
@@ -4053,7 +4072,7 @@ export default function Dashboard() {
                     </div>
                   ) : (
                     <div className="mt-4 space-y-3">
-                      {orders.slice(0, 3).map((order) => (
+                      {(orders || []).slice(0, 3).map((order) => (
                         <div
                           key={order.id}
                           className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-4 transition hover:border-[#8f2338]/30 hover:bg-white"
@@ -4131,7 +4150,7 @@ export default function Dashboard() {
                       </p>
                     ) : (
                       <div className="space-y-2">
-                        {measurements.slice(0, 2).map((m) => (
+                        {(measurements || []).slice(0, 2).map((m) => (
                           <div
                             key={m._id}
                             className="rounded-xl border border-stone-200 bg-[#fdfbf9] p-2.5 text-xs flex items-center justify-between"
@@ -4173,7 +4192,7 @@ export default function Dashboard() {
                       </p>
                     ) : (
                       <div className="space-y-2">
-                        {savedTailors.slice(0, 2).map((studio) => (
+                        {(savedTailors || []).slice(0, 2).map((studio) => (
                           <div
                             key={studio._id || studio.id}
                             className="rounded-xl border border-stone-200 bg-[#fdfbf9] p-2.5 text-xs flex items-center justify-between"
@@ -4575,7 +4594,7 @@ export default function Dashboard() {
                             {/* Categories */}
                             {tailor.categories?.length > 0 && (
                               <div className="mt-2.5 flex flex-wrap gap-1">
-                                {tailor.categories.slice(0, 3).map((c) => (
+                                {(tailor?.categories || []).slice(0, 3).map((c) => (
                                   <span
                                     key={c}
                                     className="rounded-md bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-700"
@@ -4834,7 +4853,7 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {businessRequests.map((bReq) => {
+                    {(businessRequests || []).map((bReq) => {
                       const quotes = bReq.quotes || [];
                       return (
                         <article

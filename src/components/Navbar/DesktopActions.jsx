@@ -14,8 +14,7 @@ const DesktopActions = ({
   onSignUp,
   userRole,
 }) => {
-  const { t } = useTranslation();
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, isProfileLoaded } = useAuth();
 
   const isRoleAdmin = userRole === "admin";
   const dashboardRoute = isRoleAdmin ? "/admin" : "/dashboard";
@@ -36,7 +35,7 @@ const DesktopActions = ({
       {/* =====================================================
           CUSTOMER SHORTCUTS: WISHLIST & ORDERS
       ====================================================== */}
-      {isSignedIn && userRole === "customer" && (
+      {isSignedIn && isProfileLoaded && userRole === "customer" && (
         <div className="flex items-center gap-1 border-l border-stone-200/80 pl-2">
           <NavIconButton
             to="/my-tailors"

@@ -15,11 +15,12 @@ import NotificationBell from "../notifications/NotificationBell";
 const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { i18n, t } = useTranslation();
-  const { openSignUp, openSignIn, isSignedIn, getToken, profile } = useAuth();
+  const { openSignUp, openSignIn, isSignedIn, isProfileLoaded, getToken, profile } = useAuth();
   const location = useLocation();
 
   const isHomePage = location.pathname === "/";
-  const userRole = profile?.role || "guest";
+  const cachedRole = typeof window !== 'undefined' ? localStorage.getItem('meraTailor.userRole') : null;
+  const userRole = profile?.role || (isSignedIn ? (cachedRole || (isProfileLoaded ? "customer" : null)) : "guest");
 
   useEffect(() => {
     if (!isSignedIn) return;

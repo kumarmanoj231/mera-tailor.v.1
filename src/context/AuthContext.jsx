@@ -262,6 +262,9 @@ function ClerkSession({ children }) {
           setProfile(nextProfile);
           setProfileError('');
           setIsProfileLoaded(true);
+          if (nextProfile?.role) {
+            localStorage.setItem('meraTailor.userRole', nextProfile.role);
+          }
         }
       } catch {
         if (active) {
@@ -320,6 +323,9 @@ function ClerkSession({ children }) {
       const body = await response.json();
       setProfile(body);
       setProfileError('');
+      if (body?.role) {
+        localStorage.setItem('meraTailor.userRole', body.role);
+      }
       return body;
     }
 
@@ -343,12 +349,20 @@ function ClerkSession({ children }) {
   const handleOpenSignIn = () => {
     setAuthMode(null);
     setPendingRole(null);
-    const dashboardUrl = `${window.location.origin}/dashboard`;
+    const cachedRole = typeof window !== 'undefined' ? localStorage.getItem('meraTailor.userRole') : null;
+    const targetUrl = cachedRole === 'admin'
+      ? `${window.location.origin}/admin`
+      : `${window.location.origin}/dashboard`;
     clerk.openSignIn({
-      forceRedirectUrl: dashboardUrl,
-      fallbackRedirectUrl: dashboardUrl,
+      forceRedirectUrl: targetUrl,
+      fallbackRedirectUrl: targetUrl,
       signUpForceRedirectUrl: `${window.location.origin}/onboarding`,
     });
+  };
+
+  const handleSignOut = async (...args) => {
+    localStorage.removeItem('meraTailor.userRole');
+    return clerk.signOut(...args);
   };
 
   useEffect(() => {
@@ -375,7 +389,7 @@ function ClerkSession({ children }) {
     profileError,
     openSignIn: handleOpenSignIn,
     openSignUp: handleOpenSignUp,
-    signOut: clerk.signOut,
+    signOut: handleSignOut,
     getToken,
     refreshProfile,
     retryProfile,
