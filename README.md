@@ -115,7 +115,7 @@ This repository includes a [`render.yaml`](./render.yaml) file.
    | `CLERK_ADMIN_IDS` | Comma-separated Clerk user IDs for admin access |
    | `CORS_ALLOWED_ORIGINS` | Optional comma-separated extra frontend origins, for example `https://www.example.com` |
 
-   In Clerk, configure a webhook pointing to `https://<your-domain>/api/webhooks/clerk`, subscribe to `user.created`, `user.updated`, and `user.deleted`, then copy its Signing Secret into `CLERK_WEBHOOK_SECRET`. Production startup requires this key so account lifecycle events cannot silently run without signature verification.
+   To enable Clerk account lifecycle synchronization, configure a webhook pointing to `https://<your-domain>/api/webhooks/clerk`, subscribe to `user.created`, `user.updated`, and `user.deleted`, then copy its Signing Secret into `CLERK_WEBHOOK_SECRET`. The application can start without this optional integration; webhook requests remain rejected until a signing secret is configured.
 
 > **⚠️ Important for Vite + Clerk**: Ensure `VITE_CLERK_PUBLISHABLE_KEY` is configured in Render environment variables **before** triggering the build, because Vite bakes `VITE_*` keys into client JavaScript assets during `npm run build`.
 

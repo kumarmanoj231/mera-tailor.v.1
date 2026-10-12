@@ -40,7 +40,6 @@ export function getMissingProductionConfig(env = process.env) {
   const missing = [];
   if (!env.MONGO_URI) missing.push("MONGO_URI");
   if (!env.CLERK_SECRET_KEY) missing.push("CLERK_SECRET_KEY");
-  if (!env.CLERK_WEBHOOK_SECRET) missing.push("CLERK_WEBHOOK_SECRET");
   if (!(env.CLERK_PUBLISHABLE_KEY || env.VITE_CLERK_PUBLISHABLE_KEY)) {
     missing.push("CLERK_PUBLISHABLE_KEY (or VITE_CLERK_PUBLISHABLE_KEY)");
   }

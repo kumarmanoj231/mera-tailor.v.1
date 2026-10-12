@@ -32,14 +32,12 @@ test('Production startup reports missing database and Clerk configuration', () =
   assert.deepEqual(getMissingProductionConfig({ NODE_ENV: 'production' }), [
     'MONGO_URI',
     'CLERK_SECRET_KEY',
-    'CLERK_WEBHOOK_SECRET',
     'CLERK_PUBLISHABLE_KEY (or VITE_CLERK_PUBLISHABLE_KEY)',
   ]);
   assert.deepEqual(getMissingProductionConfig({
     NODE_ENV: 'production',
     MONGO_URI: 'mongodb://database',
     CLERK_SECRET_KEY: 'secret',
-    CLERK_WEBHOOK_SECRET: 'webhook-secret',
     VITE_CLERK_PUBLISHABLE_KEY: 'publishable',
   }), []);
 });
