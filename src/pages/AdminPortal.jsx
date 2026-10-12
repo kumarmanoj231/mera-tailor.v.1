@@ -424,10 +424,10 @@ export default function AdminPortal() {
   // Admin Settings & Profile Form State
   const [settingsActiveSubTab, setSettingsActiveSubTab] = useState("profile");
   const [adminProfileForm, setAdminProfileForm] = useState({
-    firstName: "Manoj Kumar",
-    lastName: "Lodha",
-    phone: "+91 6268893387",
-    bio: "Hi, I am Manoj Kumar!",
+    firstName: "",
+    lastName: "",
+    phone: "",
+    bio: "",
     preferredLanguage: "en",
   });
   const [profileSaving, setProfileSaving] = useState(false);
@@ -483,73 +483,15 @@ export default function AdminPortal() {
     toast.info("Cleared read notifications.");
   };
 
-  // Synthesize notifications from current active database records
-  const synthesizeLocalNotifications = (uList = [], tList = [], bList = []) => {
-    const list = [];
-    const pending = tList.filter((t) => !t.verified && t.verificationStatus !== "verified");
-    pending.forEach((t) => {
-      list.push({
-        id: `notif-verify-${t._id || t.id}`,
-        type: "verification",
-        title: "Studio Verification Pending",
-        message: `${t.name} in ${t.city || "Jaipur"} applied for workshop verified status.`,
-        targetTab: "verifications",
-        time: "10m ago",
-        createdAt: t.verificationAppliedAt || t.createdAt || new Date(),
-        unread: true,
-      });
-    });
-
-    uList.slice(0, 3).forEach((u) => {
-      const uName = `${u.firstName || ""} ${u.lastName || ""}`.trim() || "User";
-      const uRole = (u.role || "customer").toUpperCase();
-      list.push({
-        id: `notif-user-${u.id || u._id}`,
-        type: "user",
-        title: "New User Registered",
-        message: `${uName} registered as a ${uRole} account on Mera Tailor.`,
-        targetTab: "users",
-        time: "1h ago",
-        user: u,
-        createdAt: u.createdAt || new Date(),
-        unread: true,
-      });
-    });
-
-    bList.slice(0, 3).forEach((b) => {
-      list.push({
-        id: `notif-bulk-${b._id || b.id}`,
-        type: "bulk",
-        title: "New B2B RFQ Demand",
-        message: `${b.organisation || "Enterprise"} submitted requirement for ${b.quantity || 100} units in ${b.city || "Jaipur"}.`,
-        targetTab: "bulk",
-        time: "3h ago",
-        createdAt: b.createdAt || new Date(),
-        unread: true,
-      });
-    });
-
-    list.push({
-      id: "notif-system-health",
-      type: "system",
-      title: "Platform Health: Operational",
-      message: "Database connections, verification queues, and Leaflet geospatial map are all healthy.",
-      targetTab: "dashboard",
-      time: "Just now",
-      createdAt: new Date(),
-      unread: false,
-    });
-
-    return list;
-  };
+  // Real notifications loaded exclusively from authorized backend endpoints
 
   useEffect(() => {
     if (profile) {
       setAdminProfileForm({
-        firstName: profile.firstName || profile.name?.split(" ")[0] || "Manoj Kumar",
-        lastName: profile.lastName || profile.name?.split(" ").slice(1).join(" ") || "Lodha",
-        phone: profile.phone || "+91 6268893387",
-        bio: profile.bio || "Hi, I am Manoj Kumar!",
+        firstName: profile.firstName || profile.name?.split(" ")[0] || "",
+        lastName: profile.lastName || profile.name?.split(" ").slice(1).join(" ") || "",
+        phone: profile.phone || "",
+        bio: profile.bio || "",
         preferredLanguage: profile.preferredLanguage || i18n.language || "en",
       });
     }
@@ -575,11 +517,11 @@ export default function AdminPortal() {
     try {
       setError("");
       const [u, ta, biz, bulk, summary, notifs] = await Promise.all([
-        request("/admin/users").catch(() => []),
-        request("/admin/tailors").catch(() => []),
-        request("/admin/businesses").catch(() => []),
-        request("/business-requests?status=all").catch(() => request("/bulk-orders").catch(() => [])),
-        request("/admin/dashboard-summary").catch(() => null),
+        request("/admin/users"),
+        request("/admin/tailors"),
+        request("/admin/businesses"),
+        request("/business-requests?status=all").catch(() => request("/bulk-orders")),
+        request("/admin/dashboard-summary"),
         request("/admin/notifications").catch(() => []),
       ]);
       const validUsers = Array.isArray(u) ? u : [];
@@ -596,10 +538,12 @@ export default function AdminPortal() {
       if (Array.isArray(notifs) && notifs.length > 0) {
         setNotifications(notifs);
       } else {
-        setNotifications(synthesizeLocalNotifications(validUsers, validTailors, validBulk));
+        setNotifications([]);
       }
     } catch (e) {
-      setError(e.message);
+      console.error("Admin data sync error:", e);
+      setError(e.message || "Failed to communicate with administrative backend. Please check network and permissions.");
+      toast.error(e.message || "Failed to load operational data.");
     } finally {
       setLoading(false);
     }
@@ -649,21 +593,56 @@ export default function AdminPortal() {
   }, [isSignedIn, profile?.role]);
 
   /* =========================================================
-     VERIFICATION ACTIONS
+     VERIFICATION ACTIONS & QUEUE AUDIT
   ========================================================== */
-  async function handleVerifyTailor(tailorId, approve = true) {
+  async function handleVerifyTailor(tailorId, action = "verify") {
     setActingId(tailorId);
     try {
-      const endpoint = approve
-        ? `/admin/tailors/${tailorId}/verify`
-        : `/admin/tailors/${tailorId}/reject`;
+      let endpoint = `/admin/tailors/${tailorId}/verify`;
+      let body = {};
 
-      await request(endpoint, { method: "PATCH" });
-      if (approve) {
+      if (action === "reject") {
+        const reason = window.prompt("Please state the specific reason for rejecting this atelier's verification:");
+        if (!reason || !reason.trim()) {
+          toast.warning("Rejection cancelled: A reason is mandatory for administrative audits.");
+          setActingId("");
+          return;
+        }
+        endpoint = `/admin/tailors/${tailorId}/reject`;
+        body.reason = reason.trim();
+      } else if (action === "resubmit") {
+        const notes = window.prompt("Specify documents or details required from tailor for resubmission:");
+        if (!notes || !notes.trim()) {
+          toast.warning("Resubmission request cancelled: Instructions are required.");
+          setActingId("");
+          return;
+        }
+        endpoint = `/admin/tailors/${tailorId}/request-resubmission`;
+        body.notes = notes.trim();
+      } else if (action === "suspend") {
+        const reason = window.prompt("Reason for suspending studio's verified status:");
+        if (!reason || !reason.trim()) {
+          setActingId("");
+          return;
+        }
+        endpoint = `/admin/tailors/${tailorId}/suspend`;
+        body.reason = reason.trim();
+      }
+
+      await request(endpoint, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+
+      if (action === "verify") {
         confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } });
         toast.success("Tailor studio verified successfully!");
-      } else {
+      } else if (action === "reject") {
         toast.info("Tailor verification application rejected.");
+      } else if (action === "resubmit") {
+        toast.info("Resubmission request sent to tailor.");
+      } else if (action === "suspend") {
+        toast.warn("Tailor verified status suspended.");
       }
       await loadData();
     } catch (e) {
@@ -673,33 +652,54 @@ export default function AdminPortal() {
     }
   }
 
-  async function handleVerifyBusiness(businessId, approve = true) {
+  async function handleVerifyBusiness(businessId, action = "verify") {
     setActingId(businessId);
     try {
+      let endpoint = `/admin/businesses/${businessId}/verify`;
       let body = {};
-      if (!approve) {
-        const reason = window.prompt("Please state the reason for rejecting business verification (e.g. Invalid GSTIN):");
-        if (reason === null) {
+
+      if (action === "reject") {
+        const reason = window.prompt("Please state the specific reason for rejecting business GSTIN verification:");
+        if (!reason || !reason.trim()) {
+          toast.warning("Rejection cancelled: A reason is mandatory for administrative audits.");
           setActingId("");
           return;
         }
-        body.reason = reason || "Business verification rejected by administrator";
+        endpoint = `/admin/businesses/${businessId}/reject`;
+        body.reason = reason.trim();
+      } else if (action === "resubmit") {
+        const notes = window.prompt("Specify documents or corrections needed from business for resubmission:");
+        if (!notes || !notes.trim()) {
+          toast.warning("Resubmission request cancelled: Notes are required.");
+          setActingId("");
+          return;
+        }
+        endpoint = `/admin/businesses/${businessId}/request-resubmission`;
+        body.notes = notes.trim();
+      } else if (action === "suspend") {
+        const reason = window.prompt("Reason for suspending business verified status:");
+        if (!reason || !reason.trim()) {
+          setActingId("");
+          return;
+        }
+        endpoint = `/admin/businesses/${businessId}/suspend`;
+        body.reason = reason.trim();
       }
-
-      const endpoint = approve
-        ? `/admin/businesses/${businessId}/verify`
-        : `/admin/businesses/${businessId}/reject`;
 
       await request(endpoint, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
 
-      if (approve) {
+      if (action === "verify") {
         confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } });
         toast.success("Business account & GSTIN verified successfully!");
-      } else {
+      } else if (action === "reject") {
         toast.info("Business verification application rejected.");
+      } else if (action === "resubmit") {
+        toast.info("Resubmission request sent to business.");
+      } else if (action === "suspend") {
+        toast.warn("Business verified privileges suspended.");
       }
       await loadData();
     } catch (e) {
@@ -913,33 +913,38 @@ export default function AdminPortal() {
     }
   }
 
-  // Filtered lists - Tailors
+  // Filtered lists - Tailors (Separated by authoritative verificationStatus enum)
   const pendingVerifications = useMemo(() => {
-    return tailors.filter(
-      (t) => !t.verified || t.verificationStatus === "pending"
-    );
+    return tailors.filter((t) => t.verificationStatus === "pending");
   }, [tailors]);
 
   const verifiedTailors = useMemo(() => {
-    return tailors.filter((t) => t.verified || t.verificationStatus === "verified");
+    return tailors.filter((t) => t.verified === true || t.verificationStatus === "verified");
   }, [tailors]);
 
   // Filtered lists - Businesses (GSTIN Compliance)
   const pendingBusinessVerifications = useMemo(() => {
     return businesses.filter(
-      (b) => !b.verified || b.verificationStatus === "pending" || b.businessProfile?.verificationStatus === "pending"
+      (b) => b.verificationStatus === "pending" || b.businessProfile?.verificationStatus === "pending"
     );
   }, [businesses]);
 
   const verifiedBusinesses = useMemo(() => {
-    return businesses.filter((b) => b.verified || b.verificationStatus === "verified" || b.businessProfile?.verificationStatus === "verified");
+    return businesses.filter(
+      (b) => b.verified === true || b.verificationStatus === "verified" || b.businessProfile?.verificationStatus === "verified"
+    );
   }, [businesses]);
 
   const filteredBusinesses = useMemo(() => {
     return businesses.filter((item) => {
-      const isVer = item.verified || item.verificationStatus === "verified" || item.businessProfile?.verificationStatus === "verified";
-      if (verificationFilter === "pending" && isVer) return false;
-      if (verificationFilter === "verified" && !isVer) return false;
+      const status = item.verificationStatus || item.businessProfile?.verificationStatus || (item.verified ? "verified" : "unverified");
+      if (verificationFilter !== "all") {
+        if (verificationFilter === "pending" && status !== "pending") return false;
+        if (verificationFilter === "verified" && status !== "verified") return false;
+        if (verificationFilter === "rejected" && status !== "rejected") return false;
+        if (verificationFilter === "resubmission_required" && status !== "resubmission_required") return false;
+        if (verificationFilter === "suspended" && status !== "suspended") return false;
+      }
       if (businessSearchQuery.trim()) {
         const q = businessSearchQuery.toLowerCase();
         const matchesComp = String(item.companyName || "").toLowerCase().includes(q);
@@ -954,10 +959,13 @@ export default function AdminPortal() {
 
   const filteredTailors = useMemo(() => {
     return tailors.filter((item) => {
-      if (verificationFilter === "pending") {
-        if (item.verified || item.verificationStatus === "verified") return false;
-      } else if (verificationFilter === "verified") {
-        if (!item.verified && item.verificationStatus !== "verified") return false;
+      const status = item.verificationStatus || (item.verified ? "verified" : "unverified");
+      if (verificationFilter !== "all") {
+        if (verificationFilter === "pending" && status !== "pending") return false;
+        if (verificationFilter === "verified" && status !== "verified") return false;
+        if (verificationFilter === "rejected" && status !== "rejected") return false;
+        if (verificationFilter === "resubmission_required" && status !== "resubmission_required") return false;
+        if (verificationFilter === "suspended" && status !== "suspended") return false;
       }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -1083,16 +1091,18 @@ export default function AdminPortal() {
   }, [users, tailors, verifiedTailors, pendingVerifications, businesses, pendingBusinessVerifications, verifiedBusinesses, bulkOrders]);
 
   const adminDisplayName =
+    profile?.firstName ||
     profile?.name ||
+    user?.firstName ||
     user?.fullName ||
-    (user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : null) ||
-    "Manoj Kumar";
+    "Administrator";
 
   const adminFullName =
+    [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") ||
     profile?.name ||
     user?.fullName ||
     (user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : null) ||
-    "Manoj Kumar Lodha";
+    "Administrator";
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -1256,6 +1266,25 @@ export default function AdminPortal() {
 
         {/* 3. MAIN WORKSPACE CONTENT */}
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        {error && (
+          <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-xs text-rose-900 flex items-center justify-between gap-4 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle size={18} className="text-[#8f2338] shrink-0" />
+              <div>
+                <p className="font-bold">Administrative Data Synchronization Failure</p>
+                <p className="text-rose-700 mt-0.5">{error}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={loadData}
+              className="rounded-xl bg-[#8f2338] text-white px-3.5 py-1.5 font-bold hover:bg-[#761c30] transition shrink-0 cursor-pointer"
+            >
+              Retry Sync
+            </button>
+          </div>
+        )}
+
         {tab === "dashboard" && (
           <div className="space-y-8 animate-fadeIn">
             {/* Executive Operations Overview & Real KPI Metrics */}
@@ -1746,6 +1775,39 @@ export default function AdminPortal() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => setVerificationFilter("resubmission_required")}
+                      className={`rounded-full px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                        verificationFilter === "resubmission_required"
+                          ? "bg-stone-900 text-white"
+                          : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                      }`}
+                    >
+                      Resubmission Required
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVerificationFilter("rejected")}
+                      className={`rounded-full px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                        verificationFilter === "rejected"
+                          ? "bg-stone-900 text-white"
+                          : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                      }`}
+                    >
+                      Rejected
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVerificationFilter("suspended")}
+                      className={`rounded-full px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                        verificationFilter === "suspended"
+                          ? "bg-stone-900 text-white"
+                          : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                      }`}
+                    >
+                      Suspended
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setVerificationFilter("all")}
                       className={`rounded-full px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${
                         verificationFilter === "all"
@@ -1784,10 +1846,10 @@ export default function AdminPortal() {
                     </div>
 
                     <h3 className="text-base font-bold text-stone-900">
-                      No unverified tailor profiles found.
+                      No tailor studios in this queue.
                     </h3>
                     <p className="text-xs text-stone-500 mt-1">
-                      All active tailor studios in this filter are reviewed and verified.
+                      No ateliers currently match the selected status filter ({verificationFilter}).
                     </p>
 
                     <div className="mt-5">
@@ -1801,7 +1863,9 @@ export default function AdminPortal() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filteredTailors.map((item) => (
+                    {filteredTailors.map((item) => {
+                      const vStatus = item.verificationStatus || (item.verified ? "verified" : "unverified");
+                      return (
                       <div
                         key={item._id}
                         className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-2xs flex flex-col justify-between"
@@ -1818,13 +1882,34 @@ export default function AdminPortal() {
                               <div>
                                 <div className="flex items-center gap-2">
                                   <h3 className="text-base font-bold text-stone-900">{item.name}</h3>
-                                  {item.verified || item.verificationStatus === "verified" ? (
+                                  {vStatus === "verified" && (
                                     <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold">
                                       ✓ Verified
                                     </span>
-                                  ) : (
-                                    <span className="rounded-full bg-rose-50 text-[#8f2338] border border-rose-200 px-2.5 py-0.5 text-[10px] font-bold">
-                                      ⏳ Under Review
+                                  )}
+                                  {vStatus === "pending" && (
+                                    <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-0.5 text-[10px] font-bold">
+                                      ⏳ Pending Audit
+                                    </span>
+                                  )}
+                                  {vStatus === "rejected" && (
+                                    <span className="rounded-full bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-0.5 text-[10px] font-bold">
+                                      ✕ Rejected
+                                    </span>
+                                  )}
+                                  {vStatus === "resubmission_required" && (
+                                    <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-0.5 text-[10px] font-bold">
+                                      ↺ Resubmission
+                                    </span>
+                                  )}
+                                  {vStatus === "suspended" && (
+                                    <span className="rounded-full bg-stone-100 text-stone-700 border border-stone-300 px-2.5 py-0.5 text-[10px] font-bold">
+                                      ⊘ Suspended
+                                    </span>
+                                  )}
+                                  {vStatus === "unverified" && (
+                                    <span className="rounded-full bg-stone-50 text-stone-600 border border-stone-200 px-2.5 py-0.5 text-[10px] font-bold">
+                                      Unverified
                                     </span>
                                   )}
                                 </div>
@@ -1848,9 +1933,16 @@ export default function AdminPortal() {
                               {item.phone || "—"}
                             </span>
                           </div>
+
+                          {(item.rejectionReason || item.resubmissionNotes || item.suspendedReason) && (
+                            <div className="mt-2.5 p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/60 text-[11px] text-amber-900">
+                              <span className="font-bold">Audit Note: </span>
+                              {item.rejectionReason || item.resubmissionNotes || item.suspendedReason}
+                            </div>
+                          )}
                         </div>
 
-                        <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between">
+                        <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between flex-wrap gap-2">
                           <button
                             type="button"
                             onClick={() => handleOpenEditTailor(item)}
@@ -1860,46 +1952,67 @@ export default function AdminPortal() {
                             <Pencil size={14} />
                           </button>
 
-                          <div className="flex items-center gap-1.5">
-                            {item.verified || item.verificationStatus === "verified" ? (
-                              <button
-                                type="button"
-                                onClick={() => handleVerifyTailor(item._id, false)}
-                                title="Revoke Verification"
-                                disabled={actingId === item._id}
-                                className="h-8 px-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center gap-1.5 text-xs font-bold transition cursor-pointer disabled:opacity-50"
-                              >
-                                <X size={14} strokeWidth={2.4} />
-                                <span>Revoke</span>
-                              </button>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {vStatus === "verified" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerifyTailor(item._id, "suspend")}
+                                  title="Suspend Verification"
+                                  disabled={actingId === item._id}
+                                  className="h-8 px-2.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 flex items-center gap-1 text-[11px] font-bold transition cursor-pointer disabled:opacity-50"
+                                >
+                                  <span>Suspend</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerifyTailor(item._id, "reject")}
+                                  title="Revoke Verification"
+                                  disabled={actingId === item._id}
+                                  className="h-8 px-2.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center gap-1 text-[11px] font-bold transition cursor-pointer disabled:opacity-50"
+                                >
+                                  <X size={13} strokeWidth={2.4} />
+                                  <span>Revoke</span>
+                                </button>
+                              </>
                             ) : (
                               <>
                                 <button
                                   type="button"
-                                  onClick={() => handleVerifyTailor(item._id, false)}
-                                  title="Reject Verification"
+                                  onClick={() => handleVerifyTailor(item._id, "resubmit")}
+                                  title="Request Resubmission"
                                   disabled={actingId === item._id}
-                                  className="h-8 px-3 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-100 hover:text-stone-900 flex items-center gap-1.5 text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                                  className="h-8 px-2.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 flex items-center gap-1 text-[11px] font-bold transition cursor-pointer disabled:opacity-50"
                                 >
-                                  <X size={14} strokeWidth={2.4} />
+                                  <span>Request Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerifyTailor(item._id, "reject")}
+                                  title="Reject Application"
+                                  disabled={actingId === item._id}
+                                  className="h-8 px-2.5 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-100 flex items-center gap-1 text-[11px] font-bold transition cursor-pointer disabled:opacity-50"
+                                >
+                                  <X size={13} strokeWidth={2.4} />
                                   <span>Reject</span>
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleVerifyTailor(item._id, true)}
+                                  onClick={() => handleVerifyTailor(item._id, "verify")}
                                   title="Approve Studio"
                                   disabled={actingId === item._id}
-                                  className="h-8 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 text-xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
+                                  className="h-8 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 text-[11px] font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
                                 >
-                                  <Check size={14} strokeWidth={2.6} />
-                                  <span>Approve Studio</span>
+                                  <Check size={13} strokeWidth={2.6} />
+                                  <span>Approve</span>
                                 </button>
                               </>
                             )}
                           </div>
                         </div>
                       </div>
-                    ))}
+                    );
+                  })}
                   </div>
                 )}
               </>
@@ -1932,6 +2045,39 @@ export default function AdminPortal() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => setVerificationFilter("resubmission_required")}
+                      className={`rounded-full px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                        verificationFilter === "resubmission_required"
+                          ? "bg-stone-900 text-white"
+                          : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                      }`}
+                    >
+                      Resubmission Required
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVerificationFilter("rejected")}
+                      className={`rounded-full px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                        verificationFilter === "rejected"
+                          ? "bg-stone-900 text-white"
+                          : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                      }`}
+                    >
+                      Rejected
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVerificationFilter("suspended")}
+                      className={`rounded-full px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                        verificationFilter === "suspended"
+                          ? "bg-stone-900 text-white"
+                          : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                      }`}
+                    >
+                      Suspended
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setVerificationFilter("all")}
                       className={`rounded-full px-4 py-1.5 text-xs font-semibold transition cursor-pointer ${
                         verificationFilter === "all"
@@ -1961,10 +2107,10 @@ export default function AdminPortal() {
                       <Building2 size={28} />
                     </div>
                     <h3 className="text-base font-bold text-stone-900">
-                      No business verification records.
+                      No business accounts in this queue.
                     </h3>
                     <p className="text-xs text-stone-500 mt-1">
-                      No corporate accounts match this verification filter.
+                      No corporate accounts match this verification filter ({verificationFilter}).
                     </p>
                     <div className="mt-5">
                       <button
@@ -1978,7 +2124,7 @@ export default function AdminPortal() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {filteredBusinesses.map((b) => {
-                      const isVer = b.verified || b.verificationStatus === "verified" || b.businessProfile?.verificationStatus === "verified";
+                      const vStatus = b.verificationStatus || b.businessProfile?.verificationStatus || (b.verified ? "verified" : "unverified");
                       const gstin = b.businessProfile?.gstin || b.gstin || "Not Submitted";
                       const company = b.companyName || b.businessProfile?.companyName || "Commercial Client";
                       const contact = b.name || b.contactPerson || "Authorized Representative";
@@ -1998,13 +2144,34 @@ export default function AdminPortal() {
                                 <div>
                                   <div className="flex items-center gap-2">
                                     <h3 className="text-base font-bold text-stone-900">{company}</h3>
-                                    {isVer ? (
+                                    {vStatus === "verified" && (
                                       <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold">
                                         ✓ GSTIN Verified
                                       </span>
-                                    ) : (
+                                    )}
+                                    {vStatus === "pending" && (
                                       <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-0.5 text-[10px] font-bold">
                                         ⏳ Audit Required
+                                      </span>
+                                    )}
+                                    {vStatus === "rejected" && (
+                                      <span className="rounded-full bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-0.5 text-[10px] font-bold">
+                                        ✕ Rejected
+                                      </span>
+                                    )}
+                                    {vStatus === "resubmission_required" && (
+                                      <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-0.5 text-[10px] font-bold">
+                                        ↺ Resubmission
+                                      </span>
+                                    )}
+                                    {vStatus === "suspended" && (
+                                      <span className="rounded-full bg-stone-100 text-stone-700 border border-stone-300 px-2.5 py-0.5 text-[10px] font-bold">
+                                        ⊘ Suspended
+                                      </span>
+                                    )}
+                                    {vStatus === "unverified" && (
+                                      <span className="rounded-full bg-stone-50 text-stone-600 border border-stone-200 px-2.5 py-0.5 text-[10px] font-bold">
+                                        Unverified
                                       </span>
                                     )}
                                   </div>
@@ -2032,41 +2199,67 @@ export default function AdminPortal() {
                                   <span className="truncate max-w-[200px]">{b.businessProfile.address}</span>
                                 </div>
                               )}
+                              {(b.rejectionReason || b.businessProfile?.rejectionReason || b.resubmissionNotes || b.businessProfile?.resubmissionNotes || b.suspendedReason || b.businessProfile?.suspendedReason) && (
+                                <div className="mt-2 p-2 rounded-xl bg-amber-50/70 border border-amber-200/60 text-[11px] text-amber-900">
+                                  <span className="font-bold">Audit Note: </span>
+                                  {b.rejectionReason || b.businessProfile?.rejectionReason || b.resubmissionNotes || b.businessProfile?.resubmissionNotes || b.suspendedReason || b.businessProfile?.suspendedReason}
+                                </div>
+                              )}
                             </div>
                           </div>
 
-                          <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-end gap-2">
-                            {isVer ? (
-                              <button
-                                type="button"
-                                onClick={() => handleVerifyBusiness(bId, false)}
-                                title="Revoke Verification"
-                                disabled={actingId === bId}
-                                className="h-8 px-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center gap-1.5 text-xs font-bold transition cursor-pointer disabled:opacity-50"
-                              >
-                                <X size={14} strokeWidth={2.4} />
-                                <span>Revoke Verification</span>
-                              </button>
+                          <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-end gap-1.5 flex-wrap">
+                            {vStatus === "verified" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerifyBusiness(bId, "suspend")}
+                                  title="Suspend Verification"
+                                  disabled={actingId === bId}
+                                  className="h-8 px-2.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 flex items-center gap-1 text-[11px] font-bold transition cursor-pointer disabled:opacity-50"
+                                >
+                                  <span>Suspend</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerifyBusiness(bId, "reject")}
+                                  title="Revoke Verification"
+                                  disabled={actingId === bId}
+                                  className="h-8 px-2.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center gap-1 text-[11px] font-bold transition cursor-pointer disabled:opacity-50"
+                                >
+                                  <X size={13} strokeWidth={2.4} />
+                                  <span>Revoke</span>
+                                </button>
+                              </>
                             ) : (
                               <>
                                 <button
                                   type="button"
-                                  onClick={() => handleVerifyBusiness(bId, false)}
+                                  onClick={() => handleVerifyBusiness(bId, "resubmit")}
+                                  title="Request Resubmission"
+                                  disabled={actingId === bId}
+                                  className="h-8 px-2.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 flex items-center gap-1 text-[11px] font-bold transition cursor-pointer disabled:opacity-50"
+                                >
+                                  <span>Request Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerifyBusiness(bId, "reject")}
                                   title="Reject Application"
                                   disabled={actingId === bId}
-                                  className="h-8 px-3 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-100 hover:text-stone-900 flex items-center gap-1.5 text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                                  className="h-8 px-2.5 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-100 flex items-center gap-1 text-[11px] font-bold transition cursor-pointer disabled:opacity-50"
                                 >
-                                  <X size={14} strokeWidth={2.4} />
+                                  <X size={13} strokeWidth={2.4} />
                                   <span>Reject</span>
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleVerifyBusiness(bId, true)}
+                                  onClick={() => handleVerifyBusiness(bId, "verify")}
                                   title="Approve Business GSTIN"
                                   disabled={actingId === bId}
-                                  className="h-8 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 text-xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
+                                  className="h-8 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 text-[11px] font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
                                 >
-                                  <Check size={14} strokeWidth={2.6} />
+                                  <Check size={13} strokeWidth={2.6} />
                                   <span>Approve GSTIN</span>
                                 </button>
                               </>
@@ -2366,22 +2559,16 @@ export default function AdminPortal() {
             {/* Studio Cards Below Map */}
             <div>
               <div className="text-xs text-stone-500 mb-3">
-                Showing {filteredDirectoryTailors.length || 1} of {tailors.length || 1} studios
+                Showing {filteredDirectoryTailors.length} of {tailors.length} studios
               </div>
 
               <div className="space-y-3">
-                {(filteredDirectoryTailors.length > 0 ? filteredDirectoryTailors : [
-                  {
-                    _id: "royal-jaipur-sample",
-                    name: "Royal Jaipur",
-                    owner: "Ramesh Kumar",
-                    experience: 5,
-                    area: "C block",
-                    city: "Jaipur",
-                    country: "India",
-                    verified: true,
-                  }
-                ]).map((studio) => (
+                {filteredDirectoryTailors.length === 0 ? (
+                  <div className="rounded-3xl border border-stone-200/80 bg-white p-8 text-center shadow-2xs">
+                    <p className="text-xs text-stone-500">No tailor studios match your search or filter criteria.</p>
+                  </div>
+                ) : (
+                  filteredDirectoryTailors.map((studio) => (
                   <div
                     key={studio._id}
                     className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-2xl border border-stone-200/80 p-4 shadow-2xs hover:border-stone-300 transition"
@@ -2423,7 +2610,7 @@ export default function AdminPortal() {
                       </button>
                     </div>
                   </div>
-                ))}
+                )))}
               </div>
             </div>
           </div>

@@ -13,9 +13,13 @@ import {
   updateAdminTailor,
   updateAdminUser,
   verifyTailor,
+  requestTailorResubmission,
+  suspendTailor,
   listAdminBusinesses,
   verifyBusiness,
   rejectBusiness,
+  requestBusinessResubmission,
+  suspendBusiness,
 } from '../controllers/adminController.js';
 import { requireAuth, requireRole, syncAppUser } from '../middleware/authMiddleware.js';
 import { validateObjectId } from '../middleware/validate.js';
@@ -43,10 +47,14 @@ router.delete('/admin/tailors/:id', validateObjectId('id'), deleteAdminTailor);
 router.get('/admin/verifications', listPendingVerifications);
 router.patch('/admin/tailors/:id/verify', validateObjectId('id'), verifyTailor);
 router.patch('/admin/tailors/:id/reject', validateObjectId('id'), rejectTailor);
+router.patch('/admin/tailors/:id/request-resubmission', validateObjectId('id'), requestTailorResubmission);
+router.patch('/admin/tailors/:id/suspend', validateObjectId('id'), suspendTailor);
 
 // Business Accounts & GSTIN Verification
 router.get('/admin/businesses', listAdminBusinesses);
 router.patch('/admin/businesses/:id/verify', validateObjectId('id'), verifyBusiness);
 router.patch('/admin/businesses/:id/reject', validateObjectId('id'), rejectBusiness);
+router.patch('/admin/businesses/:id/request-resubmission', validateObjectId('id'), requestBusinessResubmission);
+router.patch('/admin/businesses/:id/suspend', validateObjectId('id'), suspendBusiness);
 
 export default router;

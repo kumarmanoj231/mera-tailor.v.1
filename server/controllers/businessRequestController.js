@@ -747,6 +747,24 @@ export async function updateBusinessProfile(req, res) {
       return res.status(400).json({ error: 'Invalid GSTIN format. Expected 15-character Indian GST identification number (e.g., 08AAACH7409R1ZZ).' });
     }
 
+    // Prevent duplicate pending submission if already in pending review
+    if (req.body.submitForAudit) {
+      if (bp.verificationStatus === 'pending') {
+        return res.status(409).json({
+          error: 'Your verification request is already pending administrative review.',
+          verificationStatus: 'pending',
+        });
+      }
+      if (bp.verificationStatus === 'verified' || bp.verified) {
+        return res.status(400).json({
+          error: 'This business account is already verified.',
+          verificationStatus: 'verified',
+        });
+      }
+    }
+
+    const nextVerificationStatus = req.body.submitForAudit ? 'pending' : (bp.verificationStatus || 'unverified');
+
     const updatePayload = {
       ownerClerkUserId: req.authUserId,
       companyName,
@@ -761,8 +779,9 @@ export async function updateBusinessProfile(req, res) {
       contactPerson,
       contactPhone,
       documentUrl,
+      documents: documentUrl ? [{ label: 'GSTIN / Tax Certificate', url: documentUrl, uploadedAt: new Date() }] : (bp.documents || []),
       image: user.avatar || user.imageUrl || '',
-      verificationStatus: req.body.submitForAudit ? 'pending' : (bp.verificationStatus || 'unverified'),
+      verificationStatus: nextVerificationStatus,
       verificationAppliedAt: req.body.submitForAudit ? new Date() : bp.verificationAppliedAt,
     };
 
@@ -780,6 +799,38 @@ export async function updateBusinessProfile(req, res) {
     };
 
     await user.save();
+
+    // If submitted for audit, record/upsert VerificationRequest
+    if (req.body.submitForAudit) {
+      try {
+        const { VerificationRequest } = await import('../models.js');
+        await VerificationRequest.findOneAndUpdate(
+          { targetType: 'business', clerkUserId: req.authUserId },
+          {
+            $set: {
+              targetId: business._id.toString(),
+              companyName,
+              gstin,
+              documents: updatePayload.documents,
+              status: 'pending',
+              notes: req.body.notes || 'Business GSTIN verification application submitted',
+            },
+            $push: {
+              history: {
+                status: 'pending',
+                updatedBy: req.authUserId,
+                role: 'business',
+                notes: 'Application submitted for audit',
+                timestamp: new Date(),
+              },
+            },
+          },
+          { upsert: true, new: true }
+        );
+      } catch (err) {
+        console.warn('Could not record VerificationRequest for business:', err.message);
+      }
+    }
 
     res.json({
       message: req.body.submitForAudit

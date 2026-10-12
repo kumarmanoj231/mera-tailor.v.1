@@ -16,7 +16,7 @@ test('Database Architecture: Business schema matches ownerClerkUserId convention
 
   // Verify enum values for verificationStatus
   const enumValues = schema.path('verificationStatus').enumValues;
-  assert.deepEqual(enumValues, ['unverified', 'pending', 'verified', 'rejected']);
+  assert.deepEqual(enumValues, ['unverified', 'pending', 'verified', 'rejected', 'resubmission_required', 'suspended']);
 });
 
 test('Database Architecture: Tailor schema uses ownerClerkUserId convention', () => {

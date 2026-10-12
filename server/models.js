@@ -37,12 +37,24 @@ const tailorSchema = new mongoose.Schema(
     verified: { type: Boolean, default: false, index: true },
     verificationStatus: {
       type: String,
-      enum: ["unverified", "pending", "verified", "rejected"],
+      enum: ["unverified", "pending", "verified", "rejected", "resubmission_required", "suspended"],
       default: "unverified",
       index: true,
     },
     verificationAppliedAt: Date,
     verificationNotes: String,
+    rejectionReason: String,
+    resubmissionNotes: String,
+    suspendedReason: String,
+    suspendedAt: Date,
+    documentUrl: { type: String, trim: true },
+    documents: [
+      {
+        label: String,
+        url: String,
+        uploadedAt: { type: Date, default: Date.now },
+      },
+    ],
     verifiedBy: String,
     verifiedAt: Date,
   },
@@ -109,7 +121,7 @@ const userSchema = new mongoose.Schema(
       contactPhone: { type: String, trim: true },
       verificationStatus: {
         type: String,
-        enum: ["unverified", "pending", "verified", "rejected"],
+        enum: ["unverified", "pending", "verified", "rejected", "resubmission_required", "suspended"],
         default: "unverified",
         index: true,
       },
@@ -119,7 +131,17 @@ const userSchema = new mongoose.Schema(
       verifiedBy: String,
       verifiedAt: Date,
       rejectionReason: String,
+      resubmissionNotes: String,
+      suspendedReason: String,
+      suspendedAt: Date,
       documentUrl: String,
+      documents: [
+        {
+          label: String,
+          url: String,
+          uploadedAt: { type: Date, default: Date.now },
+        },
+      ],
     },
   },
   { timestamps: true },
@@ -378,13 +400,20 @@ const businessSchema = new mongoose.Schema(
     contactPerson: { type: String, trim: true },
     contactPhone: { type: String, trim: true },
     documentUrl: { type: String, trim: true },
+    documents: [
+      {
+        label: String,
+        url: String,
+        uploadedAt: { type: Date, default: Date.now },
+      },
+    ],
     description: { type: String, trim: true },
     image: { type: String, trim: true },
     location: pointSchema,
     verified: { type: Boolean, default: false, index: true },
     verificationStatus: {
       type: String,
-      enum: ["unverified", "pending", "verified", "rejected"],
+      enum: ["unverified", "pending", "verified", "rejected", "resubmission_required", "suspended"],
       default: "unverified",
       index: true,
     },
@@ -393,9 +422,80 @@ const businessSchema = new mongoose.Schema(
     verifiedBy: String,
     verifiedAt: Date,
     rejectionReason: String,
+    resubmissionNotes: String,
+    suspendedReason: String,
+    suspendedAt: Date,
   },
   { timestamps: true }
 );
+
+const verificationRequestSchema = new mongoose.Schema(
+  {
+    targetType: {
+      type: String,
+      enum: ["tailor", "business"],
+      required: true,
+      index: true,
+    },
+    targetId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      index: true,
+    },
+    clerkUserId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    name: { type: String, required: true },
+    companyName: String,
+    documentUrl: String,
+    documents: [
+      {
+        label: String,
+        url: String,
+        uploadedAt: { type: Date, default: Date.now },
+      },
+    ],
+    gstin: String,
+    panNumber: String,
+    businessType: String,
+    experience: Number,
+    phone: String,
+    address: String,
+    city: String,
+    state: String,
+    notes: String,
+    status: {
+      type: String,
+      enum: ["pending", "verified", "rejected", "resubmission_required", "suspended"],
+      default: "pending",
+      index: true,
+    },
+    reviewedBy: String,
+    reviewedByEmail: String,
+    reviewedAt: Date,
+    reviewDecision: {
+      type: String,
+      enum: ["approved", "rejected", "resubmission_required", "suspended"],
+    },
+    rejectionReason: String,
+    resubmissionNotes: String,
+    submittedAt: { type: Date, default: Date.now, index: true },
+    history: [
+      {
+        action: String,
+        status: String,
+        actorClerkUserId: String,
+        reason: String,
+        timestamp: { type: Date, default: Date.now },
+      },
+    ],
+  },
+  { timestamps: true }
+);
+
+verificationRequestSchema.index({ targetType: 1, status: 1, submittedAt: -1 });
 
 const auditLogSchema = new mongoose.Schema(
   {
@@ -430,5 +530,8 @@ export const AuditLog =
   mongoose.models.AuditLog || mongoose.model("AuditLog", auditLogSchema, "audit_logs");
 export const Message =
   mongoose.models.Message || mongoose.model("Message", messageSchema, "messages");
+export const VerificationRequest =
+  mongoose.models.VerificationRequest || mongoose.model("VerificationRequest", verificationRequestSchema, "verification_requests");
+
 
 

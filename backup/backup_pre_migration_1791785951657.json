@@ -1,0 +1,208 @@
+{
+  "timestamp": "2026-10-12T06:19:11.659Z",
+  "users": [
+    {
+      "_id": "6ac5020c6de5437f8eefd04a",
+      "clerkUserId": "user_3KKAaVV4mORI8daKhFDg0S0ZJu2",
+      "__v": 0,
+      "bio": "Hi, I am Manoj Kumar!",
+      "createdAt": "2026-10-06T14:13:32.907Z",
+      "disabled": false,
+      "email": "lodhamanoj383@gmail.com",
+      "firstName": "Manoj Kumar",
+      "lastName": "Lodha",
+      "onboardingCompleted": true,
+      "preferredLanguage": "en",
+      "role": "admin",
+      "savedTailors": [],
+      "searchPreferences": {
+        "categories": [
+          "Suit"
+        ],
+        "radiusKm": 10,
+        "sortBy": "recommended"
+      },
+      "updatedAt": "2026-10-11T11:49:00.385Z",
+      "phone": "+91 6268893387",
+      "avatar": "https://img.clerk.com/eyJ0eXBlIjoicHJveHkiLCJzcmMiOiJodHRwczovL2ltYWdlcy5jbGVyay5kZXYvb2F1dGhfZ29vZ2xlL2ltZ18zS0tBYWFiTTBpU1dyQ1R0bFY2NlBzZFdOb3UifQ",
+      "imageUrl": "https://img.clerk.com/eyJ0eXBlIjoicHJveHkiLCJzcmMiOiJodHRwczovL2ltYWdlcy5jbGVyay5kZXYvb2F1dGhfZ29vZ2xlL2ltZ18zS0tBYWFiTTBpU1dyQ1R0bFY2NlBzZFdOb3UifQ"
+    },
+    {
+      "_id": "6ac5038e6de5437f8eefd04b",
+      "clerkUserId": "user_3KKBUhoqIKOMwwHfvS42LQxzj3x",
+      "__v": 0,
+      "bio": "",
+      "createdAt": "2026-10-06T14:19:58.023Z",
+      "disabled": false,
+      "email": "kumarmanoj.dev11@gmail.com",
+      "firstName": "Manoj Kumar",
+      "lastName": "Lodha",
+      "onboardingCompleted": true,
+      "preferredLanguage": "en",
+      "role": "tailor",
+      "savedTailors": [],
+      "searchPreferences": {
+        "categories": [],
+        "radiusKm": 10,
+        "sortBy": "recommended"
+      },
+      "updatedAt": "2026-10-12T04:43:57.288Z",
+      "locationAccuracyMeters": 200000,
+      "locationConsentAt": "2026-10-06T14:20:04.364Z",
+      "locationLabel": "Tarnod, Suwasra Tahsil, Mandsaur, Madhya Pradesh, India",
+      "locationSource": "browser",
+      "primaryLocation": {
+        "type": "Point",
+        "coordinates": [
+          75.6963,
+          24.0286
+        ]
+      },
+      "avatar": "https://img.clerk.com/eyJ0eXBlIjoicHJveHkiLCJzcmMiOiJodHRwczovL2ltYWdlcy5jbGVyay5kZXYvb2F1dGhfZ29vZ2xlL2ltZ18zS0tCVWk3dmV6Z1VDVWtXVFk4UGNrV25YNFcifQ",
+      "imageUrl": "https://img.clerk.com/eyJ0eXBlIjoicHJveHkiLCJzcmMiOiJodHRwczovL2ltYWdlcy5jbGVyay5kZXYvb2F1dGhfZ29vZ2xlL2ltZ18zS0tCVWk3dmV6Z1VDVWtXVFk4UGNrV25YNFcifQ"
+    },
+    {
+      "_id": "6ac50f026de5437f8eefd04c",
+      "clerkUserId": "user_3KKHR7E6dt3nM3GVNBjpj6bxFTc",
+      "__v": 0,
+      "bio": "",
+      "createdAt": "2026-10-06T15:08:50.455Z",
+      "disabled": false,
+      "email": "indonesiaraj09@gmail.com",
+      "firstName": "Better",
+      "lastName": "Hidden",
+      "onboardingCompleted": true,
+      "preferredLanguage": "en",
+      "role": "customer",
+      "savedTailors": [
+        {
+          "tailorId": "6ac50d5958fc73dacacba208",
+          "savedAt": "2026-10-11T18:22:45.223Z",
+          "_id": "6acbd3f53c662089ae7ed661"
+        }
+      ],
+      "searchPreferences": {
+        "categories": [
+          "Suit",
+          "Ethnic Wear"
+        ],
+        "radiusKm": 10,
+        "sortBy": "recommended"
+      },
+      "updatedAt": "2026-10-11T19:52:33.203Z",
+      "locationConsentAt": "2026-10-11T18:11:46.956Z",
+      "locationLabel": "Jaipur, Jaipur Municipal Corporation, Jaipur Tehsil, Jaipur, Rajasthan, 302001, India",
+      "locationSource": "manual",
+      "primaryLocation": {
+        "type": "Point",
+        "coordinates": [
+          75.8189817,
+          26.9154576
+        ]
+      },
+      "phone": "",
+      "avatar": "https://img.clerk.com/eyJ0eXBlIjoicHJveHkiLCJzcmMiOiJodHRwczovL2ltYWdlcy5jbGVyay5kZXYvb2F1dGhfZ29vZ2xlL2ltZ18zS0tIUjhrYjhnRU9ZZkhhS1B0TDU1ZnVSUnQifQ",
+      "imageUrl": "https://img.clerk.com/eyJ0eXBlIjoicHJveHkiLCJzcmMiOiJodHRwczovL2ltYWdlcy5jbGVyay5kZXYvb2F1dGhfZ29vZ2xlL2ltZ18zS0tIUjhrYjhnRU9ZZkhhS1B0TDU1ZnVSUnQifQ",
+      "locationAccuracyMeters": 200000
+    },
+    {
+      "_id": "6ac52a5c6de5437f8eefd04d",
+      "clerkUserId": "user_3KKVctXtUQgf7cBS8HCnZnjjGgh",
+      "__v": 0,
+      "bio": "",
+      "createdAt": "2026-10-06T17:05:32.913Z",
+      "disabled": false,
+      "email": "221b231@juetguna.in",
+      "firstName": "MANOJ",
+      "lastName": "KUMAR LODHA",
+      "onboardingCompleted": true,
+      "preferredLanguage": "en",
+      "role": "business",
+      "savedTailors": [],
+      "searchPreferences": {
+        "categories": [],
+        "radiusKm": 10,
+        "sortBy": "recommended"
+      },
+      "updatedAt": "2026-10-11T11:47:44.268Z",
+      "locationAccuracyMeters": 200000,
+      "locationConsentAt": "2026-10-06T17:05:49.033Z",
+      "locationLabel": "Pitampur, Pithampur, Pithampur Tahsil, Dhar, Madhya Pradesh, 454775, India",
+      "locationSource": "browser",
+      "primaryLocation": {
+        "type": "Point",
+        "coordinates": [
+          75.6824,
+          22.6155
+        ]
+      },
+      "avatar": "https://img.clerk.com/eyJ0eXBlIjoicHJveHkiLCJzcmMiOiJodHRwczovL2ltYWdlcy5jbGVyay5kZXYvb2F1dGhfZ29vZ2xlL2ltZ18zS0tWY3F0NGV2SDFaeUViYXNldzhsYm52UlAifQ",
+      "imageUrl": "https://img.clerk.com/eyJ0eXBlIjoicHJveHkiLCJzcmMiOiJodHRwczovL2ltYWdlcy5jbGVyay5kZXYvb2F1dGhfZ29vZ2xlL2ltZ18zS0tWY3F0NGV2SDFaeUViYXNldzhsYm52UlAifQ"
+    }
+  ],
+  "tailors": [
+    {
+      "_id": "6ac50d5958fc73dacacba208",
+      "ownerClerkUserId": "user_3KKBUhoqIKOMwwHfvS42LQxzj3x",
+      "rating": 0,
+      "reviews": 0,
+      "status": "Available",
+      "categories": [
+        "Ethnic Wear",
+        "Alteration"
+      ],
+      "languages": [],
+      "portfolio": [],
+      "isDemo": false,
+      "verified": true,
+      "verificationStatus": "verified",
+      "services": [
+        {
+          "name": "Custom Stitching",
+          "price": 499,
+          "days": 7,
+          "_id": "6ac50d5958fc73dacacba209"
+        },
+        {
+          "name": "Suit / Blazer Fitting",
+          "price": 499,
+          "days": 7,
+          "_id": "6ac50d5958fc73dacacba20a"
+        },
+        {
+          "name": "Alteration & Hemming",
+          "price": 190,
+          "days": 2,
+          "_id": "6ac50d5958fc73dacacba20b"
+        }
+      ],
+      "name": "Royal Jaipur",
+      "owner": "Ramesh Kumar",
+      "area": "C block",
+      "city": "Jaipur",
+      "phone": "+91 6262240577",
+      "description": "Carrying shop for 10 years father legacy",
+      "minPrice": 499,
+      "experience": 5,
+      "createdAt": "2026-10-06T15:01:45.289Z",
+      "updatedAt": "2026-10-06T22:13:11.086Z",
+      "__v": 0,
+      "verificationAppliedAt": "2026-10-06T15:02:37.891Z",
+      "verificationNotes": "Approved by Admin",
+      "verifiedAt": "2026-10-06T15:05:51.168Z",
+      "verifiedBy": "user_3KKAaVV4mORI8daKhFDg0S0ZJu2",
+      "country": "India",
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          75.7873,
+          26.9124
+        ]
+      },
+      "state": "",
+      "activeSlotsBooked": 0,
+      "capacitySlots": 10
+    }
+  ],
+  "businesses": []
+}

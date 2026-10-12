@@ -240,13 +240,43 @@ export async function listAdminTailors(_req, res) {
 
 /**
  * GET /api/admin/verifications
- * List all tailors with verification applications / unverified
+ * List verification applications across tailors and businesses with status filtering and audit data
  */
-export async function listPendingVerifications(_req, res) {
+export async function listPendingVerifications(req, res) {
   try {
-    let tailors = await Tailor.find()
+    const { type = 'tailor', status = 'all', search = '' } = req.query;
+
+    if (type === 'business') {
+      let query = {};
+      if (status !== 'all') {
+        query.verificationStatus = status;
+      }
+      if (search.trim()) {
+        const regex = new RegExp(search.trim(), 'i');
+        query.$or = [{ companyName: regex }, { gstin: regex }, { contactPerson: regex }, { city: regex }];
+      }
+      const businesses = await Business.find(query).sort({ verificationAppliedAt: -1, createdAt: -1 }).lean();
+      return res.json(businesses);
+    }
+
+    // Default: Tailors
+    let query = {};
+    if (status !== 'all') {
+      if (status === 'verified') {
+        query.$or = [{ verified: true }, { verificationStatus: 'verified' }];
+      } else {
+        query.verificationStatus = status;
+      }
+    }
+    if (search.trim()) {
+      const regex = new RegExp(search.trim(), 'i');
+      query.$or = [{ name: regex }, { owner: regex }, { city: regex }, { area: regex }, { phone: regex }];
+    }
+
+    let tailors = await Tailor.find(query)
       .sort({ verificationAppliedAt: -1, createdAt: -1 })
       .lean();
+
     const ownerIds = [...new Set(tailors.map(t => t.ownerClerkUserId).filter(Boolean))];
     if (ownerIds.length > 0) {
       const ownerUsers = await User.find({ clerkUserId: { $in: ownerIds } })
@@ -279,17 +309,60 @@ export async function verifyTailor(req, res) {
     const tailor = await Tailor.findById(req.params.id);
     if (!tailor) return res.status(404).json({ error: 'Tailor not found.' });
 
+    const notes = String(req.body?.notes || 'Approved by Administrator').trim().slice(0, 500);
+
     tailor.verified = true;
     tailor.verificationStatus = 'verified';
     tailor.verifiedAt = new Date();
     tailor.verifiedBy = req.authUserId;
-    tailor.verificationNotes = req.body?.notes || 'Approved by Admin';
+    tailor.verificationNotes = notes;
+    tailor.rejectionReason = undefined;
 
     if (!tailor.location || !Array.isArray(tailor.location.coordinates) || tailor.location.coordinates.length !== 2) {
       tailor.location = { type: 'Point', coordinates: [75.7873, 26.9124] };
     }
 
     await tailor.save();
+
+    // Update VerificationRequest
+    try {
+      const { VerificationRequest } = await import('../models.js');
+      await VerificationRequest.findOneAndUpdate(
+        { targetType: 'tailor', targetId: tailor._id.toString() },
+        {
+          $set: {
+            status: 'verified',
+            reviewedBy: req.authUserId,
+            reviewedAt: new Date(),
+            reviewDecision: 'approved',
+            rejectionReason: '',
+          },
+          $push: {
+            history: {
+              status: 'verified',
+              updatedBy: req.authUserId,
+              role: 'admin',
+              notes,
+              timestamp: new Date(),
+            },
+          },
+        },
+        { upsert: true }
+      );
+    } catch (e) {
+      console.warn('VerificationRequest record warning:', e.message);
+    }
+
+    // Append to AuditLog
+    await AuditLog.create({
+      action: 'TAILOR_VERIFIED',
+      adminClerkUserId: req.authUserId,
+      adminEmail: req.appUser?.email || '',
+      targetUserId: tailor._id.toString(),
+      targetClerkUserId: tailor.ownerClerkUserId || '',
+      details: { tailorName: tailor.name, notes },
+      result: 'success',
+    }).catch(() => {});
 
     if (tailor.ownerClerkUserId) {
       createNotification({
@@ -310,10 +383,15 @@ export async function verifyTailor(req, res) {
 
 /**
  * PATCH /api/admin/tailors/:id/reject
- * Reject or revoke tailor verification
+ * Reject tailor verification (Mandatory reason required)
  */
 export async function rejectTailor(req, res) {
   try {
+    const reason = String(req.body?.reason || req.body?.notes || '').trim();
+    if (!reason) {
+      return res.status(400).json({ error: 'A specific rejection reason is required for administrative audit integrity.' });
+    }
+
     const tailor = await Tailor.findById(req.params.id);
     if (!tailor) return res.status(404).json({ error: 'Tailor not found.' });
 
@@ -321,18 +399,168 @@ export async function rejectTailor(req, res) {
     tailor.verificationStatus = 'rejected';
     tailor.verifiedAt = undefined;
     tailor.verifiedBy = undefined;
-    tailor.verificationNotes = req.body?.notes || req.body?.reason || 'Verification rejected by Admin';
+    tailor.verificationNotes = reason;
+    tailor.rejectionReason = reason;
 
     await tailor.save();
+
+    // Update VerificationRequest
+    try {
+      const { VerificationRequest } = await import('../models.js');
+      await VerificationRequest.findOneAndUpdate(
+        { targetType: 'tailor', targetId: tailor._id.toString() },
+        {
+          $set: {
+            status: 'rejected',
+            reviewedBy: req.authUserId,
+            reviewedAt: new Date(),
+            reviewDecision: 'rejected',
+            rejectionReason: reason,
+          },
+          $push: {
+            history: {
+              status: 'rejected',
+              updatedBy: req.authUserId,
+              role: 'admin',
+              notes: reason,
+              timestamp: new Date(),
+            },
+          },
+        },
+        { upsert: true }
+      );
+    } catch (e) {
+      console.warn('VerificationRequest record warning:', e.message);
+    }
+
+    // Append to AuditLog
+    await AuditLog.create({
+      action: 'TAILOR_REJECTED',
+      adminClerkUserId: req.authUserId,
+      adminEmail: req.appUser?.email || '',
+      targetUserId: tailor._id.toString(),
+      targetClerkUserId: tailor.ownerClerkUserId || '',
+      details: { tailorName: tailor.name, reason },
+      result: 'success',
+    }).catch(() => {});
 
     if (tailor.ownerClerkUserId) {
       createNotification({
         recipientClerkUserId: tailor.ownerClerkUserId,
         title: 'Verification Status Update',
-        message: `Your studio verification application was rejected. Notes: ${tailor.verificationNotes}`,
+        message: `Your studio verification application was rejected. Reason: ${reason}`,
         type: 'general',
         link: '/dashboard',
-        metadata: { tailorId: tailor._id },
+        metadata: { tailorId: tailor._id, reason },
+      }).catch(() => {});
+    }
+
+    res.json({ success: true, tailor });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
+/**
+ * PATCH /api/admin/tailors/:id/request-resubmission
+ * Request documentation resubmission from tailor
+ */
+export async function requestTailorResubmission(req, res) {
+  try {
+    const notes = String(req.body?.notes || req.body?.reason || '').trim();
+    if (!notes) {
+      return res.status(400).json({ error: 'Detailed notes explaining what needs resubmission are required.' });
+    }
+
+    const tailor = await Tailor.findById(req.params.id);
+    if (!tailor) return res.status(404).json({ error: 'Tailor not found.' });
+
+    tailor.verified = false;
+    tailor.verificationStatus = 'resubmission_required';
+    tailor.resubmissionNotes = notes;
+    await tailor.save();
+
+    // Update VerificationRequest
+    try {
+      const { VerificationRequest } = await import('../models.js');
+      await VerificationRequest.findOneAndUpdate(
+        { targetType: 'tailor', targetId: tailor._id.toString() },
+        {
+          $set: {
+            status: 'resubmission_required',
+            reviewedBy: req.authUserId,
+            reviewedAt: new Date(),
+            reviewDecision: 'resubmission_required',
+            rejectionReason: notes,
+          },
+          $push: {
+            history: {
+              status: 'resubmission_required',
+              updatedBy: req.authUserId,
+              role: 'admin',
+              notes,
+              timestamp: new Date(),
+            },
+          },
+        },
+        { upsert: true }
+      );
+    } catch (e) {
+      console.warn('VerificationRequest record warning:', e.message);
+    }
+
+    if (tailor.ownerClerkUserId) {
+      createNotification({
+        recipientClerkUserId: tailor.ownerClerkUserId,
+        title: 'Action Required: Verification Resubmission',
+        message: `Please update your studio details or documents for verification. Notes: ${notes}`,
+        type: 'warning',
+        link: '/dashboard',
+        metadata: { tailorId: tailor._id, notes },
+      }).catch(() => {});
+    }
+
+    res.json({ success: true, tailor });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
+/**
+ * PATCH /api/admin/tailors/:id/suspend
+ * Suspend a tailor atelier's verified status
+ */
+export async function suspendTailor(req, res) {
+  try {
+    const reason = String(req.body?.reason || 'Account suspended by administrator').trim();
+    const tailor = await Tailor.findById(req.params.id);
+    if (!tailor) return res.status(404).json({ error: 'Tailor not found.' });
+
+    tailor.verified = false;
+    tailor.verificationStatus = 'suspended';
+    tailor.suspendedReason = reason;
+    tailor.suspendedAt = new Date();
+    await tailor.save();
+
+    // Record in AuditLog
+    await AuditLog.create({
+      action: 'TAILOR_SUSPENDED',
+      adminClerkUserId: req.authUserId,
+      adminEmail: req.appUser?.email || '',
+      targetUserId: tailor._id.toString(),
+      targetClerkUserId: tailor.ownerClerkUserId || '',
+      details: { tailorName: tailor.name, reason },
+      result: 'success',
+    }).catch(() => {});
+
+    if (tailor.ownerClerkUserId) {
+      createNotification({
+        recipientClerkUserId: tailor.ownerClerkUserId,
+        title: 'Studio Account Suspended',
+        message: `Your studio verified privileges have been suspended. Reason: ${reason}`,
+        type: 'alert',
+        link: '/dashboard',
+        metadata: { tailorId: tailor._id, reason },
       }).catch(() => {});
     }
 
@@ -463,26 +691,27 @@ export async function deleteAdminTailor(req, res) {
  */
 export async function getAdminDashboardSummary(_req, res) {
   try {
-    const [tailors, users, bulkRequests, orders, businesses] = await Promise.all([
+    const [tailors, users, bulkRequests, orders, businesses, auditLogs] = await Promise.all([
       Tailor.find().sort({ createdAt: -1 }).lean(),
       User.find().sort({ createdAt: -1 }).lean(),
       BusinessRequest.find().sort({ createdAt: -1 }).lean(),
       Order.find().sort({ createdAt: -1 }).lean(),
       Business.find().sort({ createdAt: -1 }).lean(),
+      AuditLog.find().sort({ createdAt: -1 }).limit(10).lean(),
     ]);
 
     const pendingTailorAudits = tailors.filter(
-      (t) => !t.verified && t.verificationStatus !== 'rejected'
+      (t) => t.verificationStatus === 'pending'
     );
     const verifiedStudios = tailors.filter(
-      (t) => t.verified || t.verificationStatus === 'verified'
+      (t) => t.verified === true || t.verificationStatus === 'verified'
     );
 
     const pendingBusinessAudits = businesses.filter(
-      (b) => !b.verified && b.verificationStatus === 'pending'
+      (b) => b.verificationStatus === 'pending'
     );
     const verifiedBusinesses = businesses.filter(
-      (b) => b.verified || b.verificationStatus === 'verified'
+      (b) => b.verified === true || b.verificationStatus === 'verified'
     );
 
     const openBulkRequests = bulkRequests.filter(
@@ -505,30 +734,38 @@ export async function getAdminDashboardSummary(_req, res) {
       else rolesBreakdown.customer++;
     });
 
-    // Synthesize real platform activity stream from actual records
+    // Real platform activity stream from actual database records and audit logs
     const activities = [
+      ...auditLogs.map(a => ({
+        id: `audit-${a._id}`,
+        type: a.action?.toLowerCase() || 'admin_action',
+        title: a.action?.replace(/_/g, ' ') || 'Admin Action',
+        subtitle: `${a.adminEmail || 'Admin'} • ${a.details?.tailorName || a.details?.companyName || a.action}`,
+        timestamp: a.createdAt,
+        rawDate: a.createdAt,
+      })),
       ...businesses.filter(b => b.verificationStatus === 'pending').slice(0, 2).map(b => ({
         id: `b-ver-${b._id}`,
         type: 'business_verification',
         title: 'GSTIN Verification Pending',
         subtitle: `${b.companyName} • GSTIN: ${b.gstin || 'Tax Audit'}`,
-        timestamp: 'Requires audit',
-        rawDate: b.updatedAt || b.createdAt,
+        timestamp: b.verificationAppliedAt || b.createdAt,
+        rawDate: b.verificationAppliedAt || b.createdAt,
       })),
-      ...tailors.filter(t => !t.verified).slice(0, 2).map(t => ({
+      ...tailors.filter(t => t.verificationStatus === 'pending').slice(0, 2).map(t => ({
         id: `t-ver-${t._id}`,
         type: 'studio_verification',
         title: 'Studio Verification Pending',
         subtitle: `${t.name} • ${t.area || t.city || 'Jaipur'}`,
-        timestamp: 'Requires audit',
-        rawDate: t.createdAt,
+        timestamp: t.verificationAppliedAt || t.createdAt,
+        rawDate: t.verificationAppliedAt || t.createdAt,
       })),
       ...bulkRequests.slice(0, 3).map(b => ({
         id: `b-rfq-${b._id}`,
         type: 'b2b_inquiry',
         title: b.status === 'awarded' ? 'Tender Contract Awarded' : 'B2B RFQ Demand Submitted',
         subtitle: `${b.organisation || 'Enterprise'}: ${b.title || b.requirement} (${b.quantity} units)`,
-        timestamp: b.status === 'awarded' ? 'Awarded' : 'Active bidding',
+        timestamp: b.createdAt,
         rawDate: b.createdAt,
       })),
       ...orders.slice(0, 2).map(o => ({
@@ -536,7 +773,7 @@ export async function getAdminDashboardSummary(_req, res) {
         type: 'order_update',
         title: `Order #${String(o.orderId || o._id).slice(-6).toUpperCase()}`,
         subtitle: `${o.garment || 'Garment'} • Status: ${o.status}`,
-        timestamp: o.status,
+        timestamp: o.createdAt,
         rawDate: o.createdAt,
       })),
       ...users.slice(0, 2).map(u => ({
@@ -544,12 +781,12 @@ export async function getAdminDashboardSummary(_req, res) {
         type: 'user_registered',
         title: 'New User Registered',
         subtitle: `${u.firstName || 'User'} ${u.lastName || ''} (${(u.role || 'customer').toUpperCase()})`,
-        timestamp: 'Active account',
+        timestamp: u.createdAt,
         rawDate: u.createdAt,
       })),
     ]
       .sort((a, b) => new Date(b.rawDate || 0) - new Date(a.rawDate || 0))
-      .slice(0, 6);
+      .slice(0, 8);
 
     res.json({
       snapshot: {
@@ -800,13 +1037,15 @@ export async function verifyBusiness(req, res) {
     }
 
     const verifiedAt = new Date();
+    const notes = String(req.body?.notes || 'Business GSTIN Approved by Administrator').trim().slice(0, 500);
+
     if (business) {
       business.verified = true;
       business.verificationStatus = 'verified';
       business.verifiedAt = verifiedAt;
       business.verifiedBy = req.authUserId;
+      business.verificationNotes = notes;
       business.rejectionReason = undefined;
-      if (req.body?.notes) business.verificationNotes = String(req.body.notes).trim().slice(0, 500);
       await business.save();
     }
 
@@ -820,6 +1059,47 @@ export async function verifyBusiness(req, res) {
       user.role = 'business';
       await user.save();
     }
+
+    // Update VerificationRequest
+    try {
+      const { VerificationRequest } = await import('../models.js');
+      const clerkId = business?.ownerClerkUserId || user?.clerkUserId;
+      await VerificationRequest.findOneAndUpdate(
+        { targetType: 'business', clerkUserId: clerkId },
+        {
+          $set: {
+            status: 'verified',
+            reviewedBy: req.authUserId,
+            reviewedAt: new Date(),
+            reviewDecision: 'approved',
+            rejectionReason: '',
+          },
+          $push: {
+            history: {
+              status: 'verified',
+              updatedBy: req.authUserId,
+              role: 'admin',
+              notes,
+              timestamp: new Date(),
+            },
+          },
+        },
+        { upsert: true }
+      );
+    } catch (e) {
+      console.warn('VerificationRequest record warning:', e.message);
+    }
+
+    // Record in AuditLog
+    await AuditLog.create({
+      action: 'BUSINESS_VERIFIED',
+      adminClerkUserId: req.authUserId,
+      adminEmail: req.appUser?.email || '',
+      targetUserId: user?._id?.toString() || business?._id?.toString(),
+      targetClerkUserId: business?.ownerClerkUserId || user?.clerkUserId || '',
+      details: { companyName: business?.companyName, gstin: business?.gstin, notes },
+      result: 'success',
+    }).catch(() => {});
 
     const recipientClerkId = business?.ownerClerkUserId || user?.clerkUserId;
     if (recipientClerkId) {
@@ -846,10 +1126,15 @@ export async function verifyBusiness(req, res) {
 
 /**
  * PATCH /api/admin/businesses/:id/reject
- * Reject business verification audit
+ * Reject business verification audit (Mandatory reason required)
  */
 export async function rejectBusiness(req, res) {
   try {
+    const reason = String(req.body?.reason || req.body?.notes || '').trim();
+    if (!reason) {
+      return res.status(400).json({ error: 'A specific rejection reason is required for administrative audit integrity.' });
+    }
+
     const id = req.params.id;
     let business = null;
     let user = null;
@@ -873,8 +1158,6 @@ export async function rejectBusiness(req, res) {
       return res.status(404).json({ error: 'Business account not found.' });
     }
 
-    const reason = req.body?.reason || req.body?.notes || 'Business verification rejected by administrator';
-
     if (business) {
       business.verified = false;
       business.verificationStatus = 'rejected';
@@ -894,6 +1177,47 @@ export async function rejectBusiness(req, res) {
       await user.save();
     }
 
+    // Update VerificationRequest
+    try {
+      const { VerificationRequest } = await import('../models.js');
+      const clerkId = business?.ownerClerkUserId || user?.clerkUserId;
+      await VerificationRequest.findOneAndUpdate(
+        { targetType: 'business', clerkUserId: clerkId },
+        {
+          $set: {
+            status: 'rejected',
+            reviewedBy: req.authUserId,
+            reviewedAt: new Date(),
+            reviewDecision: 'rejected',
+            rejectionReason: reason,
+          },
+          $push: {
+            history: {
+              status: 'rejected',
+              updatedBy: req.authUserId,
+              role: 'admin',
+              notes: reason,
+              timestamp: new Date(),
+            },
+          },
+        },
+        { upsert: true }
+      );
+    } catch (e) {
+      console.warn('VerificationRequest record warning:', e.message);
+    }
+
+    // Record in AuditLog
+    await AuditLog.create({
+      action: 'BUSINESS_REJECTED',
+      adminClerkUserId: req.authUserId,
+      adminEmail: req.appUser?.email || '',
+      targetUserId: user?._id?.toString() || business?._id?.toString(),
+      targetClerkUserId: business?.ownerClerkUserId || user?.clerkUserId || '',
+      details: { companyName: business?.companyName, reason },
+      result: 'success',
+    }).catch(() => {});
+
     const recipientClerkId = business?.ownerClerkUserId || user?.clerkUserId;
     if (recipientClerkId) {
       createNotification({
@@ -902,7 +1226,7 @@ export async function rejectBusiness(req, res) {
         message: `Your business verification application was not approved. Reason: ${reason}`,
         type: 'general',
         link: '/bulk',
-        metadata: { businessId: business?._id },
+        metadata: { businessId: business?._id, reason },
       }).catch(() => {});
     }
 
@@ -912,6 +1236,159 @@ export async function rejectBusiness(req, res) {
       businessProfile: business || user?.businessProfile,
       user: user ? publicUser(user) : null,
     });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
+/**
+ * PATCH /api/admin/businesses/:id/request-resubmission
+ * Request documentation resubmission from business
+ */
+export async function requestBusinessResubmission(req, res) {
+  try {
+    const notes = String(req.body?.notes || req.body?.reason || '').trim();
+    if (!notes) {
+      return res.status(400).json({ error: 'Detailed notes explaining what needs resubmission are required.' });
+    }
+
+    const id = req.params.id;
+    let business = await Business.findById(id).catch(() => null);
+    let user = null;
+    if (business) {
+      user = await User.findOne({ clerkUserId: business.ownerClerkUserId });
+    } else {
+      user = await User.findOne({ clerkUserId: id });
+      business = await Business.findOne({ ownerClerkUserId: id });
+    }
+
+    if (!business && !user) {
+      return res.status(404).json({ error: 'Business account not found.' });
+    }
+
+    if (business) {
+      business.verified = false;
+      business.verificationStatus = 'resubmission_required';
+      business.resubmissionNotes = notes;
+      await business.save();
+    }
+
+    if (user) {
+      if (!user.businessProfile) user.businessProfile = {};
+      user.businessProfile.verified = false;
+      user.businessProfile.verificationStatus = 'resubmission_required';
+      user.businessProfile.resubmissionNotes = notes;
+      await user.save();
+    }
+
+    // Update VerificationRequest
+    try {
+      const { VerificationRequest } = await import('../models.js');
+      const clerkId = business?.ownerClerkUserId || user?.clerkUserId;
+      await VerificationRequest.findOneAndUpdate(
+        { targetType: 'business', clerkUserId: clerkId },
+        {
+          $set: {
+            status: 'resubmission_required',
+            reviewedBy: req.authUserId,
+            reviewedAt: new Date(),
+            reviewDecision: 'resubmission_required',
+            rejectionReason: notes,
+          },
+          $push: {
+            history: {
+              status: 'resubmission_required',
+              updatedBy: req.authUserId,
+              role: 'admin',
+              notes,
+              timestamp: new Date(),
+            },
+          },
+        },
+        { upsert: true }
+      );
+    } catch (e) {}
+
+    const recipientClerkId = business?.ownerClerkUserId || user?.clerkUserId;
+    if (recipientClerkId) {
+      createNotification({
+        recipientClerkUserId: recipientClerkId,
+        title: 'Action Required: Business Resubmission',
+        message: `Please update your business details or GSTIN document for verification. Notes: ${notes}`,
+        type: 'warning',
+        link: '/bulk',
+        metadata: { businessId: business?._id, notes },
+      }).catch(() => {});
+    }
+
+    res.json({ success: true, business, businessProfile: business || user?.businessProfile });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
+/**
+ * PATCH /api/admin/businesses/:id/suspend
+ * Suspend business verified privileges
+ */
+export async function suspendBusiness(req, res) {
+  try {
+    const reason = String(req.body?.reason || 'Account suspended by administrator').trim();
+    const id = req.params.id;
+    let business = await Business.findById(id).catch(() => null);
+    let user = null;
+    if (business) {
+      user = await User.findOne({ clerkUserId: business.ownerClerkUserId });
+    } else {
+      user = await User.findOne({ clerkUserId: id });
+      business = await Business.findOne({ ownerClerkUserId: id });
+    }
+
+    if (!business && !user) {
+      return res.status(404).json({ error: 'Business account not found.' });
+    }
+
+    if (business) {
+      business.verified = false;
+      business.verificationStatus = 'suspended';
+      business.suspendedReason = reason;
+      business.suspendedAt = new Date();
+      await business.save();
+    }
+
+    if (user) {
+      if (!user.businessProfile) user.businessProfile = {};
+      user.businessProfile.verified = false;
+      user.businessProfile.verificationStatus = 'suspended';
+      user.businessProfile.suspendedReason = reason;
+      user.businessProfile.suspendedAt = new Date();
+      await user.save();
+    }
+
+    // Record in AuditLog
+    await AuditLog.create({
+      action: 'BUSINESS_SUSPENDED',
+      adminClerkUserId: req.authUserId,
+      adminEmail: req.appUser?.email || '',
+      targetUserId: user?._id?.toString() || business?._id?.toString(),
+      targetClerkUserId: business?.ownerClerkUserId || user?.clerkUserId || '',
+      details: { companyName: business?.companyName, reason },
+      result: 'success',
+    }).catch(() => {});
+
+    const recipientClerkId = business?.ownerClerkUserId || user?.clerkUserId;
+    if (recipientClerkId) {
+      createNotification({
+        recipientClerkUserId: recipientClerkId,
+        title: 'Business Verified Privileges Suspended',
+        message: `Your business verified privileges have been suspended. Reason: ${reason}`,
+        type: 'alert',
+        link: '/bulk',
+        metadata: { businessId: business?._id, reason },
+      }).catch(() => {});
+    }
+
+    res.json({ success: true, business, businessProfile: business || user?.businessProfile });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

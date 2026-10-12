@@ -1,5 +1,5 @@
 import { getAuth } from '@clerk/express';
-import { BusinessRequest, Order, Tailor, User, Review } from '../models.js';
+import { BusinessRequest, Order, Tailor, User, Review, VerificationRequest } from '../models.js';
 import { createNotification } from './notificationController.js';
 
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -65,9 +65,9 @@ export async function listTailors(req, res) {
     const search = String(req.query.search || '').trim();
     const city = String(req.query.city || '').trim();
 
-    // Matches verified: true OR verificationStatus: 'verified' OR demo seed records
+    // Matches strictly verified tailors
     const filter = {
-      $or: [{ verified: true }, { verificationStatus: 'verified' }, { isDemo: true }],
+      $or: [{ verified: true }, { verificationStatus: 'verified' }],
     };
 
     if (city && !allLocations) {
@@ -389,17 +389,64 @@ export async function applyTailorVerification(req, res) {
       return res.status(404).json({ error: 'Please set up your studio profile first before applying for verification.' });
     }
 
-    if (tailor.verified) {
+    if (tailor.verified || tailor.verificationStatus === 'verified') {
       return res.status(400).json({ error: 'Your tailor studio is already verified!' });
     }
 
+    if (tailor.verificationStatus === 'pending') {
+      return res.status(409).json({ error: 'Your atelier verification application is already pending administrative review.' });
+    }
+
+    const appliedAt = new Date();
     tailor.verificationStatus = 'pending';
-    tailor.verificationAppliedAt = new Date();
+    tailor.verified = false;
+    tailor.verificationAppliedAt = appliedAt;
     if (typeof req.body.notes === 'string') {
       tailor.verificationNotes = req.body.notes.trim().slice(0, 500);
     }
+    if (typeof req.body.documentUrl === 'string') {
+      tailor.documentUrl = req.body.documentUrl.trim();
+    }
+    if (Array.isArray(req.body.documents)) {
+      tailor.documents = req.body.documents;
+    }
+    tailor.rejectionReason = undefined;
+    tailor.resubmissionNotes = undefined;
 
     await tailor.save();
+
+    // Idempotently create or update VerificationRequest
+    await VerificationRequest.findOneAndUpdate(
+      { targetType: 'tailor', targetId: tailor._id },
+      {
+        $set: {
+          targetType: 'tailor',
+          targetId: tailor._id,
+          clerkUserId: req.authUserId,
+          name: tailor.name,
+          companyName: tailor.name,
+          phone: tailor.phone || '',
+          city: tailor.city || 'Jaipur',
+          documentUrl: tailor.documentUrl,
+          documents: tailor.documents || [],
+          status: 'pending',
+          notes: tailor.verificationNotes || '',
+          submittedAt: appliedAt,
+          reviewDecision: undefined,
+          rejectionReason: undefined,
+        },
+        $push: {
+          history: {
+            action: 'SUBMITTED',
+            status: 'pending',
+            actorClerkUserId: req.authUserId,
+            reason: tailor.verificationNotes || 'Application submitted by atelier owner',
+            timestamp: appliedAt,
+          },
+        },
+      },
+      { upsert: true, new: true }
+    );
 
     // Confirmation notification to tailor
     createNotification({

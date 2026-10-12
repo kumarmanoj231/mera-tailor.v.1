@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { Tailor, User, Order, Measurement, BusinessRequest } from '../models.js';
+import { Tailor, User, Order, Measurement, BusinessRequest, VerificationRequest } from '../models.js';
 
 export async function connectDatabase(uri) {
   if (!uri) throw new Error('MONGO_URI is required.');
@@ -12,6 +12,7 @@ export async function connectDatabase(uri) {
     Order.createIndexes().catch(() => {}),
     Measurement.createIndexes().catch(() => {}),
     BusinessRequest.createIndexes().catch(() => {}),
+    VerificationRequest.createIndexes().catch(() => {}),
   ]);
 
   console.log(`MongoDB connected (${mongoose.connection.name})`);
