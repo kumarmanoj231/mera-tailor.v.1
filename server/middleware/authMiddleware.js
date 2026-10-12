@@ -4,7 +4,15 @@ import { User } from '../models.js';
 export function requireAuth(req, res, next) {
   if (!process.env.CLERK_SECRET_KEY) return res.status(503).json({ error: 'Clerk authentication is not configured on this server.' });
   const auth = getAuth(req);
-  if (!auth.isAuthenticated || !auth.userId) return res.status(401).json({ error: 'Sign in is required.' });
+  if (!auth.isAuthenticated || !auth.userId) {
+    const hasBearerToken = /^Bearer\s+\S+$/i.test(req.get('authorization') || '');
+    return res.status(401).json({
+      error: hasBearerToken
+        ? 'Your sign-in session could not be verified by the account service. Please retry or sign in again.'
+        : 'Sign in is required.',
+      code: hasBearerToken ? 'AUTH_SESSION_INVALID' : 'AUTH_REQUIRED',
+    });
+  }
   req.authUserId = auth.userId;
   next();
 }

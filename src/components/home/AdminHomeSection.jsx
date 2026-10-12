@@ -192,11 +192,11 @@ export default function AdminHomeSection({ onNavigateTab }) {
     },
     {
       id: "portal",
-      tab: "verifications",
-      title: isHi ? "मास्टर एडमिन कंसोल" : "Master Admin Console",
+      tab: "dashboard",
+      title: isHi ? "प्लेटफ़ॉर्म अवलोकन" : "Platform Overview",
       subtitle: isHi
-        ? "पूर्ण प्रशासन कंसोल, एकीकृत टेबल, सत्यापन वर्कफ़्लो और डेटाबेस रिकॉर्ड तक पहुंचें।"
-        : "Access the full administration console, unified tables, verification workflows, and database records.",
+        ? "सत्यापन, खाते और व्यावसायिक गतिविधियों का एकीकृत सारांश देखें।"
+        : "See a unified summary of verification, account and business activity.",
       icon: Activity,
       iconBg: "bg-[#eff6ff]",
       iconColor: "text-[#3b82f6]",
@@ -204,7 +204,7 @@ export default function AdminHomeSection({ onNavigateTab }) {
       statLabel: isHi ? "सिस्टम स्थिति" : "System Status",
       statValue: stats.platformHealth || "Healthy",
       statColor: "text-[#10b981]",
-      actionLabel: isHi ? "कंसोल खोलें" : "Open Console",
+      actionLabel: isHi ? "अवलोकन खोलें" : "Open Overview",
       linkColor: "text-[#2563eb]",
     },
     {
@@ -391,22 +391,11 @@ export default function AdminHomeSection({ onNavigateTab }) {
                 </p>
               </div>
 
-              {/* Bottom Metric & Arrow Link */}
-              <div className="mt-6 pt-4 border-t border-stone-100 flex items-end justify-between gap-3">
-                <div>
-                  <span className="text-[11px] font-medium text-stone-400 block">
-                    {opt.statLabel}
-                  </span>
-                  <span className={`text-base font-bold ${opt.statColor} block mt-0.5`}>
-                    {opt.statValue}
-                  </span>
-                </div>
-
-                <span
-                  className={`inline-flex items-center gap-1 text-xs font-bold ${opt.linkColor} group-hover:gap-1.5 transition-all`}
-                >
+              {/* Keep the overview metrics above; each module card stays focused on its action. */}
+              <div className="mt-5 flex items-center justify-end border-t border-stone-100 pt-4">
+                <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${opt.linkColor} transition-all group-hover:gap-2.5`}>
                   <span>{opt.actionLabel}</span>
-                  <span className="text-sm font-bold">→</span>
+                  <span aria-hidden="true" className="text-base">→</span>
                 </span>
               </div>
             </button>

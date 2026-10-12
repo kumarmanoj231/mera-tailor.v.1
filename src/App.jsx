@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 import AppMeta from "./components/AppMeta";
 import ErrorBoundary from './components/common/ErrorBoundary';
 import DashboardSkeleton from './components/common/DashboardSkeleton';
+import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 
 const Home = lazy(() => import("./pages/Home"));
 const FindTailors = lazy(() => import("./pages/FindTailors"));
@@ -22,12 +24,49 @@ const TailorDetail = lazy(() => import('./pages/TailorDetail'));
 const Terms = lazy(() => import('./pages/Terms'));
 const Privacy = lazy(() => import('./pages/Privacy'));
 
+function ProfileSyncError({ profileError, retryProfile }) {
+  const { t, i18n } = useTranslation();
+  const message = /sign in is required|sign-in session could not be verified/i.test(profileError || '')
+    ? (i18n.resolvedLanguage?.startsWith('hi')
+      ? 'आपके साइन-इन की पुष्टि नहीं हो सकी। कृपया कुछ देर बाद खाता जाँच फिर से करें।'
+      : 'Your sign-in could not be verified. Retry the account check in a moment.')
+    : t('authFlow.accountLoadError', { error: profileError || 'Your account profile could not be verified yet.' });
+
+  return (
+    <div className="flex min-h-screen flex-col bg-[#fbf9f5] text-stone-900">
+      <Navbar />
+      <main className="grid flex-1 place-items-center px-4 py-12 sm:px-6">
+        <section role="alert" className="w-full max-w-lg rounded-3xl border border-stone-200 bg-white p-6 text-center shadow-sm sm:p-9">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#f8edf0] text-xl font-bold text-[#8f2338]" aria-hidden="true">!</div>
+          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-[#8f2338]">MeraTailor account</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">
+            {t('authFlow.syncErrorTitle', 'Unable to load account permissions')}
+          </h1>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-stone-600">{message}</p>
+          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => retryProfile()}
+              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[#8f2338] px-5 text-sm font-semibold text-white transition hover:bg-[#781c2e] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8f2338]"
+            >
+              {t('common.retry', 'Retry Connection')}
+            </button>
+            <a href="/" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-stone-200 px-5 text-sm font-semibold text-stone-700 transition hover:bg-stone-50">
+              {t('navbar.home', 'Home')}
+            </a>
+          </div>
+        </section>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
 function RoleAccess({ roles, children }) {
   const { isSignedIn, isLoaded, isProfileLoaded, profile, profileError, retryProfile } = useAuth();
-  const { t } = useTranslation();
 
   // 1. Initial authentication and profile role resolution state
-  if (!isLoaded || (isSignedIn && !isProfileLoaded)) {
+  if (!isLoaded || (isSignedIn && (!isProfileLoaded || (!profile && !profileError)))) {
     // Determine expected role archetype hint based on route if available
     const expectedRole = roles.includes('admin') && roles.length === 1
       ? 'admin'
@@ -41,37 +80,8 @@ function RoleAccess({ roles, children }) {
   }
 
   // 2. Retryable Error state if profile fetch failed
-  if (isSignedIn && !profile && profileError) {
-    return (
-      <div className="min-h-[50vh] flex items-center justify-center p-6">
-        <div role="alert" className="rounded-3xl border border-amber-200 bg-amber-50/90 p-6 sm:p-8 text-amber-950 max-w-md w-full shadow-lg text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700 mb-3">
-            <span className="text-xl font-bold">!</span>
-          </div>
-          <h2 className="font-serif text-lg font-bold text-stone-900 mb-1">
-            {t('authFlow.syncErrorTitle', 'Unable to load account permissions')}
-          </h2>
-          <p className="text-xs text-amber-900 mb-5 leading-relaxed">
-            {t('authFlow.accountLoadError', { error: profileError })}
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5">
-            <button
-              type="button"
-              onClick={() => retryProfile()}
-              className="w-full sm:w-auto rounded-xl bg-[#8f2338] hover:bg-[#781c2e] px-5 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer"
-            >
-              {t('common.retry', 'Retry Connection')}
-            </button>
-            <a
-              href="/"
-              className="w-full sm:w-auto rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 transition text-center"
-            >
-              {t('navbar.home', 'Home')}
-            </a>
-          </div>
-        </div>
-      </div>
-    );
+  if (isSignedIn && !profile) {
+    return <ProfileSyncError profileError={profileError} retryProfile={retryProfile} />;
   }
 
   const userRole = isSignedIn ? profile?.role : 'guest';
@@ -88,7 +98,6 @@ function RoleAccess({ roles, children }) {
 
 function DashboardRoleRouter() {
   const { isSignedIn, isLoaded, isProfileLoaded, profile, profileError, retryProfile } = useAuth();
-  const { t } = useTranslation();
 
   // 1. If not authenticated with Clerk, render Dashboard directly (guest mode)
   if (isLoaded && !isSignedIn) {
@@ -96,43 +105,14 @@ function DashboardRoleRouter() {
   }
 
   // 2. If Clerk is initializing, or signed in and authoritative profile is still resolving:
-  if (!isLoaded || (isSignedIn && !isProfileLoaded)) {
+  if (!isLoaded || (isSignedIn && (!isProfileLoaded || (!profile && !profileError)))) {
     const cachedRole = typeof window !== 'undefined' ? localStorage.getItem('meraTailor.userRole') : null;
     return <DashboardSkeleton role={cachedRole || 'customer'} />;
   }
 
   // 3. Retryable Error state if profile fetch failed
-  if (isSignedIn && !profile && profileError) {
-    return (
-      <div className="min-h-[50vh] flex items-center justify-center p-6">
-        <div role="alert" className="rounded-3xl border border-amber-200 bg-amber-50/90 p-6 sm:p-8 text-amber-950 max-w-md w-full shadow-lg text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700 mb-3">
-            <span className="text-xl font-bold">!</span>
-          </div>
-          <h2 className="font-serif text-lg font-bold text-stone-900 mb-1">
-            {t('authFlow.syncErrorTitle', 'Unable to load account permissions')}
-          </h2>
-          <p className="text-xs text-amber-900 mb-5 leading-relaxed">
-            {t('authFlow.accountLoadError', { error: profileError })}
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5">
-            <button
-              type="button"
-              onClick={() => retryProfile()}
-              className="w-full sm:w-auto rounded-xl bg-[#8f2338] hover:bg-[#781c2e] px-5 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer"
-            >
-              {t('common.retry', 'Retry Connection')}
-            </button>
-            <a
-              href="/"
-              className="w-full sm:w-auto rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 transition text-center"
-            >
-              {t('navbar.home', 'Home')}
-            </a>
-          </div>
-        </div>
-      </div>
-    );
+  if (isSignedIn && !profile) {
+    return <ProfileSyncError profileError={profileError} retryProfile={retryProfile} />;
   }
 
   // 4. Authoritative profile loaded:

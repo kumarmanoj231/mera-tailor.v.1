@@ -18,7 +18,7 @@ const AdminHomeSection = lazy(() => import("../components/home/AdminHomeSection"
 const CustomerHomeSection = lazy(() => import("../components/home/CustomerHomeSection"));
 
 const Home = () => {
-  const { openSignUp, isSignedIn, isProfileLoaded, profile, profileError, retryProfile } = useAuth();
+  const { openSignUp, isSignedIn, profile, profileError, retryProfile } = useAuth();
 
   const handleSignUp = () => {
     openSignUp();
@@ -34,7 +34,7 @@ const Home = () => {
 
       <main>
         {/* Loading skeleton while profile is resolving */}
-        {isSignedIn && !profile && (profileError || isProfileLoaded) && (
+        {isSignedIn && !profile && profileError && (
           <section role="alert" className="mx-auto my-10 max-w-xl rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center text-amber-950 shadow-sm sm:p-8">
             <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-amber-100 text-xl font-bold text-amber-700">!</span>
             <h1 className="mt-4 text-xl font-bold">{"Unable to load account permissions"}</h1>
@@ -45,7 +45,7 @@ const Home = () => {
           </section>
         )}
 
-        {isSignedIn && !profileError && !isProfileLoaded && !profile && (
+        {isSignedIn && !profileError && !profile && (
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
             <DashboardSkeleton />
           </div>

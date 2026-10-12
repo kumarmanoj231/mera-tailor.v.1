@@ -53,7 +53,7 @@ const CATEGORIES = [
 export default function Bulk() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { isSignedIn, isLoaded, profile, getToken, openSignUp } = useAuth();
+  const { isSignedIn, isLoaded, profile, getToken, openSignIn } = useAuth();
 
   const userRole = (profile?.role || "customer").toLowerCase();
   const isBusiness = userRole === "business";
@@ -124,6 +124,7 @@ export default function Bulk() {
     if (!isSignedIn) return;
     try {
       setLoading(true);
+      setLoadError("");
       const token = await getToken();
       const headers = { Authorization: `Bearer ${token}` };
 
@@ -504,34 +505,27 @@ export default function Bulk() {
       {/* MAIN CONTAINER */}
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
         {/* PAGE HEADER */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-3xl border border-stone-200/90 bg-white p-5 sm:p-6 shadow-xs">
+        <section className="relative isolate overflow-hidden rounded-[28px] border border-stone-200/90 bg-white shadow-sm">
+          <div className="grid md:grid-cols-[1.1fr_.9fr]">
+            <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-10">
           {/* Left: Module Title */}
-          <div className="flex items-center gap-3.5">
-            <div className="h-11 w-11 rounded-2xl bg-amber-50 text-[#f59e0b] border border-amber-200 flex items-center justify-center font-bold shrink-0">
-              <Layers size={22} strokeWidth={2.2} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-base sm:text-lg font-bold text-stone-900 leading-tight">
-                  B2B Commercial Tenders & Bulk Orders
-                </h1>
-                <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold">
-                  {isAdmin ? "Admin Console" : isTailor ? "Artisan Marketplace" : "Enterprise Hub"}
-                </span>
+              <div className="flex items-center gap-2 text-xs font-semibold text-[#8f2338]">
+                <Layers size={15} />
+                <span>{isAdmin ? "Admin workspace" : isTailor ? "Artisan marketplace" : "For businesses"}</span>
               </div>
-              <p className="text-[11px] text-stone-500 mt-0.5">
-                Institutional Uniforms, Corporate Blazers, Garment Production & Quotations
+              <h1 className="mt-3 max-w-xl text-2xl font-semibold leading-tight tracking-tight text-stone-900 sm:text-3xl lg:text-4xl">
+                Bulk apparel, made with care.
+              </h1>
+              <p className="mt-3 max-w-xl text-sm leading-relaxed text-stone-600 sm:text-base">
+                Bring larger clothing orders to skilled ateliers. Compare requirements, timelines and quotations in one place.
               </p>
-            </div>
-          </div>
-
           {/* Right: Actions */}
-          <div className="flex items-center gap-2">
+              <div className="mt-6 flex flex-wrap items-center gap-3">
             {(isBusiness || isAdmin) && (
               <button
                 type="button"
                 onClick={() => handleOpenPostModal()}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] hover:bg-[#761c30] px-4 py-2.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#8f2338] hover:bg-[#761c30] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition cursor-pointer"
               >
                 <Plus size={14} />
                 <span>Post Requirement</span>
@@ -542,7 +536,7 @@ export default function Bulk() {
               <button
                 type="button"
                 onClick={() => setIsVerificationModalOpen(true)}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2.5 text-xs font-semibold border transition cursor-pointer ${
+                className={`inline-flex min-h-11 items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold border transition cursor-pointer ${
                   isBizVerified
                     ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                     : isBizPending
@@ -555,7 +549,22 @@ export default function Bulk() {
               </button>
             )}
           </div>
-        </div>
+            </div>
+            <div className="relative min-h-56 overflow-hidden md:min-h-[20rem]">
+              <img
+                src="/assets/hero-atelier.jpg"
+                alt="A local tailor carefully working with fabric in a bright atelier"
+                className="absolute inset-0 h-full w-full object-cover object-[70%_center]"
+                loading="eager"
+                decoding="async"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-stone-950/50 via-transparent to-transparent md:bg-gradient-to-l md:from-transparent md:via-transparent md:to-white/10" />
+              <div className="absolute bottom-4 left-4 rounded-full border border-white/70 bg-white/90 px-3 py-1.5 text-xs font-medium text-stone-800 shadow-sm backdrop-blur-sm sm:bottom-6 sm:left-6">
+                Thoughtful craft, at every scale
+              </div>
+            </div>
+          </div>
+        </section>
         {/* 1. BUSINESS VERIFICATION BANNER (FOR BUSINESS ACCOUNTS) */}
         {isBusiness && !isBizVerified && (
           <div
@@ -764,12 +773,20 @@ export default function Bulk() {
         </div>
 
         {/* 4. REQUIREMENTS LIST / GRID */}
+        {loadError && !loading && (
+          <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900 sm:flex-row sm:items-center sm:justify-between">
+            <span>{loadError}</span>
+            <button type="button" onClick={loadData} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-4 font-semibold text-rose-900 hover:bg-rose-100">
+              <RefreshCw size={14} /> Try again
+            </button>
+          </div>
+        )}
         {loading ? (
           <div className="rounded-3xl border border-stone-200 bg-white p-12 text-center text-xs text-stone-500 flex items-center justify-center gap-2">
             <RefreshCw size={16} className="animate-spin text-stone-400" />
             <span>Loading commercial apparel tenders...</span>
           </div>
-        ) : filteredList.length === 0 ? (
+        ) : loadError ? null : filteredList.length === 0 ? (
           <div className="rounded-3xl border border-stone-200/80 bg-white p-12 text-center shadow-2xs my-4 max-w-xl mx-auto">
             <div className="h-16 w-16 mx-auto rounded-3xl bg-amber-50 text-amber-700 flex items-center justify-center mb-4">
               <Layers size={28} />

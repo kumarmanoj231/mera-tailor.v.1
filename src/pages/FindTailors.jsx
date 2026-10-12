@@ -854,12 +854,12 @@ export default function FindTailors() {
           </div>
 
           {/* Row 2: Headline & Description */}
-          <div className="mt-4 grid items-center gap-4 sm:grid-cols-[minmax(0,1fr)_11rem]">
+          <div className="mt-5 grid items-center gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(17rem,.8fr)] lg:gap-8">
             <div className="min-w-0">
               <h1 className="font-sans text-3xl sm:text-4xl lg:text-[40px] font-black tracking-tight text-[#111827]">
                 {isHi ? "दर्जी खोजें" : "Find Tailors"}
               </h1>
-              <p className="mt-1 text-xs sm:text-sm text-stone-500 max-w-2xl leading-relaxed">
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-stone-600 sm:text-base">
                 {isHi
                   ? "किसी भी स्थान के आस-पास कुशल सिलाई कारीगरों को खोजें। अपना क्षेत्र और खोज दायरा चुनें।"
                   : "Search skilled tailoring professionals around any location. Choose your search area and radius."}
@@ -868,8 +868,8 @@ export default function FindTailors() {
             <img
               src="/assets/hero-atelier.jpg"
               alt={isHi ? "कारीगर अपने एटेलियर में कपड़े की कटाई करते हुए" : "A tailor cutting fabric in a local atelier"}
-              className="h-32 w-full rounded-2xl border border-stone-200 object-cover object-[72%_center] shadow-sm sm:h-24 sm:w-44 lg:h-28 lg:w-48"
-              loading="lazy"
+              className="h-44 w-full rounded-2xl border border-stone-200 object-cover object-[72%_center] shadow-sm sm:h-48 lg:h-56"
+              loading="eager"
               decoding="async"
             />
           </div>
@@ -941,7 +941,7 @@ export default function FindTailors() {
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-stone-400">
                   {isHi ? "सक्रिय श्रेणी" : "CATEGORY"}
                 </span>
-                <p className="text-base font-black truncate text-stone-900 leading-tight">
+                <p className="line-clamp-2 break-words text-sm font-bold leading-tight text-stone-900">
                   {category ? categoryLabel(category) : (isHi ? "सभी वस्त्र" : "All Specialties")}
                 </p>
                 <p className="mt-0.5 line-clamp-2 text-[10px] leading-tight text-stone-500 sm:text-[11px]">

@@ -22,26 +22,15 @@ const Navbar = () => {
   const userRole = profile?.role || null;
 
   useEffect(() => {
-    if (!isSignedIn) return;
-    (async () => {
-      try {
-        const token = await getToken();
-        const response = await fetch("/api/users/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) return;
-        const body = await response.json();
-        if (
-          ["en", "hi"].includes(body.preferredLanguage) &&
-          body.preferredLanguage !== i18n.language
-        ) {
-          i18n.changeLanguage(body.preferredLanguage);
-        }
-      } catch {
-        /* a failed profile sync should not block navigation */
-      }
-    })();
-  }, [isSignedIn, getToken, i18n]);
+    const preferredLanguage = profile?.preferredLanguage;
+    if (
+      isSignedIn &&
+      ["en", "hi"].includes(preferredLanguage) &&
+      preferredLanguage !== i18n.language
+    ) {
+      i18n.changeLanguage(preferredLanguage);
+    }
+  }, [isSignedIn, profile?.preferredLanguage, i18n]);
 
   const changeLanguage = async (language) => {
     i18n.changeLanguage(language);

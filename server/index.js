@@ -37,6 +37,31 @@ function escapeXml(value) {
   })[character]);
 }
 
+function getClerkAuthorizedParties() {
+  const urls = [
+    ...(process.env.CLERK_AUTHORIZED_PARTIES || '').split(','),
+    process.env.SITE_URL,
+    process.env.RENDER_EXTERNAL_URL,
+  ].filter(Boolean);
+
+  if (process.env.NODE_ENV !== 'production') {
+    urls.push(
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:5174',
+    );
+  }
+
+  return [...new Set(urls.flatMap((value) => {
+    try {
+      return [new URL(value.trim()).origin];
+    } catch {
+      return [];
+    }
+  }))];
+}
+
 // Defensive HTTP Security Headers
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -87,7 +112,13 @@ app.use((req, res, next) => {
 
 const clerkPublishableKey = process.env.CLERK_PUBLISHABLE_KEY || process.env.VITE_CLERK_PUBLISHABLE_KEY;
 if (process.env.CLERK_SECRET_KEY && clerkPublishableKey) {
-  app.use(clerkMiddleware({ secretKey: process.env.CLERK_SECRET_KEY, publishableKey: clerkPublishableKey }));
+  const authorizedParties = getClerkAuthorizedParties();
+  app.use(clerkMiddleware({
+    secretKey: process.env.CLERK_SECRET_KEY,
+    publishableKey: clerkPublishableKey,
+    clockSkewInMs: 15_000,
+    ...(authorizedParties.length ? { authorizedParties } : {}),
+  }));
 }
 
 app.use(cors());

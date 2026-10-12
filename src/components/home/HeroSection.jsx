@@ -208,7 +208,7 @@ const HeroSection = ({ onSignUp }) => {
             sm:object-[68%_center]
             lg:object-[72%_center]
           "
-          fetchPriority="high"
+          loading="eager"
           decoding="async"
         />
       </div>

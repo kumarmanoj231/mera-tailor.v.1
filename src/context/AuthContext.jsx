@@ -232,50 +232,71 @@ function ClerkSession({ children }) {
     }
 
     let active = true;
+    let loadingProfile = false;
+    let profileIsResolved = false;
     const loadProfile = async () => {
+      if (loadingProfile) return;
+      loadingProfile = true;
       try {
-        const token = await getToken();
-        if (!token) throw new Error('Your Clerk session is still loading. Please try again.');
+        setIsProfileLoaded(profileIsResolved);
+        let lastError;
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          try {
+            // A signed-in state can arrive just before Clerk finishes establishing
+            // its session token after a redirect. Force a fresh token on retry.
+            const token = await getToken(attempt ? { skipCache: true } : undefined);
+            if (!token) throw new Error('Your Clerk session is still loading. Please try again.');
 
-        const response = await fetch('/api/users/me', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+            const response = await fetch('/api/users/me', {
+              headers: { Authorization: `Bearer ${token}` },
+            });
 
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          if (active) {
-            setProfileError(body.error || 'Could not verify your app profile.');
-            setIsProfileLoaded(true);
+            if (response.status === 401 && attempt < 3) {
+              await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
+              continue;
+            }
+            if (!response.ok) {
+              const body = await response.json().catch(() => ({}));
+              throw new Error(body.error || 'Could not verify your app profile.');
+            }
+
+            const nextProfile = await response.json();
+
+            if (active && nextProfile.onboardingCompleted) {
+              localStorage.removeItem('meraTailor.pendingRole');
+              localStorage.removeItem('meraTailor.pendingAuthMode');
+              setAuthMode(null);
+            }
+
+            if (active) {
+              setProfile(nextProfile);
+              setProfileError('');
+              setIsProfileLoaded(true);
+              profileIsResolved = true;
+              if (nextProfile?.role) {
+                localStorage.setItem('meraTailor.userRole', nextProfile.role);
+              }
+            }
+            return;
+          } catch (error) {
+            lastError = error;
+            if (attempt < 3 && !/disabled|access/i.test(error.message || '')) {
+              await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
+              continue;
+            }
+            break;
           }
-          return;
         }
-
-        const nextProfile = await response.json();
-
-        if (active && nextProfile.onboardingCompleted) {
-          localStorage.removeItem('meraTailor.pendingRole');
-          localStorage.removeItem('meraTailor.pendingAuthMode');
-          setAuthMode(null);
-        }
-
         if (active) {
-          setProfile(nextProfile);
-          setProfileError('');
-          setIsProfileLoaded(true);
-          if (nextProfile?.role) {
-            localStorage.setItem('meraTailor.userRole', nextProfile.role);
-          }
-        }
-      } catch {
-        if (active) {
-          setProfileError('Could not connect to the account service.');
+          setProfileError(lastError?.message || 'Could not connect to the account service.');
           setIsProfileLoaded(true);
         }
+      } finally {
+        loadingProfile = false;
       }
     };
 
     loadProfile();
-    const interval = window.setInterval(loadProfile, 60000);
     const onFocus = () => {
       if (document.visibilityState === 'visible') loadProfile();
     };
@@ -285,7 +306,6 @@ function ClerkSession({ children }) {
 
     return () => {
       active = false;
-      window.clearInterval(interval);
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
     };
@@ -312,26 +332,43 @@ function ClerkSession({ children }) {
   };
 
   const refreshProfile = async () => {
-    const token = await getToken();
-    if (!token) throw new Error('Your Clerk session is still loading. Please try again.');
+    try {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const token = await getToken({ skipCache: true });
+        if (!token) throw new Error('Your Clerk session is still loading. Please try again.');
 
-    const response = await fetch('/api/users/me', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+        const response = await fetch('/api/users/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-    if (response.ok) {
-      const body = await response.json();
-      setProfile(body);
-      setProfileError('');
-      if (body?.role) {
-        localStorage.setItem('meraTailor.userRole', body.role);
+        if (response.ok) {
+          const body = await response.json();
+          setProfile(body);
+          setProfileError('');
+          setIsProfileLoaded(true);
+          if (body?.role) {
+            localStorage.setItem('meraTailor.userRole', body.role);
+          }
+          return body;
+        }
+
+        const error = await response.json().catch(() => ({}));
+        if (response.status === 401 && attempt < 2) {
+          await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
+          continue;
+        }
+        setProfileError(error.error || 'Could not verify your app profile.');
+        setIsProfileLoaded(true);
+        return null;
       }
-      return body;
+      setProfileError('Your sign-in session could not be verified. Please retry or sign in again.');
+      setIsProfileLoaded(true);
+      return null;
+    } catch (error) {
+      setProfileError(error.message || 'Could not connect to the account service.');
+      setIsProfileLoaded(true);
+      return null;
     }
-
-    const error = await response.json().catch(() => ({}));
-    setProfileError(error.error || 'Could not verify your app profile.');
-    return null;
   };
 
   const handleOpenSignUp = (role) => {

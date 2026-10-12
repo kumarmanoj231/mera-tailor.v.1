@@ -447,7 +447,7 @@ export default function HowItWorks() {
     },
 
     admin: {
-      bgImage: "/assets/admin_home/hero_illustration.png",
+      bgImage: "/assets/hero-atelier.jpg",
       breadcrumb: isHi ? "होम / मार्गदर्शिका / प्लेटफ़ॉर्म प्रशासन" : "Home / How It Works / Platform Administration",
       categoryTag: isHi ? "सिस्टम शासन व संचालन" : "Platform Governance & Security",
       updatedDate: isHi ? "अद्यतन: 2026" : "Updated: 2026",
@@ -588,16 +588,13 @@ export default function HowItWorks() {
             <div className="flex items-center gap-2 text-xs font-medium text-stone-500">
               <Link to="/" className="hover:text-stone-900">MeraTailor</Link>
               <span>/</span>
-              <span>{current.breadcrumb}</span>
+              <span aria-current="page">{current.breadcrumb.split(" / ").at(-1)}</span>
             </div>
 
             {/* Category Pill Tag & Updated Date */}
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
                 {current.categoryTag}
-              </span>
-              <span className="rounded-full bg-rose-100/80 px-3 py-1 text-xs font-semibold text-[#8f2338]">
-                {current.updatedDate}
               </span>
             </div>
 
@@ -611,12 +608,14 @@ export default function HowItWorks() {
               {current.intro}
             </p>
 
-            {/* Main Hero Visual Card with High-Visibility Minecraft Cutout Backdrop */}
+            {/* Atelier photography keeps every role's guide grounded in the craft. */}
             <div className="mt-8 relative overflow-hidden rounded-3xl border border-stone-200 bg-stone-900 shadow-md">
               <img
                 src={current.bgImage}
-                alt={current.title}
+                alt={isHi ? "दर्जी के एटेलियर में कपड़ों की सिलाई" : "Tailoring and garment-making in a professional atelier"}
                 className="h-[320px] sm:h-[440px] w-full object-cover object-center brightness-100 contrast-[1.05]"
+                loading="eager"
+                decoding="async"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-stone-950/80 via-transparent to-black/20" />
               
@@ -687,36 +686,6 @@ export default function HowItWorks() {
                     </div>
                   </div>
                 ))}
-              </div>
-
-              {/* Key Features & Access Capabilities */}
-              <div className="pt-6 border-t border-stone-200">
-                <h2 className="font-sans text-xl font-bold tracking-tight text-[#111827]">
-                  {isHi ? "उपलब्ध मुख्य सुविधाएं" : "Included Features & Capabilities"}
-                </h2>
-
-                <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {current.features.map((feat, idx) => (
-                    <div
-                      key={idx}
-                      className="rounded-2xl border border-stone-200 bg-white p-5 shadow-xs flex flex-col justify-between"
-                    >
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800">
-                            ✓ {feat.status}
-                          </span>
-                        </div>
-                        <h4 className="mt-3 font-bold text-[#111827] text-base">
-                          {feat.title}
-                        </h4>
-                        <p className="mt-1 text-xs text-stone-500 leading-relaxed">
-                          {feat.desc}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
 
               {/* FAQ Accordion */}
