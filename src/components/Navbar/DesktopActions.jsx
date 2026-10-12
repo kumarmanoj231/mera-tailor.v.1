@@ -14,6 +14,7 @@ const DesktopActions = ({
   onSignUp,
   userRole,
 }) => {
+  const { t } = useTranslation();
   const { isSignedIn, isProfileLoaded } = useAuth();
 
   const isRoleAdmin = userRole === "admin";
