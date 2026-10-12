@@ -203,19 +203,22 @@ const App = () => {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/find-tailors" element={<FindTailors />} />
+        <Route path="/tailors" element={<Navigate to="/find-tailors" replace />} />
         <Route path="/tailors/:id" element={<TailorDetail />} />
         <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/bulk" element={<RoleAccess roles={['business', 'tailor', 'admin']}><Bulk /></RoleAccess>} />
 
         <Route path="/my-tailors" element={<RoleAccess roles={['customer', 'admin']}><MyTailors /></RoleAccess>} />
-        <Route path="/orders" element={<RoleAccess roles={['customer', 'tailor', 'admin']}><Orders /></RoleAccess>} />
-        <Route path="/my-orders" element={<RoleAccess roles={['customer', 'tailor', 'admin']}><Orders /></RoleAccess>} />
+        <Route path="/orders" element={<RoleAccess roles={['customer', 'business', 'tailor', 'admin']}><Orders /></RoleAccess>} />
+        <Route path="/my-orders" element={<RoleAccess roles={['customer', 'business', 'tailor', 'admin']}><Orders /></RoleAccess>} />
         <Route path="/profile" element={<Navigate to="/dashboard" replace />} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="/dashboard" element={<ErrorBoundary><DashboardRoleRouter /></ErrorBoundary>} />
         <Route path="/admin" element={<RoleAccess roles={['admin']}><AdminPortal /></RoleAccess>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </ErrorBoundary>
   );

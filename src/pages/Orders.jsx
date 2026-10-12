@@ -959,8 +959,8 @@ export default function Orders() {
                               {["Request Sent", "Quote Received"].includes(order.status) && (
                                 <button
                                   type="button"
-                                  disabled={actingId === order.id}
-                                  onClick={() => handleDeclineOrder(order.id)}
+                                  disabled={actingId === (order.id || order._id)}
+                                  onClick={() => handleDeclineOrder(order.id || order._id)}
                                   className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 px-3 py-2 text-xs font-bold text-[#8f2338] shadow-2xs transition active:scale-95 disabled:opacity-50"
                                 >
                                   <X size={13} />
@@ -972,12 +972,12 @@ export default function Orders() {
                               {order.status === "Accepted" && (
                                 <button
                                   type="button"
-                                  disabled={actingId === order.id}
-                                  onClick={() => handleUpdateStatus(order.id, "In Production")}
+                                  disabled={actingId === (order.id || order._id)}
+                                  onClick={() => handleUpdateStatus(order.id || order._id, "In Production")}
                                   className="inline-flex items-center gap-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 px-3.5 py-2 text-xs font-bold text-white shadow-xs transition active:scale-95 disabled:opacity-50"
                                 >
                                   <Scissors size={13} />
-                                  <span>{actingId === order.id ? "Updating..." : (isHi ? "सिलाई शुरू करें" : "Start Production")}</span>
+                                  <span>{actingId === (order.id || order._id) ? "Updating..." : (isHi ? "सिलाई शुरू करें" : "Start Production")}</span>
                                 </button>
                               )}
 
@@ -985,12 +985,12 @@ export default function Orders() {
                               {order.status === "In Production" && (
                                 <button
                                   type="button"
-                                  disabled={actingId === order.id}
-                                  onClick={() => handleUpdateStatus(order.id, "Ready for Pickup")}
+                                  disabled={actingId === (order.id || order._id)}
+                                  onClick={() => handleUpdateStatus(order.id || order._id, "Ready for Pickup")}
                                   className="inline-flex items-center gap-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 px-3.5 py-2 text-xs font-bold text-white shadow-xs transition active:scale-95 disabled:opacity-50"
                                 >
                                   <Package size={13} />
-                                  <span>{actingId === order.id ? "Updating..." : (isHi ? "तैयार मार्क करें" : "Mark Ready")}</span>
+                                  <span>{actingId === (order.id || order._id) ? "Updating..." : (isHi ? "तैयार मार्क करें" : "Mark Ready")}</span>
                                 </button>
                               )}
 
@@ -998,12 +998,12 @@ export default function Orders() {
                               {order.status === "Ready for Pickup" && (
                                 <button
                                   type="button"
-                                  disabled={actingId === order.id}
-                                  onClick={() => handleUpdateStatus(order.id, "Completed")}
+                                  disabled={actingId === (order.id || order._id)}
+                                  onClick={() => handleUpdateStatus(order.id || order._id, "Completed")}
                                   className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 px-3.5 py-2 text-xs font-bold text-white shadow-xs transition active:scale-95 disabled:opacity-50"
                                 >
                                   <CheckCircle2 size={13} />
-                                  <span>{actingId === order.id ? "Updating..." : (isHi ? "ऑर्डर पूर्ण करें" : "Mark Completed")}</span>
+                                  <span>{actingId === (order.id || order._id) ? "Updating..." : (isHi ? "ऑर्डर पूर्ण करें" : "Mark Completed")}</span>
                                 </button>
                               )}
                             </>
@@ -1030,12 +1030,12 @@ export default function Orders() {
                               {(order.status === "Quote Received" || order.status === "Quote Ready") && (
                                 <button
                                   type="button"
-                                  disabled={actingId === order.id}
-                                  onClick={() => acceptQuote(order.id)}
+                                  disabled={actingId === (order.id || order._id)}
+                                  onClick={() => acceptQuote(order.id || order._id)}
                                   className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 px-3 py-2 text-xs font-bold text-white shadow-xs transition active:scale-95 disabled:opacity-50"
                                 >
                                   <CheckCircle2 size={13} />
-                                  <span>{actingId === order.id ? (isHi ? "स्वीकार कर रहे..." : "Accepting...") : (isHi ? "कोट स्वीकारें" : "Accept Quote")}</span>
+                                  <span>{actingId === (order.id || order._id) ? (isHi ? "स्वीकार कर रहे..." : "Accepting...") : (isHi ? "कोट स्वीकारें" : "Accept Quote")}</span>
                                 </button>
                               )}
                             </>
@@ -1152,8 +1152,8 @@ export default function Orders() {
                 </button>
                 <button
                   type="button"
-                  disabled={actingId === cancelModalOrder.id}
-                  onClick={() => handleCancelOrder(cancelModalOrder.id)}
+                  disabled={actingId === (cancelModalOrder.id || cancelModalOrder._id)}
+                  onClick={() => handleCancelOrder(cancelModalOrder.id || cancelModalOrder._id)}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] transition disabled:opacity-50"
                 >
                   <X size={14} />
@@ -1240,8 +1240,8 @@ export default function Orders() {
                 </button>
                 <button
                   type="button"
-                  disabled={actingId === quoteModalOrder.id || !quotePriceInput}
-                  onClick={() => handleSendQuote(quoteModalOrder.id, quotePriceInput)}
+                  disabled={actingId === (quoteModalOrder.id || quoteModalOrder._id) || !quotePriceInput}
+                  onClick={() => handleSendQuote(quoteModalOrder.id || quoteModalOrder._id, quotePriceInput)}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] px-5 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] transition disabled:opacity-50"
                 >
                   <CheckCircle2 size={14} />
@@ -1494,7 +1494,7 @@ export default function Orders() {
                       {selectedOrder.status === "Accepted" && (
                         <button
                           type="button"
-                          onClick={() => handleUpdateStatus(selectedOrder.id, "In Production")}
+                          onClick={() => handleUpdateStatus(selectedOrder.id || selectedOrder._id, "In Production")}
                           className="rounded-xl bg-blue-700 px-4 py-2 font-bold text-white shadow-xs hover:bg-blue-800 text-xs"
                         >
                           Start Production
@@ -1503,7 +1503,7 @@ export default function Orders() {
                       {selectedOrder.status === "In Production" && (
                         <button
                           type="button"
-                          onClick={() => handleUpdateStatus(selectedOrder.id, "Ready for Pickup")}
+                          onClick={() => handleUpdateStatus(selectedOrder.id || selectedOrder._id, "Ready for Pickup")}
                           className="rounded-xl bg-amber-700 px-4 py-2 font-bold text-white shadow-xs hover:bg-amber-800 text-xs"
                         >
                           Mark Ready
@@ -1512,7 +1512,7 @@ export default function Orders() {
                       {selectedOrder.status === "Ready for Pickup" && (
                         <button
                           type="button"
-                          onClick={() => handleUpdateStatus(selectedOrder.id, "Completed")}
+                          onClick={() => handleUpdateStatus(selectedOrder.id || selectedOrder._id, "Completed")}
                           className="rounded-xl bg-emerald-700 px-4 py-2 font-bold text-white shadow-xs hover:bg-emerald-800 text-xs"
                         >
                           Mark Completed
@@ -1523,7 +1523,7 @@ export default function Orders() {
                     selectedOrder.status === "Quote Received" && (
                       <button
                         type="button"
-                        onClick={() => acceptQuote(selectedOrder.id)}
+                        onClick={() => acceptQuote(selectedOrder.id || selectedOrder._id)}
                         className="rounded-xl bg-[#8f2338] px-5 py-2 font-bold text-white shadow-xs hover:bg-[#781c2e] text-xs"
                       >
                         Accept Quote

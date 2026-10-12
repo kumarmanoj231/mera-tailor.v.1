@@ -100,6 +100,13 @@ export async function getOrder(req, res) {
       }
     }
 
+    if (order.measurementProfileId && /^[a-f\d]{24}$/i.test(String(order.measurementProfileId))) {
+      const measurementDoc = await Measurement.findById(order.measurementProfileId).lean();
+      if (measurementDoc) {
+        order.measurementDetails = measurementDoc;
+      }
+    }
+
     res.json(order);
   } catch (error) {
     res.status(500).json({ error: error.message });

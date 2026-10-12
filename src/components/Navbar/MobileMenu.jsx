@@ -177,7 +177,10 @@ const MobileMenu = ({
             </button>
             <button
               type="button"
-              onClick={onSignUp}
+              onClick={() => {
+                onClose();
+                onSignUp?.();
+              }}
               className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#8f2338] py-2.5 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] active:scale-95 cursor-pointer"
             >
               <UserPlus size={15} />

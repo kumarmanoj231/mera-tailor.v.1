@@ -183,7 +183,7 @@ export default function BusinessHomeSection() {
               </Link>
 
               <Link
-                to="/tailors"
+                to="/find-tailors"
                 className="inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-xs sm:text-sm font-bold text-stone-800 shadow-2xs transition hover:bg-stone-50 active:scale-95"
               >
                 <Users size={16} className="text-[#8f2338]" />

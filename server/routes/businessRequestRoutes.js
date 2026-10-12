@@ -36,7 +36,7 @@ router.delete('/business-requests/:id', validateObjectId('id'), deleteBusinessRe
 
 // 3. Tailor Quotation & Bidding Routes
 router.post('/business-requests/:id/quotes', validateObjectId('id'), requireRole('tailor', 'admin'), submitQuote);
-router.patch('/business-requests/:id/quotes/:quoteId/status', validateObjectId('id'), updateQuoteStatus);
-router.delete('/business-requests/:id/quotes/:quoteId', validateObjectId('id'), withdrawQuote);
+router.patch('/business-requests/:id/quotes/:quoteId/status', validateObjectId('id'), validateObjectId('quoteId'), updateQuoteStatus);
+router.delete('/business-requests/:id/quotes/:quoteId', validateObjectId('id'), validateObjectId('quoteId'), withdrawQuote);
 
 export default router;
