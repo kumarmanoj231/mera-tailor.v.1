@@ -12,6 +12,24 @@ import "./i18n/i18n";
 import { AuthProvider } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
 
+// A tab left open across a deployment may request a chunk hash that has just
+// been replaced. Retry once for that exact asset so the browser loads the new
+// HTML manifest, while avoiding an endless reload loop for a genuinely broken chunk.
+window.addEventListener("vite:preloadError", (event) => {
+  const failedAsset = event.payload?.url || event.payload?.message || window.location.pathname;
+  const retryKey = `meratailor:chunk-retry:${failedAsset}`;
+  try {
+    if (window.sessionStorage.getItem(retryKey)) return;
+    window.sessionStorage.setItem(retryKey, "1");
+  } catch {
+    // If browser storage is unavailable, fall through to the normal error boundary.
+    return;
+  }
+
+  event.preventDefault();
+  window.location.reload();
+});
+
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 const app = (

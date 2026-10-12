@@ -154,8 +154,21 @@ app.use('/api', globalApiLimiter, apiRoutes);
 app.all('/api/*', (_req, res) => res.status(404).json({ error: 'API route not found' }));
 
 if (process.env.NODE_ENV === 'production' || fs.existsSync(path.resolve(distDir, 'index.html'))) {
-  app.use(express.static(distDir));
-  app.get('*', (_req, res) => res.sendFile(path.resolve(distDir, 'index.html')));
+  app.use(express.static(distDir, {
+    setHeaders: (res, filePath) => {
+      if (path.basename(filePath) === 'index.html') {
+        res.setHeader('Cache-Control', 'no-cache');
+      } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  }));
+  // A missing hashed bundle must return 404, never the SPA HTML shell.
+  app.get('/assets/*', (_req, res) => res.status(404).type('text').send('Asset not found'));
+  app.get('*', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.resolve(distDir, 'index.html'));
+  });
 }
 
 // Render requires binding to 0.0.0.0 and expects port 10000
