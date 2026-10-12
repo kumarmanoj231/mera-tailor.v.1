@@ -140,7 +140,7 @@ export default function BusinessHomeSection() {
           1. BUSINESS PROCUREMENT HERO BANNER (BROSSARD THEME)
       ========================================================== */}
       <section className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-8 shadow-xs">
-        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
+        <div className="grid gap-6 md:grid-cols-[minmax(0,1.2fr)_minmax(17rem,.8fr)] md:items-stretch">
           <div className="max-w-2xl">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-xs font-bold text-blue-900">
@@ -193,7 +193,16 @@ export default function BusinessHomeSection() {
           </div>
 
           {/* Quick Procurement Snapshot Card */}
-          <div className="w-full lg:max-w-xs shrink-0 rounded-2xl border border-stone-200 bg-[#fdfbf9] p-5 shadow-2xs">
+          <div className="relative flex min-h-72 w-full items-end overflow-hidden rounded-2xl">
+            <img
+              src="/assets/hero-atelier.jpg"
+              alt="A tailor preparing garments in a traditional atelier"
+              className="absolute inset-0 h-full w-full object-cover object-[70%_center]"
+              fetchPriority="high"
+              decoding="async"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-stone-950/35 via-transparent to-transparent" />
+            <div className="relative z-10 m-3 w-full rounded-2xl border border-white/80 bg-white/95 p-5 shadow-sm backdrop-blur-sm sm:m-4">
             <div className="flex items-center justify-between border-b border-stone-200/80 pb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-stone-500">
                 {isHi ? "B2B अवलोकन" : "Procurement Snapshot"}
@@ -241,6 +250,7 @@ export default function BusinessHomeSection() {
                 <FileSpreadsheet size={14} className="text-[#8f2338]" />
                 <span>{isHi ? "RFQ मांगें प्रबंधित करें" : "Manage Bulk RFQs"}</span>
               </Link>
+            </div>
             </div>
           </div>
         </div>

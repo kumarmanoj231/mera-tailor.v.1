@@ -1721,7 +1721,7 @@ export default function Dashboard() {
           {/* =========================================================
               TABS NAVIGATION BAR
           ========================================================== */}
-          <nav className="relative z-10 mt-6 grid grid-cols-2 gap-1.5 border-t border-stone-100 pt-3 text-xs sm:flex sm:items-center sm:overflow-x-auto scrollbar-thin">
+          <nav className="relative z-10 mt-6 grid grid-cols-2 gap-1.5 border-t border-stone-100 pt-3 text-xs sm:flex sm:flex-wrap sm:items-center">
             {(role === "tailor"
               ? [
                   { id: "overview", label: t("tailorDashboard.tabOverview", "Studio Command Center"), icon: Activity, count: null },
@@ -1736,7 +1736,7 @@ export default function Dashboard() {
                   { id: "bulk", label: "Procurement & RFQs", icon: Layers, count: businessRequests.length },
                   { id: "verification", label: "GSTIN Compliance Audit", icon: ShieldCheck, count: null },
                   { id: "orders", label: "Production Orders", icon: ShoppingBag, count: orders.length },
-                  { id: "profile", label: "Company Profile", icon: Settings, count: null },
+                  { id: "profile", label: "Account & Location", icon: Settings, count: null },
                 ]
               : [
                   { id: "overview", label: t("dashboardPage.overview", "Overview"), icon: Home, count: null },

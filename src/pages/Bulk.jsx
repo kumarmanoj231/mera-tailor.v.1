@@ -233,6 +233,11 @@ export default function Bulk() {
 
   // Handlers for Requirements
   const handleOpenPostModal = (reqToEdit = null) => {
+    if (!reqToEdit && isBusiness && !isBizVerified) {
+      setIsVerificationModalOpen(true);
+      return;
+    }
+
     if (reqToEdit) {
       setEditingRequest(reqToEdit);
       setTenderForm({
@@ -252,7 +257,7 @@ export default function Bulk() {
       setEditingRequest(null);
       setTenderForm({
         title: "",
-        organisation: businessProfile?.companyName || profile?.firstName ? `${profile.firstName}'s Enterprise` : "",
+        organisation: businessProfile?.companyName || (profile?.firstName ? `${profile.firstName}'s Enterprise` : ""),
         category: "Corporate Uniforms",
         requirement: "",
         quantity: 100,
@@ -528,7 +533,7 @@ export default function Bulk() {
                 className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#8f2338] hover:bg-[#761c30] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition cursor-pointer"
               >
                 <Plus size={14} />
-                <span>Post Requirement</span>
+                <span>{isBusiness && !isBizVerified ? "Verify to Post" : "Post Requirement"}</span>
               </button>
             )}
 
@@ -590,8 +595,8 @@ export default function Bulk() {
                 </h3>
                 <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">
                   {isBizPending
-                    ? "Mera Tailor compliance team is verifying your registered company GSTIN. You can still post requirements, and certified ateliers can quote."
-                    : "Industry standard buyer verification boosts confidence, accelerating quotations from India's top ateliers."}
+                    ? "Tender publishing is paused until your GSTIN audit is approved. Review or update your application here."
+                    : "Complete the business GSTIN audit to publish tenders and receive quotations from verified ateliers."}
                 </p>
               </div>
             </div>
@@ -793,7 +798,7 @@ export default function Bulk() {
             </div>
             <h3 className="text-base font-bold text-stone-900">No matching tenders found</h3>
             <p className="text-xs text-stone-500 mt-1 max-w-md mx-auto">
-              There are no active requirements matching your selected filters. Adjust your search parameters or publish a new requirement.
+              There are no active requirements matching your selected filters. Adjust your search parameters. {isBusiness && !isBizVerified ? "Complete the GSTIN audit to publish a requirement." : "You can also publish a new requirement."}
             </p>
             {(isBusiness || isAdmin) && (
               <button
@@ -802,7 +807,7 @@ export default function Bulk() {
                 className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] text-white px-4 py-2 text-xs font-bold hover:bg-[#761c30] transition cursor-pointer"
               >
                 <Plus size={14} />
-                <span>Post Requirement</span>
+                <span>{isBusiness && !isBizVerified ? "Verify to Post" : "Post Requirement"}</span>
               </button>
             )}
           </div>
