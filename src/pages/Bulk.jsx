@@ -911,7 +911,7 @@ export default function Bulk() {
                       {isTailor && (
                         item.isAwardedToMe ? (
                           <Link
-                            to="/orders?type=bulk"
+                            to={`/dashboard?tab=orders&orderId=${item.awardedOrderId || item._id}`}
                             className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 px-3 py-1.5 text-xs font-bold transition shadow-2xs"
                           >
                             <CheckCircle2 size={13} className="text-emerald-600" />
@@ -938,7 +938,7 @@ export default function Bulk() {
                         <>
                           {item.status === "awarded" && (
                             <Link
-                              to="/orders?type=bulk"
+                              to={`/dashboard?tab=orders&orderId=${item.awardedOrderId || item._id}`}
                               title="Track Manufacturing Order & Milestones"
                               className="h-8 px-2.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold flex items-center gap-1 transition shadow-2xs"
                             >

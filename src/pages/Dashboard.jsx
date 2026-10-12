@@ -40,6 +40,13 @@ import {
   Heart,
   Home,
   Settings,
+  MessageSquare,
+  Truck,
+  Copy,
+  Send,
+  Eye,
+  RefreshCw,
+  FileCheck,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "react-toastify";
@@ -164,6 +171,25 @@ export default function Dashboard() {
     notes: "",
   });
   const [editingBulkId, setEditingBulkId] = useState(null);
+
+  // Business Contract & Order Detail States
+  const [selectedContractDetails, setSelectedContractDetails] = useState(null);
+  const [contractDetailsTab, setContractDetailsTab] = useState("specs"); // 'specs' | 'sizes' | 'milestones' | 'atelier' | 'chat'
+  const [businessContractFilter, setBusinessContractFilter] = useState("all");
+
+  // Order Chat / Direct Messaging States
+  const [chatOrder, setChatOrder] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [newMessageText, setNewMessageText] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+
+  // Tailor Milestone Progression States
+  const [milestoneModalOrder, setMilestoneModalOrder] = useState(null);
+  const [milestoneTargetStage, setMilestoneTargetStage] = useState("cutting");
+  const [milestoneNoteInput, setMilestoneNoteInput] = useState("");
+  const [milestonePhotoInput, setMilestonePhotoInput] = useState("");
+  const [isUpdatingMilestone, setIsUpdatingMilestone] = useState(false);
 
   // Edit Profile Form State
   const [profileForm, setProfileForm] = useState({
@@ -321,8 +347,13 @@ export default function Dashboard() {
           }
           if (bDashRes && bDashRes.ok) {
             const bDashData = await bDashRes.json();
-            if (active && Array.isArray(bDashData.orders)) {
-              setOrders(bDashData.orders);
+            if (active) {
+              const bOrders = Array.isArray(bDashData.bulkOrders)
+                ? bDashData.bulkOrders
+                : Array.isArray(bDashData.orders)
+                ? bDashData.orders
+                : [];
+              setOrders(bOrders);
             }
           }
         }
@@ -337,6 +368,23 @@ export default function Dashboard() {
       active = false;
     };
   }, [isSignedIn, isProfileLoaded, profile, role, getToken]);
+
+  // Deep-link auto-selector when navigating to /dashboard?tab=orders&orderId=...
+  useEffect(() => {
+    const targetOrderId = searchParams.get("orderId");
+    if (targetOrderId && orders.length > 0) {
+      const match = orders.find(
+        (o) => o.id === targetOrderId || o._id === targetOrderId
+      );
+      if (match) {
+        if (role === "business") {
+          setSelectedContractDetails(match);
+        } else {
+          setSelectedOrderDetails(match);
+        }
+      }
+    }
+  }, [searchParams, orders, role]);
 
   /* =========================================================
      CRUD: PROFILE & PREFERENCES
@@ -766,6 +814,144 @@ export default function Dashboard() {
   }
 
   /* =========================================================
+     ORDER CONVERSATION & DIRECT ATELIER CHAT
+  ========================================================== */
+  async function openOrderChat(order) {
+    setChatOrder(order);
+    setLoadingMessages(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/orders/${encodeURIComponent(order.id || order._id)}/messages`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load conversation.");
+      setChatMessages(Array.isArray(data) ? data : []);
+    } catch (e) {
+      toast.error(e.message || "Could not load messages.");
+    } finally {
+      setLoadingMessages(false);
+    }
+  }
+
+  async function handleSendOrderMessage(e) {
+    if (e) e.preventDefault();
+    if (!chatOrder || !newMessageText.trim() || sendingMessage) return;
+    setSendingMessage(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/orders/${encodeURIComponent(chatOrder.id || chatOrder._id)}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: newMessageText.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send message.");
+      setChatMessages((prev) => [...prev, data]);
+      setNewMessageText("");
+      toast.success("Message sent successfully.");
+    } catch (e) {
+      toast.error(e.message || "Failed to send message.");
+    } finally {
+      setSendingMessage(false);
+    }
+  }
+
+  /* =========================================================
+     TAILOR PRODUCTION MILESTONE PROGRESSION
+  ========================================================== */
+  function handleOpenMilestoneModal(order) {
+    setMilestoneModalOrder(order);
+    const curr = order.productionStatus || "not_started";
+    const nextMap = {
+      not_started: "cutting",
+      cutting: "stitching",
+      stitching: "quality_check",
+      quality_check: "ready_for_delivery",
+      ready_for_delivery: "delivered",
+      delivered: "delivered",
+    };
+    setMilestoneTargetStage(nextMap[curr] || "cutting");
+    setMilestoneNoteInput("");
+    setMilestonePhotoInput("");
+  }
+
+  async function handleTailorSubmitMilestone(e) {
+    if (e) e.preventDefault();
+    if (!milestoneModalOrder || isUpdatingMilestone) return;
+    setIsUpdatingMilestone(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/orders/${encodeURIComponent(milestoneModalOrder.id || milestoneModalOrder._id)}/milestone`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          milestone: milestoneTargetStage,
+          note: milestoneNoteInput.trim() || undefined,
+          photoUrl: milestonePhotoInput.trim() || undefined,
+        }),
+      });
+      const updated = await res.json();
+      if (!res.ok) throw new Error(updated.error || "Failed to update milestone.");
+
+      setTailorRequests((prev) =>
+        prev.map((item) => ((item.id === milestoneModalOrder.id || item._id === milestoneModalOrder._id) ? updated : item))
+      );
+      setOrders((prev) =>
+        prev.map((item) => ((item.id === milestoneModalOrder.id || item._id === milestoneModalOrder._id) ? updated : item))
+      );
+      if (selectedOrderDetails?.id === milestoneModalOrder.id) {
+        setSelectedOrderDetails(updated);
+      }
+      if (milestoneTargetStage === "delivered" || milestoneTargetStage === "ready_for_delivery") {
+        confetti({ particleCount: 80, spread: 70, origin: { y: 0.7 } });
+      }
+      toast.success(`Production milestone updated to ${milestoneTargetStage.replace(/_/g, " ")}!`);
+      setMilestoneModalOrder(null);
+      setMilestoneNoteInput("");
+      setMilestonePhotoInput("");
+    } catch (e) {
+      toast.error(e.message || "Failed to update milestone.");
+    } finally {
+      setIsUpdatingMilestone(false);
+    }
+  }
+
+  /* =========================================================
+     BUSINESS: CONFIRM DELIVERY RECEIPT
+  ========================================================== */
+  async function handleBusinessConfirmDelivery(order) {
+    if (!window.confirm("Confirm that you have received and inspected all garments for this contract? This will release completion.")) return;
+    setActingId(order.id);
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/orders/${encodeURIComponent(order.id || order._id)}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          status: "Completed",
+          note: "Delivery confirmed and accepted by business enterprise client.",
+        }),
+      });
+      const updated = await res.json();
+      if (!res.ok) throw new Error(updated.error || "Failed to confirm delivery.");
+
+      setOrders((prev) =>
+        prev.map((item) => ((item.id === order.id || item._id === order._id) ? updated : item))
+      );
+      if (selectedContractDetails?.id === order.id) {
+        setSelectedContractDetails(updated);
+      }
+      confetti({ particleCount: 90, spread: 80, origin: { y: 0.7 } });
+      toast.success("Contract delivery confirmed and order marked completed!");
+    } catch (e) {
+      toast.error(e.message || "Failed to confirm delivery.");
+    } finally {
+      setActingId("");
+    }
+  }
+
+  /* =========================================================
      CRUD: BUSINESS REQUIREMENTS & VERIFICATION
   ========================================================== */
   async function handleSaveBusinessVerification(e) {
@@ -910,6 +1096,127 @@ export default function Dashboard() {
       return true;
     });
   }, [orders, ordersStatusFilter, ordersSearch]);
+
+  /* =========================================================
+     BUSINESS ENTERPRISE CONTRACTS: STATS & FILTERED MEMOS
+  ========================================================== */
+  const businessContractStats = useMemo(() => {
+    const list = Array.isArray(orders) ? orders : [];
+    const inProd = list.filter(
+      (o) =>
+        o.status === "In Production" ||
+        ["cutting", "stitching"].includes(o.productionStatus)
+    ).length;
+    const qc = list.filter((o) => o.productionStatus === "quality_check").length;
+    const readyOrDelivered = list.filter(
+      (o) =>
+        ["Ready for Pickup", "Completed", "Delivered"].includes(o.status) ||
+        ["ready_for_delivery", "delivered"].includes(o.productionStatus)
+    ).length;
+    const completed = list.filter(
+      (o) => o.status === "Completed" || o.productionStatus === "delivered"
+    ).length;
+    const totalCommittedValue = list.reduce(
+      (sum, o) => sum + (Number(o.agreedAmount || o.quotePrice || o.price) || 0),
+      0
+    );
+
+    return {
+      total: list.length,
+      inProd,
+      qc,
+      readyOrDelivered,
+      completed,
+      totalCommittedValue,
+    };
+  }, [orders]);
+
+  const filteredBusinessContracts = useMemo(() => {
+    return orders.filter((order) => {
+      if (businessContractFilter === "confirmed") {
+        if (!["Confirmed", "Request Sent"].includes(order.status) && order.productionStatus !== "not_started") {
+          return false;
+        }
+      } else if (businessContractFilter === "inProduction") {
+        if (order.status !== "In Production" && !["cutting", "stitching"].includes(order.productionStatus)) {
+          return false;
+        }
+      } else if (businessContractFilter === "qualityCheck") {
+        if (order.productionStatus !== "quality_check") return false;
+      } else if (businessContractFilter === "ready") {
+        if (order.status !== "Ready for Pickup" && order.productionStatus !== "ready_for_delivery") {
+          return false;
+        }
+      } else if (businessContractFilter === "completed") {
+        if (order.status !== "Completed" && order.productionStatus !== "delivered") return false;
+      }
+
+      if (ordersSearch.trim()) {
+        const q = ordersSearch.toLowerCase();
+        const matchesId = String(order.id || "").toLowerCase().includes(q);
+        const matchesGarment = String(order.garment || order.category || "").toLowerCase().includes(q);
+        const matchesOrg = String(order.organisation || "").toLowerCase().includes(q);
+        const matchesTailor = String(order.tailorName || order.tailorOwner || "").toLowerCase().includes(q);
+        const matchesCity = String(order.tailorCity || "").toLowerCase().includes(q);
+        if (!matchesId && !matchesGarment && !matchesOrg && !matchesTailor && !matchesCity) return false;
+      }
+
+      return true;
+    });
+  }, [orders, businessContractFilter, ordersSearch]);
+
+  const PRODUCTION_MILESTONE_STEPS = [
+    {
+      key: "confirmed",
+      stageIndex: 0,
+      label: "Contract Confirmed",
+      desc: "Tender awarded & specs locked",
+      milestoneCode: "not_started",
+      icon: CheckCircle2,
+    },
+    {
+      key: "cutting",
+      stageIndex: 1,
+      label: "Cutting & Pattern Prep",
+      desc: "Fabric inspection & sizing layout",
+      milestoneCode: "cutting",
+      icon: Scissors,
+    },
+    {
+      key: "stitching",
+      stageIndex: 2,
+      label: "Assembly & Stitching",
+      desc: "Production line tailoring & stitching",
+      milestoneCode: "stitching",
+      icon: Layers,
+    },
+    {
+      key: "quality_check",
+      stageIndex: 3,
+      label: "Quality Audit & Finishing",
+      desc: "Tolerance check, steam press & QC",
+      milestoneCode: "quality_check",
+      icon: ShieldCheck,
+    },
+    {
+      key: "delivered",
+      stageIndex: 4,
+      label: "Dispatched / Delivered",
+      desc: "Shipped & received by enterprise client",
+      milestoneCode: "delivered",
+      icon: Package,
+    },
+  ];
+
+  const getOrderMilestoneIndex = (order) => {
+    if (!order) return 0;
+    if (order.status === "Completed" || order.productionStatus === "delivered") return 4;
+    if (order.productionStatus === "ready_for_delivery" || order.status === "Ready for Pickup") return 3.5;
+    if (order.productionStatus === "quality_check") return 3;
+    if (order.productionStatus === "stitching") return 2;
+    if (order.productionStatus === "cutting") return 1;
+    return 0;
+  };
 
   const filteredMeasurements = useMemo(() => {
     if (!measurementsSearch.trim()) return measurements;
@@ -3191,6 +3498,58 @@ export default function Dashboard() {
                               </div>
                             </div>
 
+                            {/* Production Milestone Stepper for In Production / Accepted orders */}
+                            {["Accepted", "In Production", "Ready for Pickup", "Completed"].includes(req.status) && (
+                              <div className="mt-4 pt-3 border-t border-stone-200">
+                                <div className="flex items-center justify-between text-xs mb-2">
+                                  <span className="font-semibold text-stone-700 flex items-center gap-1.5">
+                                    <Scissors size={12} className="text-[#8f2338]" />
+                                    <span>Milestone: <strong className="capitalize text-stone-900">{(req.productionStatus || "not_started").replace(/_/g, " ")}</strong></span>
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => openOrderChat(req)}
+                                      className="inline-flex items-center gap-1 text-[11px] font-bold text-stone-700 bg-white border border-stone-200 hover:bg-stone-50 px-2.5 py-1 rounded-lg transition"
+                                    >
+                                      <MessageSquare size={11} className="text-[#8f2338]" />
+                                      <span>Chat with Client</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenMilestoneModal(req)}
+                                      className="inline-flex items-center gap-1 text-[11px] font-bold text-white bg-[#8f2338] hover:bg-[#781c2e] px-2.5 py-1 rounded-lg transition shadow-2xs"
+                                    >
+                                      <RefreshCw size={11} />
+                                      <span>Update Milestone</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-5 gap-1 text-center">
+                                  {PRODUCTION_MILESTONE_STEPS.map((step) => {
+                                    const currIdx = getOrderMilestoneIndex(req);
+                                    const isDone = currIdx > step.stageIndex;
+                                    const isCurr = Math.floor(currIdx) === step.stageIndex;
+                                    return (
+                                      <div key={step.key} className="space-y-1">
+                                        <div
+                                          className={`h-1.5 rounded-full transition-all ${
+                                            isDone ? "bg-emerald-600" : isCurr ? "bg-[#8f2338]" : "bg-stone-200"
+                                          }`}
+                                        />
+                                        <p className={`text-[10px] font-bold truncate ${
+                                          isCurr ? "text-[#8f2338]" : isDone ? "text-emerald-800" : "text-stone-400"
+                                        }`}>
+                                          {step.label.split(" ")[0]}
+                                        </p>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
                             {/* Tailor Actions by Status */}
                             {req.status === "Request Sent" && (
                               <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-end justify-between gap-3 border-t border-stone-200 pt-3">
@@ -3239,14 +3598,24 @@ export default function Dashboard() {
                             {req.status === "Quote Received" && (
                               <div className="mt-3 flex items-center justify-between border-t border-stone-200 pt-3 text-xs text-stone-500">
                                 <span>⏳ {t("dashboardPage.waitingCustomerAccept", "Price quote sent. Waiting for customer confirmation.")}</span>
-                                <button
-                                  type="button"
-                                  disabled={actingId === req.id}
-                                  onClick={() => handleTailorDeclineOrder(req)}
-                                  className="text-xs font-bold text-rose-600 hover:underline"
-                                >
-                                  {t("dashboardPage.cancelQuote", "Cancel Quote / Decline")}
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openOrderChat(req)}
+                                    className="text-xs font-bold text-stone-600 hover:text-[#8f2338] hover:underline"
+                                  >
+                                    Chat with Customer
+                                  </button>
+                                  <span className="text-stone-300">·</span>
+                                  <button
+                                    type="button"
+                                    disabled={actingId === req.id}
+                                    onClick={() => handleTailorDeclineOrder(req)}
+                                    className="text-xs font-bold text-rose-600 hover:underline"
+                                  >
+                                    {t("dashboardPage.cancelQuote", "Cancel Quote / Decline")}
+                                  </button>
+                                </div>
                               </div>
                             )}
 
@@ -3255,14 +3624,23 @@ export default function Dashboard() {
                                 <span className="text-xs font-semibold text-emerald-800">
                                   ✓ {t("dashboardPage.customerAcceptedQuote", "Customer accepted quote. Ready to begin work.")}
                                 </span>
-                                <button
-                                  type="button"
-                                  disabled={actingId === req.id}
-                                  onClick={() => handleTailorUpdateOrder(req, "status", "In Production")}
-                                  className="rounded-xl bg-stone-900 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-stone-800"
-                                >
-                                  {actingId === req.id ? "Updating…" : t("dashboardPage.startProduction", "Start Production →")}
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenMilestoneModal(req)}
+                                    className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50"
+                                  >
+                                    Set Milestone
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={actingId === req.id}
+                                    onClick={() => handleTailorUpdateOrder(req, "status", "In Production")}
+                                    className="rounded-xl bg-stone-900 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-stone-800"
+                                  >
+                                    {actingId === req.id ? "Updating…" : t("dashboardPage.startProduction", "Start Production →")}
+                                  </button>
+                                </div>
                               </div>
                             )}
 
@@ -3271,14 +3649,23 @@ export default function Dashboard() {
                                 <span className="text-xs font-semibold text-blue-800">
                                   🧵 {t("dashboardPage.garmentInProduction", "Garment is currently in production.")}
                                 </span>
-                                <button
-                                  type="button"
-                                  disabled={actingId === req.id}
-                                  onClick={() => handleTailorUpdateOrder(req, "status", "Ready for Pickup")}
-                                  className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-800"
-                                >
-                                  {actingId === req.id ? "Updating…" : t("dashboardPage.markReady", "Mark Ready for Pickup ✓")}
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenMilestoneModal(req)}
+                                    className="rounded-xl border border-[#8f2338] bg-rose-50 px-3.5 py-2 text-xs font-bold text-[#8f2338] hover:bg-rose-100"
+                                  >
+                                    Update Milestone Stage
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={actingId === req.id}
+                                    onClick={() => handleTailorUpdateOrder(req, "status", "Ready for Pickup")}
+                                    className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-800"
+                                  >
+                                    {actingId === req.id ? "Updating…" : t("dashboardPage.markReady", "Mark Ready for Pickup ✓")}
+                                  </button>
+                                </div>
                               </div>
                             )}
 
@@ -3287,28 +3674,47 @@ export default function Dashboard() {
                                 <span className="text-xs font-semibold text-emerald-800">
                                   📦 {t("dashboardPage.readyAwaitingDelivery", "Ready for customer collection or delivery.")}
                                 </span>
-                                <button
-                                  type="button"
-                                  disabled={actingId === req.id}
-                                  onClick={() => handleTailorUpdateOrder(req, "status", "Completed")}
-                                  className="rounded-xl bg-stone-900 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-stone-800"
-                                >
-                                  {actingId === req.id ? "Completing…" : t("dashboardPage.markCompleted", "Mark Completed 🎉")}
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenMilestoneModal(req)}
+                                    className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50"
+                                  >
+                                    Milestone
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={actingId === req.id}
+                                    onClick={() => handleTailorUpdateOrder(req, "status", "Completed")}
+                                    className="rounded-xl bg-stone-900 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-stone-800"
+                                  >
+                                    {actingId === req.id ? "Completing…" : t("dashboardPage.markCompleted", "Mark Completed 🎉")}
+                                  </button>
+                                </div>
                               </div>
                             )}
 
                             {(req.status === "Completed" || req.status === "Cancelled") && (
                               <div className="mt-3 flex items-center justify-between border-t border-stone-200 pt-3 text-xs text-stone-500">
                                 <span>{req.status === "Completed" ? "🎉 Order fulfilled successfully." : "Order was declined or cancelled."}</span>
-                                <button
-                                  type="button"
-                                  disabled={actingId === req.id}
-                                  onClick={() => handleTailorDeleteOrder(req)}
-                                  className="text-xs font-bold text-stone-400 hover:text-rose-600 hover:underline"
-                                >
-                                  {t("dashboardPage.archiveOrder", "Archive Order")}
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openOrderChat(req)}
+                                    className="text-xs font-bold text-stone-500 hover:text-stone-800"
+                                  >
+                                    View Chat
+                                  </button>
+                                  <span className="text-stone-300">·</span>
+                                  <button
+                                    type="button"
+                                    disabled={actingId === req.id}
+                                    onClick={() => handleTailorDeleteOrder(req)}
+                                    className="text-xs font-bold text-stone-400 hover:text-rose-600 hover:underline"
+                                  >
+                                    {t("dashboardPage.archiveOrder", "Archive Order")}
+                                  </button>
+                                </div>
                               </div>
                             )}
                           </article>
@@ -4007,6 +4413,137 @@ export default function Dashboard() {
                         )}
                       </div>
 
+                      {/* Active Manufacturing Contracts & Production Pipeline Widget */}
+                      <div className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-7 shadow-xs space-y-5">
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 pb-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h2 className="font-serif text-lg font-bold text-[#231b1a]">
+                                Active Manufacturing Contracts & Production Pipeline
+                              </h2>
+                              <span className="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-[10px] font-extrabold text-blue-800 uppercase tracking-wider">
+                                Live Tracking
+                              </span>
+                            </div>
+                            <p className="text-xs text-stone-500 mt-0.5">
+                              Real-time staged milestones for awarded contracts with verified ateliers.
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab("orders")}
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#8f2338] hover:underline"
+                          >
+                            <span>Open Dedicated Orders Tracker ({orders.length})</span>
+                            <ArrowRight size={13} />
+                          </button>
+                        </div>
+
+                        {orders.length === 0 ? (
+                          <div className="py-8 text-center rounded-2xl border border-dashed border-stone-200 bg-[#fdfbf9] space-y-2">
+                            <ShoppingBag size={28} className="mx-auto text-stone-300" />
+                            <p className="text-xs sm:text-sm font-bold text-stone-700">No Production Contracts Active Yet</p>
+                            <p className="text-xs text-stone-500 max-w-sm mx-auto">
+                              When you award a tender bid to an atelier, the contract and real-time production milestone progress will appear here.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {orders.slice(0, 3).map((contract) => {
+                              const currIdx = getOrderMilestoneIndex(contract);
+                              return (
+                                <div
+                                  key={contract.id || contract._id}
+                                  className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-4 sm:p-5 transition hover:border-[#8f2338]/40 hover:bg-white shadow-2xs"
+                                >
+                                  <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-mono text-xs font-bold text-[#8f2338]">#{contract.id}</span>
+                                        <span className="h-1 w-1 rounded-full bg-stone-300" />
+                                        <span className="text-xs text-stone-500">
+                                          {new Date(contract.createdAt).toLocaleDateString()}
+                                        </span>
+                                        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                                          contract.status === "Completed"
+                                            ? "bg-emerald-100 text-emerald-800"
+                                            : "bg-blue-100 text-blue-800"
+                                        }`}>
+                                          {contract.status}
+                                        </span>
+                                      </div>
+                                      <h3 className="font-serif text-base font-bold text-stone-900 mt-1">
+                                        {contract.quantity?.toLocaleString() || 1} Units × {contract.garment || contract.category}
+                                      </h3>
+                                      <p className="text-xs text-stone-600 mt-0.5 flex items-center gap-1.5">
+                                        <Scissors size={12} className="text-[#8f2338]" />
+                                        <span>Atelier: <strong>{contract.tailorName || "Master Workshop"}</strong></span>
+                                        {contract.tailorCity && <span>({contract.tailorCity})</span>}
+                                      </p>
+                                    </div>
+
+                                    <div className="text-right">
+                                      <span className="font-serif text-base font-bold text-[#8f2338] block">
+                                        {money(contract.agreedAmount || contract.quotePrice || contract.price || 0)}
+                                      </span>
+                                      <span className="text-[11px] text-stone-500 font-medium">
+                                        Timeline: {contract.deliveryDeadline || contract.deadline || "30 Days"}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Compact Milestone Pipeline */}
+                                  <div className="mt-4 pt-3 border-t border-stone-200/70">
+                                    <div className="grid grid-cols-5 gap-1.5 text-center">
+                                      {PRODUCTION_MILESTONE_STEPS.map((step) => {
+                                        const isDone = currIdx > step.stageIndex;
+                                        const isCurr = Math.floor(currIdx) === step.stageIndex;
+                                        return (
+                                          <div key={step.key} className="space-y-1">
+                                            <div
+                                              className={`h-2 rounded-full transition-all ${
+                                                isDone
+                                                  ? "bg-emerald-600"
+                                                  : isCurr
+                                                  ? "bg-[#8f2338] animate-pulse"
+                                                  : "bg-stone-200"
+                                              }`}
+                                            />
+                                            <p className={`text-[10px] font-bold truncate ${
+                                              isCurr ? "text-[#8f2338]" : isDone ? "text-emerald-800" : "text-stone-400"
+                                            }`}>
+                                              {step.label.split(" ")[0]}
+                                            </p>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-3.5 pt-2.5 border-t border-stone-100 flex items-center justify-between">
+                                    <span className="text-[11px] text-stone-500">
+                                      Stage: <strong className="text-stone-800 capitalize">{(contract.productionStatus || "not_started").replace(/_/g, " ")}</strong>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedContractDetails(contract);
+                                        setActiveTab("orders");
+                                      }}
+                                      className="inline-flex items-center gap-1 text-xs font-bold text-[#8f2338] hover:underline"
+                                    >
+                                      <span>Full Contract & Specs</span>
+                                      <ChevronRight size={13} />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
                       {/* 4. Enterprise B2B Procurement Protocol */}
                       <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-xs space-y-3">
                         <h3 className="font-serif text-base font-bold text-stone-900 flex items-center gap-2">
@@ -4218,190 +4755,550 @@ export default function Dashboard() {
           )}
 
             {/* =====================================================
-                TAB 2: ORDERS (FULL CRUD & FILTERING)
+                TAB 2: ORDERS (ENTERPRISE CONTRACTS FOR BUSINESS, ORDERS FOR CUSTOMER)
             ====================================================== */}
             {activeTab === "orders" && (
-              <div className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-7 shadow-xs space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-4">
-                  <div>
-                    <h2 className="font-serif text-xl font-bold text-[#231b1a]">
-                      {t("dashboardPage.myOrdersTitle", "My Tailoring Orders")}
-                    </h2>
-                    <p className="text-xs text-stone-500">
-                      {t("dashboardPage.myOrdersSubtitle", "Manage order quotes, track production milestones, and delete pre-production requests.")}
-                    </p>
-                  </div>
+              role === "business" ? (
+                /* ---------------------------------------------------
+                   BUSINESS ROLE: DEDICATED CONTRACTS & PRODUCTION TRACKER
+                ---------------------------------------------------- */
+                <div className="space-y-6">
+                  {/* Header & KPI Summary Cards */}
+                  <div className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-7 shadow-xs space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-100 pb-5">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#231b1a]">
+                            Production Contracts & Manufacturing Orders
+                          </h2>
+                          <span className="rounded-full bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 uppercase tracking-wider">
+                            Live Tracking
+                          </span>
+                        </div>
+                        <p className="text-xs text-stone-500 mt-1 max-w-xl">
+                          Track real-time workshop milestones, monitor cutting & stitching schedules, inspect technical size matrices, and communicate directly with awarded ateliers.
+                        </p>
+                      </div>
 
-                  <div className="relative">
-                    <Search
-                      size={13}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
-                    />
-                    <input
-                      value={ordersSearch}
-                      onChange={(e) => setOrdersSearch(e.target.value)}
-                      placeholder={t("dashboardPage.searchOrdersPlaceholder", "Search orders...")}
-                      className="w-full sm:w-48 rounded-xl border border-stone-200 bg-[#fdfbf9] pl-8 pr-3 py-1.5 text-xs outline-none focus:border-[#8f2338]"
-                    />
-                  </div>
-                </div>
-
-                {/* Status Tabs */}
-                <div className="flex items-center gap-1.5 overflow-x-auto text-xs pb-1">
-                  {[
-                    { id: "all", label: t("dashboardPage.filterAll", "All"), count: orders.length },
-                    { id: "active", label: t("dashboardPage.filterInProgress", "In Progress"), count: activeOrdersCount },
-                    { id: "quotes", label: t("dashboardPage.filterQuotesReady", "Quotes Ready"), count: quotesCount },
-                    { id: "completed", label: t("dashboardPage.filterCompleted", "Completed"), count: completedOrdersCount },
-                  ].map((filter) => (
-                    <button
-                      key={filter.id}
-                      type="button"
-                      onClick={() => setOrdersStatusFilter(filter.id)}
-                      className={`rounded-xl px-3 py-1.5 font-bold transition ${
-                        ordersStatusFilter === filter.id
-                          ? "bg-[#8f2338] text-white shadow-xs"
-                          : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-                      }`}
-                    >
-                      {filter.label} ({filter.count})
-                    </button>
-                  ))}
-                </div>
-
-                {/* Orders List */}
-                {filteredOrders.length === 0 ? (
-                  <div className="py-12 text-center rounded-2xl border border-dashed border-stone-200">
-                    <ShoppingBag size={36} className="mx-auto text-stone-300 mb-2" />
-                    <p className="font-sans text-base font-bold text-stone-800">
-                      {t("dashboardPage.noMatchingOrders", "No matching orders found")}
-                    </p>
-                    <p className="text-xs text-stone-500 mt-1 max-w-sm mx-auto">
-                      {t("dashboardPage.noMatchingOrdersHelp", "Explore local tailors to place a new tailoring request.")}
-                    </p>
-                    <Link
-                      to="/find-tailors"
-                      className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] transition"
-                    >
-                      {t("dashboardPage.findTailors", "Find Tailors")}
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {filteredOrders.map((order) => {
-                      const isPreProduction = ["Request Sent", "Quote Received"].includes(
-                        order.status
-                      );
-                      return (
-                        <article
-                          key={order.id}
-                          className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-4 sm:p-5 transition hover:border-[#8f2338]/40 hover:bg-white"
+                      <div className="flex items-center gap-2.5">
+                        <Link
+                          to="/bulk"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-xs font-bold text-stone-700 shadow-2xs hover:bg-stone-50 hover:border-stone-300 transition"
                         >
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="flex items-start gap-3.5">
-                              <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-xl bg-[#fdf2f4] border border-rose-100 overflow-hidden shrink-0 flex items-center justify-center p-1">
-                                <img
-                                  src={order.image || "/assets/kurta.png"}
-                                  alt={order.garment || order.category || "Order"}
-                                  className="h-full w-full object-contain"
-                                  onError={(e) => {
-                                    e.currentTarget.src = "/assets/kurta.png";
-                                  }}
-                                />
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-bold text-stone-400">
-                                    #{order.id}
-                                  </span>
-                                  <span className="h-1 w-1 rounded-full bg-stone-300" />
-                                  <span className="text-xs text-stone-500">
-                                    {new Date(order.createdAt).toLocaleDateString()}
-                                  </span>
+                          <Layers size={13} className="text-stone-600" />
+                          <span>Tender Marketplace</span>
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={handleOpenCreateBulk}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] transition"
+                        >
+                          <Plus size={14} />
+                          <span>New RFQ</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 5 KPI Metric Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                      <div className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-3.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500">Total Contracts</p>
+                        <p className="font-serif text-xl font-bold text-stone-900 mt-1">{businessContractStats.total}</p>
+                        <p className="text-[10px] text-stone-400 mt-0.5">Awarded orders</p>
+                      </div>
+                      <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-3.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">In Production</p>
+                        <p className="font-serif text-xl font-bold text-blue-900 mt-1">{businessContractStats.inProd}</p>
+                        <p className="text-[10px] text-blue-600 mt-0.5">Cutting & stitching</p>
+                      </div>
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-3.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Quality Audit</p>
+                        <p className="font-serif text-xl font-bold text-amber-950 mt-1">{businessContractStats.qc}</p>
+                        <p className="text-[10px] text-amber-700 mt-0.5">Finishing inspection</p>
+                      </div>
+                      <div className="rounded-2xl border border-purple-200 bg-purple-50/50 p-3.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-purple-800">Ready / Delivered</p>
+                        <p className="font-serif text-xl font-bold text-purple-950 mt-1">{businessContractStats.readyOrDelivered}</p>
+                        <p className="text-[10px] text-purple-700 mt-0.5">Awaiting receipt</p>
+                      </div>
+                      <div className="col-span-2 sm:col-span-1 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-3.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Committed Value</p>
+                        <p className="font-serif text-xl font-bold text-emerald-950 mt-1">{money(businessContractStats.totalCommittedValue)}</p>
+                        <p className="text-[10px] text-emerald-700 mt-0.5">Manufacturing escrow</p>
+                      </div>
+                    </div>
+
+                    {/* Filter Tabs & Search Bar */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-2">
+                      <div className="flex items-center gap-1.5 overflow-x-auto text-xs pb-1 scrollbar-thin">
+                        {[
+                          { id: "all", label: "All Contracts", count: businessContractStats.total },
+                          { id: "confirmed", label: "Confirmed & Prep", count: orders.filter(o => ["Confirmed", "Request Sent"].includes(o.status) || o.productionStatus === "not_started").length },
+                          { id: "inProduction", label: "Cutting & Stitching", count: businessContractStats.inProd },
+                          { id: "qualityCheck", label: "Quality Audit", count: businessContractStats.qc },
+                          { id: "ready", label: "Ready / Shipped", count: orders.filter(o => o.status === "Ready for Pickup" || o.productionStatus === "ready_for_delivery").length },
+                          { id: "completed", label: "Completed", count: businessContractStats.completed },
+                        ].map((filter) => (
+                          <button
+                            key={filter.id}
+                            type="button"
+                            onClick={() => setBusinessContractFilter(filter.id)}
+                            className={`rounded-xl px-3.5 py-1.5 font-bold transition whitespace-nowrap ${
+                              businessContractFilter === filter.id
+                                ? "bg-[#8f2338] text-white shadow-xs"
+                                : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                            }`}
+                          >
+                            {filter.label} ({filter.count})
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="relative shrink-0">
+                        <Search
+                          size={13}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+                        />
+                        <input
+                          value={ordersSearch}
+                          onChange={(e) => setOrdersSearch(e.target.value)}
+                          placeholder="Search contract, atelier, garment..."
+                          className="w-full md:w-64 rounded-xl border border-stone-200 bg-[#fdfbf9] pl-8 pr-3 py-1.5 text-xs outline-none focus:border-[#8f2338]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contracts List */}
+                  {filteredBusinessContracts.length === 0 ? (
+                    <div className="rounded-3xl border border-stone-200 bg-white p-12 text-center">
+                      <ShoppingBag size={42} className="mx-auto text-stone-300 mb-3" />
+                      <h3 className="font-serif text-lg font-bold text-stone-800">
+                        No Matching Contracts Found
+                      </h3>
+                      <p className="text-xs text-stone-500 mt-1 max-w-sm mx-auto">
+                        Award tender quotations from tailors on the marketplace to initialize active manufacturing contracts with automated milestone tracking.
+                      </p>
+                      <Link
+                        to="/bulk"
+                        className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] transition"
+                      >
+                        <Layers size={13} />
+                        <span>Go to Tender Marketplace</span>
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredBusinessContracts.map((contract) => {
+                        const currIdx = getOrderMilestoneIndex(contract);
+                        const isDeliveredOrReady = ["ready_for_delivery", "delivered"].includes(contract.productionStatus) || ["Ready for Pickup", "Completed"].includes(contract.status);
+                        const isFullyDone = contract.status === "Completed" || contract.productionStatus === "delivered";
+
+                        return (
+                          <article
+                            key={contract.id || contract._id}
+                            className="rounded-3xl border border-stone-200 bg-white p-5 sm:p-6 shadow-xs space-y-4 transition hover:border-[#8f2338]/40"
+                          >
+                            {/* Card Top: Order ID, Status, Garment & Financials */}
+                            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-stone-100 pb-4">
+                              <div className="flex items-start gap-3.5">
+                                <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-gradient-to-br from-[#fdf2f4] to-rose-50 border border-rose-100 flex items-center justify-center shrink-0 p-2">
+                                  <Layers size={24} className="text-[#8f2338]" />
                                 </div>
-                                <h3 className="mt-1 font-sans text-base font-bold text-stone-900">
-                                  {order.quantity || 1} × {order.garment || order.category}
-                                </h3>
-                                <p className="text-xs text-stone-600 mt-0.5">
-                                  {t("dashboardPage.studio", "Studio:")} <strong>{order.tailorName || "Master Studio"}</strong>
-                                  {order.color ? ` · Color: ${order.color}` : ""}
-                                  {order.fabric ? ` · Fabric: ${order.fabric}` : ""}
+
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-xs font-bold text-[#8f2338]">
+                                      #{contract.id}
+                                    </span>
+                                    <span className="h-1 w-1 rounded-full bg-stone-300" />
+                                    <span className="text-xs text-stone-500">
+                                      Awarded: {new Date(contract.createdAt).toLocaleDateString()}
+                                    </span>
+                                    <span className="h-1 w-1 rounded-full bg-stone-300" />
+                                    <span className="rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-[10px] font-semibold text-stone-700">
+                                      B2B Bulk Contract
+                                    </span>
+                                  </div>
+
+                                  <h3 className="font-serif text-lg font-bold text-stone-900 mt-1">
+                                    {contract.quantity?.toLocaleString() || 1} Units × {contract.garment || contract.category || "Garments"}
+                                  </h3>
+
+                                  <p className="text-xs text-stone-600 mt-0.5">
+                                    {[
+                                      contract.fabric ? `Fabric: ${contract.fabric}` : null,
+                                      contract.color ? `Color: ${contract.color}` : null,
+                                      contract.deadline || contract.deliveryDeadline ? `Deadline: ${contract.deadline || contract.deliveryDeadline}` : null,
+                                    ].filter(Boolean).join(" · ")}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="text-right">
+                                <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
+                                  isFullyDone
+                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                    : "bg-blue-50 text-blue-800 border border-blue-200"
+                                }`}>
+                                  <span className={`h-1.5 w-1.5 rounded-full ${isFullyDone ? "bg-emerald-600" : "bg-blue-600 animate-pulse"}`} />
+                                  <span>{contract.status || "In Production"}</span>
+                                </span>
+
+                                <p className="font-serif text-xl font-bold text-[#8f2338] mt-1.5">
+                                  {money(contract.agreedAmount || contract.quotePrice || contract.price || 0)}
+                                </p>
+                                <p className="text-[11px] text-stone-400">
+                                  Unit Rate: {contract.unitPrice ? money(contract.unitPrice) : contract.quantity ? money(Math.round((contract.agreedAmount || contract.price || 0) / contract.quantity)) : "N/A"}/pc
                                 </p>
                               </div>
                             </div>
 
-                            <span className="self-start sm:self-center rounded-full bg-rose-50 border border-rose-200 px-3 py-1 text-xs font-bold text-[#8f2338]">
-                              {order.status || "Request Sent"}
-                            </span>
-                          </div>
+                            {/* Awarded Atelier Studio Details Strip */}
+                            <div className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+                              <div className="flex items-center gap-3">
+                                <TailorAvatar
+                                  image={contract.tailorImage || contract.tailorDetails?.image}
+                                  name={contract.tailorName || contract.tailorDetails?.name || "Workshop"}
+                                  size="md"
+                                  rounded="rounded-xl"
+                                />
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-stone-900">
+                                      {contract.tailorName || contract.tailorDetails?.name || "Master Atelier"}
+                                    </span>
+                                    {(contract.tailorVerified || contract.tailorDetails?.verified) && (
+                                      <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 text-emerald-800 px-1.5 py-0.2 text-[9px] font-bold">
+                                        ✓ Verified
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] text-stone-500 flex items-center gap-1 mt-0.5">
+                                    <MapPin size={11} className="text-[#8f2338]" />
+                                    <span>{contract.tailorCity || contract.tailorDetails?.city || "Local Atelier"}</span>
+                                    {contract.tailorArea && <span>· {contract.tailorArea}</span>}
+                                    {contract.tailorRating && (
+                                      <span className="font-semibold text-amber-700 ml-1.5">★ {Number(contract.tailorRating).toFixed(1)}</span>
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
 
-                          {/* Progress bar */}
-                          <div className="mt-3.5 h-1.5 w-full overflow-hidden rounded-full bg-stone-200">
-                            <div
-                              className="h-full bg-[#8f2338] transition-all duration-500"
-                              style={{
-                                width: `${orderProgressPercent[order.status] || 25}%`,
-                              }}
-                            />
-                          </div>
-
-                          {/* Footer and Actions */}
-                          <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-stone-200 pt-3">
-                            <div className="text-xs">
-                              <span className="text-stone-500">{t("dashboardPage.totalPrice", "Total Price")}: </span>
-                              <strong className="text-sm font-extrabold text-[#8f2338]">
-                                {order.quotePrice != null
-                                  ? money(order.quotePrice)
-                                  : order.price != null
-                                  ? money(order.price)
-                                  : t("dashboardPage.awaitingReview", "Awaiting Review")}
-                              </strong>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-2">
-                              {order.status === "Quote Received" && (
+                              <div className="flex items-center gap-2">
                                 <button
                                   type="button"
-                                  disabled={actingId === order.id}
-                                  onClick={() => handleAcceptQuote(order.id)}
-                                  className="inline-flex items-center gap-1 rounded-xl bg-[#8f2338] px-3.5 py-1.5 text-xs font-bold text-white hover:bg-[#781c2e] shadow-xs disabled:opacity-60 transition"
+                                  onClick={() => openOrderChat(contract)}
+                                  className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-700 shadow-2xs hover:bg-stone-50 hover:border-stone-300 transition"
                                 >
-                                  <Check size={13} />
-                                  <span>
-                                    {actingId === order.id ? t("dashboardPage.accepting", "Accepting…") : t("dashboardPage.acceptQuote", "Accept Quote")}
+                                  <MessageSquare size={13} className="text-[#8f2338]" />
+                                  <span>Message Workshop</span>
+                                </button>
+                                {contract.tailorPhone && (
+                                  <a
+                                    href={`tel:${contract.tailorPhone}`}
+                                    className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50 transition"
+                                  >
+                                    <Phone size={12} className="text-stone-500" />
+                                    <span>Call</span>
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* 5-Step Interactive Production Milestone Stepper */}
+                            <div className="pt-2">
+                              <div className="flex items-center justify-between text-xs mb-3">
+                                <span className="font-bold text-stone-800 flex items-center gap-1.5">
+                                  <Scissors size={14} className="text-[#8f2338]" />
+                                  <span>Production Pipeline & Milestone Stepper</span>
+                                </span>
+                                <span className="text-[11px] font-semibold text-stone-500">
+                                  Current Stage: <strong className="text-stone-900 capitalize">{(contract.productionStatus || "not_started").replace(/_/g, " ")}</strong>
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-5 gap-2 relative">
+                                {PRODUCTION_MILESTONE_STEPS.map((step) => {
+                                  const StepIcon = step.icon;
+                                  const isDone = currIdx > step.stageIndex;
+                                  const isCurr = Math.floor(currIdx) === step.stageIndex;
+
+                                  return (
+                                    <div key={step.key} className="flex flex-col items-center text-center">
+                                      <div
+                                        className={`flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-2xl border transition-all ${
+                                          isDone
+                                            ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                            : isCurr
+                                            ? "bg-[#8f2338] text-white border-[#8f2338] ring-4 ring-rose-100 shadow-sm"
+                                            : "bg-stone-100 text-stone-400 border-stone-200"
+                                        }`}
+                                      >
+                                        <StepIcon size={16} />
+                                      </div>
+                                      <p className={`mt-1.5 text-[11px] font-bold leading-tight ${
+                                        isCurr ? "text-[#8f2338]" : isDone ? "text-emerald-900" : "text-stone-500"
+                                      }`}>
+                                        {step.label}
+                                      </p>
+                                      <p className="text-[9px] text-stone-400 hidden sm:block mt-0.5 line-clamp-1">
+                                        {step.desc}
+                                      </p>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Workshop Note or Delivery Notice */}
+                            {contract.statusHistory && contract.statusHistory.length > 0 && (
+                              <div className="rounded-xl border border-stone-200 bg-[#fdfbf9] p-3 text-xs text-stone-600 flex items-start gap-2">
+                                <Clock size={13} className="text-stone-400 shrink-0 mt-0.5" />
+                                <div>
+                                  <span className="font-semibold text-stone-700">Latest Workshop Log: </span>
+                                  <span>{contract.statusHistory[contract.statusHistory.length - 1]?.note || "Progress updated by atelier."}</span>
+                                  <span className="text-[10px] text-stone-400 ml-1.5">
+                                    ({new Date(contract.statusHistory[contract.statusHistory.length - 1]?.changedAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
                                   </span>
-                                </button>
-                              )}
+                                </div>
+                              </div>
+                            )}
 
-                              <button
-                                type="button"
-                                onClick={() => setSelectedOrderDetails(order)}
-                                className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50"
-                              >
-                                {t("dashboardPage.viewDetails", "View Details")}
-                              </button>
-
-                              {/* CRUD Delete Button for pre-production orders */}
-                              {isPreProduction && (
+                            {/* Card Footer: Action Buttons */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-3">
+                              <div className="flex items-center gap-2">
                                 <button
                                   type="button"
-                                  disabled={actingId === order.id}
-                                  onClick={() => setConfirmDeleteOrder(order)}
-                                  className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
-                                  title={t("dashboardPage.deleteRequest", "Delete Request")}
+                                  onClick={() => setSelectedContractDetails(contract)}
+                                  className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3.5 py-1.5 text-xs font-bold text-stone-700 hover:bg-stone-50 hover:border-stone-300 shadow-2xs transition"
                                 >
-                                  <Trash2 size={12} className="text-rose-600" />
-                                  <span>{t("dashboardPage.delete", "Delete")}</span>
+                                  <Eye size={13} />
+                                  <span>View Full Contract & Specs</span>
                                 </button>
-                              )}
+                                <button
+                                  type="button"
+                                  onClick={() => openOrderChat(contract)}
+                                  className="inline-flex items-center gap-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 px-3.5 py-1.5 text-xs font-bold text-stone-800 transition"
+                                >
+                                  <MessageSquare size={13} />
+                                  <span>Atelier Chat</span>
+                                </button>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                {isDeliveredOrReady && !isFullyDone && (
+                                  <button
+                                    type="button"
+                                    disabled={actingId === contract.id}
+                                    onClick={() => handleBusinessConfirmDelivery(contract)}
+                                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-1.5 text-xs font-bold text-white shadow-xs disabled:opacity-60 transition"
+                                  >
+                                    <Check size={13} />
+                                    <span>Confirm Receipt & Release Order</span>
+                                  </button>
+                                )}
+
+                                {isFullyDone && (
+                                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-1">
+                                    <CheckCircle2 size={13} className="text-emerald-600" />
+                                    <span>Contract Fulfilled & Archived</span>
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </article>
-                      );
-                    })}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* ---------------------------------------------------
+                   CUSTOMER ROLE: STANDARD TAILORING ORDERS
+                ---------------------------------------------------- */
+                <div className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-7 shadow-xs space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-4">
+                    <div>
+                      <h2 className="font-serif text-xl font-bold text-[#231b1a]">
+                        {t("dashboardPage.myOrdersTitle", "My Tailoring Orders")}
+                      </h2>
+                      <p className="text-xs text-stone-500">
+                        {t("dashboardPage.myOrdersSubtitle", "Manage order quotes, track production milestones, and delete pre-production requests.")}
+                      </p>
+                    </div>
+
+                    <div className="relative">
+                      <Search
+                        size={13}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+                      />
+                      <input
+                        value={ordersSearch}
+                        onChange={(e) => setOrdersSearch(e.target.value)}
+                        placeholder={t("dashboardPage.searchOrdersPlaceholder", "Search orders...")}
+                        className="w-full sm:w-48 rounded-xl border border-stone-200 bg-[#fdfbf9] pl-8 pr-3 py-1.5 text-xs outline-none focus:border-[#8f2338]"
+                      />
+                    </div>
                   </div>
-                )}
-              </div>
+
+                  {/* Status Tabs */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto text-xs pb-1">
+                    {[
+                      { id: "all", label: t("dashboardPage.filterAll", "All"), count: orders.length },
+                      { id: "active", label: t("dashboardPage.filterInProgress", "In Progress"), count: activeOrdersCount },
+                      { id: "quotes", label: t("dashboardPage.filterQuotesReady", "Quotes Ready"), count: quotesCount },
+                      { id: "completed", label: t("dashboardPage.filterCompleted", "Completed"), count: completedOrdersCount },
+                    ].map((filter) => (
+                      <button
+                        key={filter.id}
+                        type="button"
+                        onClick={() => setOrdersStatusFilter(filter.id)}
+                        className={`rounded-xl px-3 py-1.5 font-bold transition ${
+                          ordersStatusFilter === filter.id
+                            ? "bg-[#8f2338] text-white shadow-xs"
+                            : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                        }`}
+                      >
+                        {filter.label} ({filter.count})
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Orders List */}
+                  {filteredOrders.length === 0 ? (
+                    <div className="py-12 text-center rounded-2xl border border-dashed border-stone-200">
+                      <ShoppingBag size={36} className="mx-auto text-stone-300 mb-2" />
+                      <p className="font-sans text-base font-bold text-stone-800">
+                        {t("dashboardPage.noMatchingOrders", "No matching orders found")}
+                      </p>
+                      <p className="text-xs text-stone-500 mt-1 max-w-sm mx-auto">
+                        {t("dashboardPage.noMatchingOrdersHelp", "Explore local tailors to place a new tailoring request.")}
+                      </p>
+                      <Link
+                        to="/find-tailors"
+                        className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] transition"
+                      >
+                        {t("dashboardPage.findTailors", "Find Tailors")}
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredOrders.map((order) => {
+                        const isPreProduction = ["Request Sent", "Quote Received"].includes(
+                          order.status
+                        );
+                        return (
+                          <article
+                            key={order.id}
+                            className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-4 sm:p-5 transition hover:border-[#8f2338]/40 hover:bg-white"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="flex items-start gap-3.5">
+                                <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-xl bg-[#fdf2f4] border border-rose-100 overflow-hidden shrink-0 flex items-center justify-center p-1">
+                                  <img
+                                    src={order.image || "/assets/kurta.png"}
+                                    alt={order.garment || order.category || "Order"}
+                                    className="h-full w-full object-contain"
+                                    onError={(e) => {
+                                      e.currentTarget.src = "/assets/kurta.png";
+                                    }}
+                                  />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-stone-400">
+                                      #{order.id}
+                                    </span>
+                                    <span className="h-1 w-1 rounded-full bg-stone-300" />
+                                    <span className="text-xs text-stone-500">
+                                      {new Date(order.createdAt).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                  <h3 className="mt-1 font-sans text-base font-bold text-stone-900">
+                                    {order.quantity || 1} × {order.garment || order.category}
+                                  </h3>
+                                  <p className="text-xs text-stone-600 mt-0.5">
+                                    {t("dashboardPage.studio", "Studio:")} <strong>{order.tailorName || "Master Studio"}</strong>
+                                    {order.color ? ` · Color: ${order.color}` : ""}
+                                    {order.fabric ? ` · Fabric: ${order.fabric}` : ""}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <span className="self-start sm:self-center rounded-full bg-rose-50 border border-rose-200 px-3 py-1 text-xs font-bold text-[#8f2338]">
+                                {order.status || "Request Sent"}
+                              </span>
+                            </div>
+
+                            {/* Progress bar */}
+                            <div className="mt-3.5 h-1.5 w-full overflow-hidden rounded-full bg-stone-200">
+                              <div
+                                className="h-full bg-[#8f2338] transition-all duration-500"
+                                style={{
+                                  width: `${orderProgressPercent[order.status] || 25}%`,
+                                }}
+                              />
+                            </div>
+
+                            {/* Footer and Actions */}
+                            <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-stone-200 pt-3">
+                              <div className="text-xs">
+                                <span className="text-stone-500">{t("dashboardPage.totalPrice", "Total Price")}: </span>
+                                <strong className="text-sm font-extrabold text-[#8f2338]">
+                                  {order.quotePrice != null
+                                    ? money(order.quotePrice)
+                                    : order.price != null
+                                    ? money(order.price)
+                                    : t("dashboardPage.awaitingReview", "Awaiting Review")}
+                                </strong>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2">
+                                {order.status === "Quote Received" && (
+                                  <button
+                                    type="button"
+                                    disabled={actingId === order.id}
+                                    onClick={() => handleAcceptQuote(order.id)}
+                                    className="inline-flex items-center gap-1 rounded-xl bg-[#8f2338] px-3.5 py-1.5 text-xs font-bold text-white hover:bg-[#781c2e] shadow-xs disabled:opacity-60 transition"
+                                  >
+                                    <Check size={13} />
+                                    <span>
+                                      {actingId === order.id ? t("dashboardPage.accepting", "Accepting…") : t("dashboardPage.acceptQuote", "Accept Quote")}
+                                    </span>
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedOrderDetails(order)}
+                                  className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                                >
+                                  {t("dashboardPage.viewDetails", "View Details")}
+                                </button>
+
+                                {/* CRUD Delete Button for pre-production orders */}
+                                {isPreProduction && (
+                                  <button
+                                    type="button"
+                                    disabled={actingId === order.id}
+                                    onClick={() => setConfirmDeleteOrder(order)}
+                                    className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                                    title={t("dashboardPage.deleteRequest", "Delete Request")}
+                                  >
+                                    <Trash2 size={12} className="text-rose-600" />
+                                    <span>{t("dashboardPage.delete", "Delete")}</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
             )}
 
             {/* =====================================================
@@ -6223,6 +7120,569 @@ export default function Dashboard() {
                     className="rounded-xl bg-[#8f2338] px-5 py-2 font-bold text-white shadow-xs hover:bg-[#781c2e] disabled:opacity-60 transition"
                   >
                     {actingId === "studio" ? t("dashboardPage.saving", "Saving…") : t("tailorStudio.saveStudio", "Save Studio & Rate Card")}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+        {/* =========================================================
+            MODAL 7: ENTERPRISE CONTRACT DOSSIER & FULL SPECIFICATIONS
+        ========================================================== */}
+        {selectedContractDetails && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-3 sm:p-4 backdrop-blur-xs"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setSelectedContractDetails(null);
+            }}
+          >
+            <div className="relative w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl transition-all sm:p-7 max-h-[92vh] overflow-y-auto space-y-6">
+              {/* Header */}
+              <div className="flex items-start justify-between border-b border-stone-100 pb-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#8f2338] text-white shadow-md shrink-0">
+                    <FileCheck size={24} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-[#8f2338]">
+                        #{selectedContractDetails.id}
+                      </span>
+                      <span className="h-1 w-1 rounded-full bg-stone-300" />
+                      <span className="rounded-full bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 text-[10px] uppercase tracking-wider">
+                        Confirmed Manufacturing Order
+                      </span>
+                    </div>
+                    <h2 className="font-serif text-xl sm:text-2xl font-bold text-stone-900 mt-1">
+                      {selectedContractDetails.quantity?.toLocaleString() || 1} Units × {selectedContractDetails.garment || selectedContractDetails.category || "Garment"}
+                    </h2>
+                    <p className="text-xs text-stone-500 mt-0.5">
+                      Awarded on {new Date(selectedContractDetails.createdAt).toLocaleDateString()} · Enterprise Contract Agreement
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedContractDetails(null)}
+                  className="rounded-full p-2 text-stone-400 hover:bg-stone-100 transition"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Modal Navigation Tabs */}
+              <div className="flex items-center gap-2 border-b border-stone-100 pb-2 text-xs font-bold">
+                {[
+                  { id: "overview", label: "Contract Overview", icon: Layers },
+                  { id: "sizes", label: "Size Breakdown Matrix", icon: Ruler },
+                  { id: "atelier", label: "Awarded Studio Atelier", icon: Scissors },
+                  { id: "audit", label: "Milestone Audit Trail", icon: ShieldCheck },
+                ].map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = contractDetailsTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setContractDetailsTab(tab.id)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition ${
+                        isActive
+                          ? "bg-[#8f2338] text-white shadow-xs"
+                          : "text-stone-600 hover:bg-stone-100"
+                      }`}
+                    >
+                      <Icon size={13} />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Tab 1: Overview & Financials */}
+              {contractDetailsTab === "overview" && (
+                <div className="space-y-4 text-xs sm:text-sm">
+                  {/* Milestone Progress Bar */}
+                  <div className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-4">
+                    <div className="flex items-center justify-between mb-3 text-xs">
+                      <span className="font-bold text-stone-800">Production Stage Tracking</span>
+                      <span className="font-bold text-[#8f2338] capitalize">{(selectedContractDetails.productionStatus || "not_started").replace(/_/g, " ")}</span>
+                    </div>
+
+                    <div className="grid grid-cols-5 gap-1.5 text-center">
+                      {PRODUCTION_MILESTONE_STEPS.map((step) => {
+                        const currIdx = getOrderMilestoneIndex(selectedContractDetails);
+                        const isDone = currIdx > step.stageIndex;
+                        const isCurr = Math.floor(currIdx) === step.stageIndex;
+                        return (
+                          <div key={step.key} className="space-y-1">
+                            <div
+                              className={`h-2 rounded-full transition-all ${
+                                isDone ? "bg-emerald-600" : isCurr ? "bg-[#8f2338]" : "bg-stone-200"
+                              }`}
+                            />
+                            <p className={`text-[10px] font-bold ${
+                              isCurr ? "text-[#8f2338]" : isDone ? "text-emerald-800" : "text-stone-400"
+                            }`}>
+                              {step.label.split(" ")[0]}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Garment Specifications Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="rounded-2xl border border-stone-200 bg-white p-3.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Garment Type</p>
+                      <p className="font-bold text-stone-900 mt-1">{selectedContractDetails.garment || selectedContractDetails.category || "Custom"}</p>
+                    </div>
+                    <div className="rounded-2xl border border-stone-200 bg-white p-3.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Total Batch</p>
+                      <p className="font-bold text-stone-900 mt-1">{selectedContractDetails.quantity?.toLocaleString() || 1} Pcs</p>
+                    </div>
+                    <div className="rounded-2xl border border-stone-200 bg-white p-3.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Fabric Spec</p>
+                      <p className="font-bold text-stone-900 mt-1">{selectedContractDetails.fabric || "Enterprise Provided"}</p>
+                    </div>
+                    <div className="rounded-2xl border border-stone-200 bg-white p-3.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Colorway</p>
+                      <p className="font-bold text-stone-900 mt-1">{selectedContractDetails.color || "Standard Navy"}</p>
+                    </div>
+                  </div>
+
+                  {/* Commercials & Escrow Card */}
+                  <div className="rounded-2xl border border-stone-200 bg-gradient-to-br from-stone-50 to-white p-4 sm:p-5">
+                    <h3 className="font-bold text-xs uppercase tracking-wider text-stone-500 mb-3">
+                      Commercial Terms & Financial Settlement
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-xs text-stone-500">Agreed Contract Total</p>
+                        <p className="font-serif text-2xl font-bold text-[#8f2338] mt-0.5">
+                          {money(selectedContractDetails.agreedAmount || selectedContractDetails.quotePrice || selectedContractDetails.price || 0)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-stone-500">Calculated Unit Cost</p>
+                        <p className="font-serif text-lg font-bold text-stone-900 mt-0.5">
+                          {selectedContractDetails.unitPrice ? money(selectedContractDetails.unitPrice) : selectedContractDetails.quantity ? money(Math.round((selectedContractDetails.agreedAmount || selectedContractDetails.price || 0) / selectedContractDetails.quantity)) : "N/A"} / piece
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-stone-500">Delivery Deadline</p>
+                        <p className="font-bold text-stone-900 mt-0.5">
+                          {selectedContractDetails.deliveryDeadline || selectedContractDetails.deadline || "Within 30 Calendar Days"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Scope of Work / Notes */}
+                  {selectedContractDetails.notes && (
+                    <div className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-4">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">
+                        Technical Scope & Sourcing Notes
+                      </p>
+                      <p className="text-xs text-stone-700 leading-relaxed whitespace-pre-line">
+                        {selectedContractDetails.notes}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 2: Size Breakdown Matrix */}
+              {contractDetailsTab === "sizes" && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-stone-200 bg-white p-5">
+                    <div className="flex items-center justify-between border-b border-stone-100 pb-3 mb-4">
+                      <h3 className="font-serif text-base font-bold text-stone-900">
+                        Technical Garment Sizing & Pattern Distribution
+                      </h3>
+                      <span className="text-xs font-bold text-[#8f2338]">
+                        Total: {selectedContractDetails.quantity?.toLocaleString() || 0} Units
+                      </span>
+                    </div>
+
+                    {selectedContractDetails.sizeBreakdown && Object.keys(selectedContractDetails.sizeBreakdown).length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs text-left">
+                          <thead>
+                            <tr className="border-b border-stone-200 bg-stone-50 text-stone-600 font-bold uppercase text-[10px]">
+                              <th className="py-2.5 px-4 rounded-l-xl">Size Category</th>
+                              <th className="py-2.5 px-4">Allocated Quantity</th>
+                              <th className="py-2.5 px-4 rounded-r-xl">Batch Percentage</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-stone-100">
+                            {Object.entries(selectedContractDetails.sizeBreakdown).map(([size, count]) => {
+                              const num = Number(count) || 0;
+                              const pct = selectedContractDetails.quantity ? Math.round((num / selectedContractDetails.quantity) * 100) : 0;
+                              return (
+                                <tr key={size} className="hover:bg-stone-50/50">
+                                  <td className="py-2.5 px-4 font-bold text-stone-900 uppercase">{size}</td>
+                                  <td className="py-2.5 px-4 font-semibold text-stone-700">{num} pcs</td>
+                                  <td className="py-2.5 px-4">
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-1.5 w-24 rounded-full bg-stone-100 overflow-hidden">
+                                        <div className="h-full bg-[#8f2338]" style={{ width: `${pct}%` }} />
+                                      </div>
+                                      <span className="text-[11px] text-stone-500 font-medium">{pct}%</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="py-8 text-center text-xs text-stone-500">
+                        <Ruler size={32} className="mx-auto text-stone-300 mb-2" />
+                        <p className="font-bold text-stone-700">Standard Sizing Distribution</p>
+                        <p className="text-[11px] text-stone-400 mt-1 max-w-sm mx-auto">
+                          Garment patterns tailored uniformly per enterprise procurement specifications.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 3: Awarded Studio Atelier Dossier */}
+              {contractDetailsTab === "atelier" && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-stone-200 bg-white p-5">
+                    <div className="flex items-start gap-4">
+                      <TailorAvatar
+                        image={selectedContractDetails.tailorImage || selectedContractDetails.tailorDetails?.image}
+                        name={selectedContractDetails.tailorName || selectedContractDetails.tailorDetails?.name || "Master Studio"}
+                        size="lg"
+                        rounded="rounded-2xl"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-serif text-lg font-bold text-stone-900">
+                            {selectedContractDetails.tailorName || selectedContractDetails.tailorDetails?.name || "Master Atelier"}
+                          </h3>
+                          {(selectedContractDetails.tailorVerified || selectedContractDetails.tailorDetails?.verified) && (
+                            <span className="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-bold">
+                              ✓ Verified Workshop
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-xs text-stone-600 mt-1">
+                          Master Artisan: <strong>{selectedContractDetails.tailorOwner || selectedContractDetails.tailorDetails?.owner || "Master Craftsman"}</strong>
+                        </p>
+
+                        <p className="text-xs text-stone-500 flex items-center gap-1.5 mt-1">
+                          <MapPin size={12} className="text-[#8f2338]" />
+                          <span>{selectedContractDetails.tailorCity || selectedContractDetails.tailorDetails?.city || "Jaipur"}</span>
+                          {selectedContractDetails.tailorArea && <span>· {selectedContractDetails.tailorArea}</span>}
+                        </p>
+
+                        {selectedContractDetails.tailorRating && (
+                          <div className="mt-2 inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs font-bold text-amber-800">
+                            <Star size={11} className="fill-amber-400 text-amber-500" />
+                            <span>{Number(selectedContractDetails.tailorRating).toFixed(1)} Studio Rating</span>
+                            {selectedContractDetails.tailorReviews && <span>({selectedContractDetails.tailorReviews} reviews)</span>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-5 pt-4 border-t border-stone-100 flex flex-wrap items-center justify-between gap-3">
+                      <div className="text-xs text-stone-500">
+                        {selectedContractDetails.tailorPhone && (
+                          <span className="flex items-center gap-1">
+                            <Phone size={12} className="text-stone-400" />
+                            <span>Contact: {selectedContractDetails.tailorPhone}</span>
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          openOrderChat(selectedContractDetails);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] transition"
+                      >
+                        <MessageSquare size={13} />
+                        <span>Launch Direct Chat</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 4: Milestone Audit Trail */}
+              {contractDetailsTab === "audit" && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-stone-200 bg-white p-5">
+                    <h3 className="font-serif text-base font-bold text-stone-900 mb-4">
+                      Chronological Milestone & Workshop Event History
+                    </h3>
+
+                    {selectedContractDetails.statusHistory && selectedContractDetails.statusHistory.length > 0 ? (
+                      <div className="relative pl-6 space-y-4 border-l-2 border-stone-200 ml-2">
+                        {selectedContractDetails.statusHistory.map((hist, idx) => (
+                          <div key={idx} className="relative">
+                            <div className="absolute -left-[31px] top-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-[#8f2338] shadow-xs" />
+                            <div className="rounded-xl border border-stone-200 bg-[#fdfbf9] p-3 text-xs">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-stone-900">{hist.status}</span>
+                                <span className="text-[10px] text-stone-400">
+                                  {new Date(hist.changedAt).toLocaleString()}
+                                </span>
+                              </div>
+                              {hist.note && (
+                                <p className="text-stone-600 mt-1">{hist.note}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-stone-500 py-4 text-center">
+                        No workshop audit events recorded yet. Updates will appear as the atelier advances milestones.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Footer Actions */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => openOrderChat(selectedContractDetails)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50 transition shadow-2xs"
+                >
+                  <MessageSquare size={14} className="text-[#8f2338]" />
+                  <span>Send Studio Message</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  {["ready_for_delivery", "delivered"].includes(selectedContractDetails.productionStatus) && selectedContractDetails.status !== "Completed" && (
+                    <button
+                      type="button"
+                      disabled={actingId === selectedContractDetails.id}
+                      onClick={() => handleBusinessConfirmDelivery(selectedContractDetails)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition"
+                    >
+                      <Check size={14} />
+                      <span>Confirm Delivery & Release</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedContractDetails(null)}
+                    className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50 transition"
+                  >
+                    Close Dossier
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================
+            MODAL 8: DIRECT ORDER / ATELIER CONVERSATION CHAT
+        ========================================================== */}
+        {chatOrder && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-3 sm:p-4 backdrop-blur-xs"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setChatOrder(null);
+            }}
+          >
+            <div className="relative w-full max-w-lg rounded-3xl bg-white shadow-2xl flex flex-col h-[600px] max-h-[90vh] overflow-hidden">
+              {/* Chat Header */}
+              <div className="flex items-center justify-between border-b border-stone-100 p-4 sm:p-5 bg-[#fdfbf9]">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#8f2338] text-white shrink-0 shadow-xs">
+                    <MessageSquare size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-serif text-sm font-bold text-stone-900">
+                      {role === "tailor" ? (chatOrder.organisation || "Enterprise Client") : (chatOrder.tailorName || "Master Atelier")}
+                    </h3>
+                    <p className="text-[11px] text-stone-500">
+                      Order #{chatOrder.id} · {chatOrder.garment || "Bulk Garments"}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setChatOrder(null)}
+                  className="rounded-full p-1.5 text-stone-400 hover:bg-stone-100 transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Chat Thread Messages */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 bg-[#faf9f6]/40">
+                {loadingMessages ? (
+                  <div className="py-16 text-center text-xs text-stone-400 space-y-2">
+                    <RefreshCw size={20} className="mx-auto animate-spin text-[#8f2338]" />
+                    <p>Loading conversation thread…</p>
+                  </div>
+                ) : chatMessages.length === 0 ? (
+                  <div className="py-16 text-center text-xs text-stone-400 space-y-2">
+                    <MessageSquare size={28} className="mx-auto text-stone-300" />
+                    <p className="font-bold text-stone-600">No messages in this contract thread yet</p>
+                    <p className="text-[11px] text-stone-400 max-w-xs mx-auto">
+                      Send a message below to clarify pattern measurements, fabric shipments, or delivery timelines.
+                    </p>
+                  </div>
+                ) : (
+                  chatMessages.map((msg, i) => {
+                    const isMe = msg.senderClerkUserId === user?.id || msg.senderRole === role;
+                    return (
+                      <div
+                        key={msg._id || i}
+                        className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}
+                      >
+                        <div
+                          className={`max-w-[80%] rounded-2xl p-3 text-xs leading-relaxed shadow-2xs ${
+                            isMe
+                              ? "bg-[#8f2338] text-white rounded-br-xs"
+                              : "bg-white text-stone-800 border border-stone-200 rounded-bl-xs"
+                          }`}
+                        >
+                          <p>{msg.content}</p>
+                          <p className={`mt-1 text-[9px] text-right ${isMe ? "text-rose-200" : "text-stone-400"}`}>
+                            {new Date(msg.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Chat Input Bar */}
+              <form onSubmit={handleSendOrderMessage} className="p-3 sm:p-4 border-t border-stone-100 bg-white flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newMessageText}
+                  onChange={(e) => setNewMessageText(e.target.value)}
+                  placeholder="Type a message to the atelier or client…"
+                  className="flex-1 rounded-xl border border-stone-200 bg-[#fdfbf9] px-3.5 py-2 text-xs outline-none focus:border-[#8f2338] focus:bg-white"
+                />
+                <button
+                  type="submit"
+                  disabled={!newMessageText.trim() || sendingMessage}
+                  className="rounded-xl bg-[#8f2338] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#781c2e] disabled:opacity-50 transition shrink-0"
+                >
+                  <Send size={14} />
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================
+            MODAL 9: TAILOR ADVANCE PRODUCTION MILESTONE MODAL
+        ========================================================== */}
+        {milestoneModalOrder && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-3 sm:p-4 backdrop-blur-xs"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !isUpdatingMilestone) setMilestoneModalOrder(null);
+            }}
+          >
+            <div className="relative w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl transition-all sm:p-7 space-y-5">
+              <div className="flex items-center justify-between border-b border-stone-100 pb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 text-[#8f2338]">
+                    <Scissors size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-serif text-lg font-bold text-stone-900">
+                      Update Production Milestone
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Order #{milestoneModalOrder.id} · {milestoneModalOrder.garment || "Apparel"}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setMilestoneModalOrder(null)}
+                  className="rounded-full p-1.5 text-stone-400 hover:bg-stone-100 transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleTailorSubmitMilestone} className="space-y-4 text-xs">
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">
+                    Select Milestone Stage
+                  </label>
+                  <select
+                    value={milestoneTargetStage}
+                    onChange={(e) => setMilestoneTargetStage(e.target.value)}
+                    className="w-full rounded-xl border border-stone-200 bg-white p-2.5 text-xs outline-none focus:border-[#8f2338]"
+                  >
+                    <option value="cutting">1. Pattern & Cutting Prep (cutting)</option>
+                    <option value="stitching">2. Assembly & Stitching (stitching)</option>
+                    <option value="quality_check">3. Quality Audit & Finishing (quality_check)</option>
+                    <option value="ready_for_delivery">4. Ready for Pickup / Dispatch (ready_for_delivery)</option>
+                    <option value="delivered">5. Delivered / Completed (delivered)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">
+                    Workshop Note (Visible to Client)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={milestoneNoteInput}
+                    onChange={(e) => setMilestoneNoteInput(e.target.value)}
+                    placeholder="e.g. Master cutter finished pattern layouts for all 100 sets. Commencing precision stitching tomorrow."
+                    className="w-full rounded-xl border border-stone-200 bg-[#fdfbf9] p-2.5 text-xs outline-none focus:border-[#8f2338] focus:bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">
+                    Optional Photo URL (Work in Progress Reference)
+                  </label>
+                  <input
+                    type="url"
+                    value={milestonePhotoInput}
+                    onChange={(e) => setMilestonePhotoInput(e.target.value)}
+                    placeholder="https://example.com/workshop-cut.jpg"
+                    className="w-full rounded-xl border border-stone-200 bg-[#fdfbf9] p-2.5 text-xs outline-none focus:border-[#8f2338] focus:bg-white"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 border-t border-stone-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setMilestoneModalOrder(null)}
+                    className="rounded-xl border border-stone-200 bg-white px-4 py-2 font-bold text-stone-700 hover:bg-stone-50 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isUpdatingMilestone}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f2338] px-5 py-2 font-bold text-white shadow-xs hover:bg-[#781c2e] disabled:opacity-60 transition"
+                  >
+                    {isUpdatingMilestone ? "Updating…" : "Confirm Stage Update ✓"}
                   </button>
                 </div>
               </form>

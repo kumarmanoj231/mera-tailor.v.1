@@ -547,20 +547,46 @@ export async function getBusinessDashboard(req, res) {
       .sort({ createdAt: -1 })
       .lean();
 
+    // Enrich bulkOrders with authentic tailor studio details and tender requirements
+    const tailorIds = [...new Set(bulkOrders.map(o => o.tailorId).filter(Boolean))];
+    const tailors = tailorIds.length
+      ? await Tailor.find({ _id: { $in: tailorIds } })
+          .select('_id name owner phone city area verified image rating reviews minPrice')
+          .lean()
+      : [];
+    const tailorMap = new Map(tailors.map(t => [String(t._id), t]));
+
+    const enrichedBulkOrders = bulkOrders.map(order => {
+      const tailorInfo = order.tailorId ? tailorMap.get(String(order.tailorId)) : null;
+      return {
+        ...order,
+        tailorDetails: tailorInfo || null,
+        tailorPhone: tailorInfo?.phone || order.tailorPhone || '',
+        tailorCity: tailorInfo?.city || 'Jaipur',
+        tailorArea: tailorInfo?.area || '',
+        tailorVerified: Boolean(tailorInfo?.verified),
+        tailorImage: tailorInfo?.image || '',
+        tailorOwner: tailorInfo?.owner || tailorInfo?.name || 'Master Artisan',
+        tailorRating: tailorInfo?.rating || 0,
+        tailorReviews: tailorInfo?.reviews || 0,
+      };
+    });
+
     res.json({
       business: bp,
       businessProfile: bp,
       user: user ? publicUser(user) : null,
       requests,
-      bulkOrders,
+      bulkOrders: enrichedBulkOrders,
+      orders: enrichedBulkOrders,
       stats: {
         totalRequirements: requests.length,
         submitted: requests.filter(r => r.status === 'submitted').length,
         quoted: requests.filter(r => r.status === 'quoted').length,
         awardedContracts: requests.filter(r => r.status === 'awarded').length,
-        inProduction: bulkOrders.filter(o => o.status === 'In Production' || o.productionStatus !== 'not_started').length,
-        completed: bulkOrders.filter(o => o.status === 'Completed').length,
-        activeBulkOrders: bulkOrders.filter(o => !['Completed', 'Cancelled'].includes(o.status)).length,
+        inProduction: enrichedBulkOrders.filter(o => o.status === 'In Production' || (o.productionStatus && o.productionStatus !== 'not_started')).length,
+        completed: enrichedBulkOrders.filter(o => o.status === 'Completed').length,
+        activeBulkOrders: enrichedBulkOrders.filter(o => !['Completed', 'Cancelled'].includes(o.status)).length,
       },
     });
   } catch (error) {

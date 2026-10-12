@@ -343,8 +343,17 @@ export async function cancelCustomerOrder(req, res) {
 export async function updateOrderStatus(req, res) {
   try {
     const order = await Order.findOne(buildOrderQuery(req.params.id));
-    if (!order || !(await orderBelongsToTailor(req, order))) return res.status(404).json({ error: 'Order request not found.' });
+    if (!order) return res.status(404).json({ error: 'Order request not found.' });
+
+    const isTailor = await orderBelongsToTailor(req, order);
+    const isOwner = String(order.clerkUserId) === String(req.authUserId);
+    const isAdmin = req.appUser?.role === 'admin';
     const nextStatus = String(req.body?.status || '');
+
+    if (!isTailor && !isAdmin && !(isOwner && ['Completed'].includes(nextStatus))) {
+      return res.status(403).json({ error: 'You are not authorized to update this order status.' });
+    }
+
     const transitions = {
       'Request Sent': ['Quote Received', 'Cancelled'],
       'Quote Received': ['Accepted', 'Cancelled'],
@@ -365,12 +374,17 @@ export async function updateOrderStatus(req, res) {
     const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
     order.history.push([nextStatus, dateStr]);
 
+    // Also update productionStatus if reaching Completed
+    if (nextStatus === 'Completed') {
+      order.productionStatus = 'delivered';
+    }
+
     order.statusHistory = order.statusHistory || [];
     order.statusHistory.push({
       status: nextStatus,
       productionStatus: order.productionStatus,
-      updatedBy: req.appUser?.firstName ? `${req.appUser.firstName} ${req.appUser.lastName || ''}`.trim() : 'Tailor Studio',
-      role: req.appUser?.role || 'tailor',
+      updatedBy: req.appUser?.firstName ? `${req.appUser.firstName} ${req.appUser.lastName || ''}`.trim() : (isOwner ? 'Client' : 'Tailor Studio'),
+      role: req.appUser?.role || (isOwner ? 'customer' : 'tailor'),
       note: req.body?.note || `Status updated to ${nextStatus}`,
       timestamp: now,
     });
@@ -401,15 +415,20 @@ export async function updateOrderStatus(req, res) {
       messageType: 'status_update',
     }).catch(() => {});
 
-    // Notify customer/business
-    createNotification({
-      recipientClerkUserId: order.clerkUserId,
-      title: `Order Status: ${nextStatus}`,
-      message: `Your order #${order.id} for '${order.garment}' is now '${nextStatus}'.`,
-      type: 'status',
-      link: '/orders',
-      metadata: { orderId: order.id, nextStatus },
-    }).catch(() => {});
+    // Notify other party
+    const notifyTarget = isOwner
+      ? (await Tailor.findById(order.tailorId).select('ownerClerkUserId').lean())?.ownerClerkUserId
+      : order.clerkUserId;
+    if (notifyTarget) {
+      createNotification({
+        recipientClerkUserId: notifyTarget,
+        title: `Order Status: ${nextStatus}`,
+        message: `Order #${order.id} for '${order.garment}' is now '${nextStatus}'.`,
+        type: 'status',
+        link: '/orders',
+        metadata: { orderId: order.id, nextStatus },
+      }).catch(() => {});
+    }
 
     res.json(order);
   } catch (error) {
@@ -445,6 +464,28 @@ export async function updateProductionMilestone(req, res) {
 
     order.productionStatus = milestone;
     const now = new Date();
+    const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    // Synchronize overall order status with production milestone
+    if (['cutting', 'stitching', 'quality_check'].includes(milestone)) {
+      if (!['In Production', 'Ready for Pickup', 'Completed'].includes(order.status)) {
+        order.status = 'In Production';
+        order.history.push(['In Production', dateStr, `Milestone: ${milestone}`]);
+      }
+      if (order.sourceRequirement) {
+        await BusinessRequest.updateOne({ _id: order.sourceRequirement }, { $set: { status: 'in-production' } }).catch(() => {});
+      }
+    } else if (milestone === 'ready_for_delivery') {
+      order.status = 'Ready for Pickup';
+      order.history.push(['Ready for Pickup', dateStr, 'Quality Check Complete']);
+    } else if (milestone === 'delivered') {
+      order.status = 'Completed';
+      order.history.push(['Completed', dateStr, 'Delivered to client']);
+      if (order.sourceRequirement) {
+        await BusinessRequest.updateOne({ _id: order.sourceRequirement }, { $set: { status: 'completed' } }).catch(() => {});
+      }
+    }
+
     order.statusHistory = order.statusHistory || [];
     order.statusHistory.push({
       status: order.status,
