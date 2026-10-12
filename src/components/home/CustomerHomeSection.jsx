@@ -312,7 +312,7 @@ export default function CustomerHomeSection() {
   );
 
   return (
-    <div className="space-y-6 sm:space-y-8 pb-16 pt-1 selection:bg-[#8f2338] selection:text-white">
+    <div className="mt-role-home mt-customer-home space-y-6 sm:space-y-8 pb-16 pt-1 selection:bg-[#8f2338] selection:text-white">
       {/* =========================================================
           1. COCKPIT HERO & FIT PROFILE VAULT (HEADER BLOCK)
       ========================================================== */}

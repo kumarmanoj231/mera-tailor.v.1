@@ -148,6 +148,148 @@
   letter-spacing: -0.02em;
 }
 
+/* Admin workspace: keep dense operational views calm and usable at every width. */
+.mt-admin-home .mt-admin-hero {
+  border-radius: 1.5rem;
+  background:
+    radial-gradient(ellipse at 92% 8%, rgb(143 35 56 / 7%), transparent 38%),
+    linear-gradient(135deg, #fffdfa 0%, #f8f3ed 100%);
+  box-shadow: 0 14px 36px rgb(58 36 28 / 5%);
+}
+
+.mt-admin-option-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mt-admin-home .mt-admin-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mt-admin-home .mt-admin-stat {
+  min-width: 0;
+}
+
+.mt-admin-option {
+  min-height: 15rem;
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 18px rgb(58 36 28 / 3%);
+}
+
+.mt-admin-option:focus-visible {
+  outline: 3px solid rgb(143 35 56 / 55%);
+  outline-offset: 3px;
+}
+
+.mt-admin-workspace main {
+  min-width: 0;
+}
+
+.mt-admin-workspace .overflow-x-auto {
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mt-admin-workspace table {
+  min-width: 44rem;
+}
+
+.mt-role-home,
+.mt-role-dashboard {
+  min-width: 0;
+}
+
+.mt-role-home h1,
+.mt-role-dashboard h1 {
+  text-wrap: balance;
+}
+
+.mt-role-home section[class*="rounded-3xl"][class*="border"][class*="bg-white"],
+.mt-role-dashboard section[class*="rounded-3xl"][class*="border"][class*="bg-white"] {
+  border-color: rgb(234 223 212 / 90%);
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 26px rgb(53 35 29 / 4%);
+}
+
+.mt-role-home input:not([type="checkbox"]):not([type="radio"]),
+.mt-role-home select,
+.mt-role-home textarea,
+.mt-role-dashboard input:not([type="checkbox"]):not([type="radio"]),
+.mt-role-dashboard select,
+.mt-role-dashboard textarea {
+  border-radius: 0.75rem;
+}
+
+.mt-role-home .overflow-x-auto,
+.mt-role-dashboard .overflow-x-auto {
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 1023px) {
+  .mt-admin-option-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  .mt-admin-home {
+    gap: 1.25rem;
+  }
+
+  .mt-admin-home .mt-admin-hero {
+    padding: 1.2rem;
+    border-radius: 1.25rem;
+  }
+
+  .mt-admin-home .mt-admin-hero > div > div:first-child {
+    min-width: 0;
+  }
+
+  .mt-admin-home .mt-admin-hero img {
+    max-height: 13rem;
+    object-fit: contain;
+  }
+
+  .mt-admin-option-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  .mt-admin-option {
+    min-height: 0;
+    padding: 1.1rem;
+    border-radius: 1rem;
+  }
+
+  .mt-role-home section[class*="rounded-3xl"][class*="border"][class*="bg-white"],
+  .mt-role-dashboard section[class*="rounded-3xl"][class*="border"][class*="bg-white"] {
+    border-radius: 1.15rem;
+  }
+
+  .mt-role-home :is(h1, h2),
+  .mt-role-dashboard :is(h1, h2) {
+    overflow-wrap: anywhere;
+  }
+
+  .mt-role-home .overflow-x-auto,
+  .mt-role-dashboard .overflow-x-auto {
+    max-width: calc(100vw - 2rem);
+  }
+
+  .mt-admin-workspace > header {
+    padding-inline: 0.75rem;
+  }
+
+  .mt-admin-workspace main {
+    padding-inline: 0.75rem;
+    padding-block: 1rem;
+  }
+
+  .mt-admin-workspace .overflow-x-auto {
+    max-width: calc(100vw - 1.5rem);
+  }
+}
+
 /* Minimal subtle custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

@@ -57,7 +57,7 @@ export default function AdminHomeSection({ onNavigateTab }) {
           const tailors = tailorsRes.ok ? await tailorsRes.json() : [];
           const users = usersRes.ok ? await usersRes.json() : [];
 
-          if (isMounted) {
+          if (isMounted && tailorsRes.ok && usersRes.ok) {
             const pendingAudits = tailors.filter(
               (t) => !t.verified && t.verificationStatus !== "verified"
             );
@@ -72,8 +72,7 @@ export default function AdminHomeSection({ onNavigateTab }) {
                 pendingStudioAudits: pendingAudits.length,
                 activeStudios: tailors.length,
                 totalRegisteredUsers: users.length,
-                enterpriseRfqs: 3,
-                platformHealth: "Healthy",
+                platformHealth: "Unknown",
               },
               rolesBreakdown,
               tailors,
@@ -99,7 +98,7 @@ export default function AdminHomeSection({ onNavigateTab }) {
     profile?.name ||
     user?.fullName ||
     (user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : null) ||
-    "Manoj Kumar Lodha";
+    "Administrator";
 
   // Summary Metrics
   const stats = useMemo(() => {
@@ -109,13 +108,17 @@ export default function AdminHomeSection({ onNavigateTab }) {
     const pendingList = dashboardData?.pendingAudits || [];
 
     return {
-      pendingAudits: snap.pendingStudioAudits ?? pendingList.length ?? 0,
-      activeStudios: snap.activeStudios ?? (tailorsList.length || 1),
-      totalUsers: snap.totalRegisteredUsers ?? (usersList.length || 4),
-      enterpriseRfqs: snap.enterpriseRfqs ?? 3,
-      platformHealth: snap.platformHealth || "Healthy",
+      pendingAudits: dashboardData ? (snap.pendingStudioAudits ?? pendingList.length ?? 0) : null,
+      activeStudios: dashboardData ? (snap.activeStudios ?? tailorsList.length) : null,
+      totalUsers: dashboardData ? (snap.totalRegisteredUsers ?? usersList.length) : null,
+      enterpriseRfqs: dashboardData ? (snap.enterpriseRfqs ?? null) : null,
+      platformHealth: snap.platformHealth || (loading ? "Connecting" : "Unavailable"),
     };
-  }, [dashboardData]);
+  }, [dashboardData, loading]);
+
+  const platformIsHealthy = ["healthy", "operational"].includes(
+    String(stats.platformHealth).toLowerCase()
+  );
 
   // 6 Primary Admin Options matching the reference UI mockup
   const adminOptions = [
@@ -131,7 +134,7 @@ export default function AdminHomeSection({ onNavigateTab }) {
       iconColor: "text-[#ef4444]",
       image: "/assets/admin_home/card_verification.png",
       statLabel: isHi ? "लंबित ऑडिट" : "Pending Audits",
-      statValue: stats.pendingAudits,
+      statValue: stats.pendingAudits ?? "—",
       statColor: "text-stone-900",
       actionLabel: isHi ? "आवेदन समीक्षा करें" : "Review Applications",
       linkColor: "text-[#ef4444]",
@@ -148,7 +151,7 @@ export default function AdminHomeSection({ onNavigateTab }) {
       iconColor: "text-[#8b5cf6]",
       image: "/assets/admin_home/card_users.png",
       statLabel: isHi ? "कुल खाते" : "Total Accounts",
-      statValue: stats.totalUsers,
+      statValue: stats.totalUsers ?? "—",
       statColor: "text-stone-900",
       actionLabel: isHi ? "उपयोगकर्ता प्रबंधित करें" : "Manage Users",
       linkColor: "text-[#8b5cf6]",
@@ -165,7 +168,7 @@ export default function AdminHomeSection({ onNavigateTab }) {
       iconColor: "text-[#10b981]",
       image: "/assets/admin_home/card_studios.png",
       statLabel: isHi ? "सक्रिय स्टूडियो" : "Active Studios",
-      statValue: stats.activeStudios,
+      statValue: stats.activeStudios ?? "—",
       statColor: "text-stone-900",
       actionLabel: isHi ? "स्टूडियो देखें" : "Explore Studios",
       linkColor: "text-[#10b981]",
@@ -182,7 +185,7 @@ export default function AdminHomeSection({ onNavigateTab }) {
       iconColor: "text-[#f59e0b]",
       image: "/assets/admin_home/card_bulk.png",
       statLabel: isHi ? "थोक RFQ" : "Bulk RFQs",
-      statValue: stats.enterpriseRfqs,
+      statValue: stats.enterpriseRfqs ?? "—",
       statColor: "text-stone-900",
       actionLabel: isHi ? "अनुरोध मॉडरेट करें" : "Moderate Requests",
       linkColor: "text-[#d97706]",
@@ -224,11 +227,11 @@ export default function AdminHomeSection({ onNavigateTab }) {
   ];
 
   return (
-    <div className="w-full space-y-7 pb-12 pt-1 font-sans">
+    <div className="mt-admin-home w-full space-y-7 pb-12 pt-1 font-sans">
       {/* =========================================================
           HERO BANNER (MATCHING REFERENCE MOCKUP EXACTLY)
       ========================================================== */}
-      <div className="relative overflow-hidden rounded-[28px] border border-stone-200/70 bg-[#fdfbf9] p-6 sm:p-8 lg:p-9 shadow-xs">
+      <div className="mt-admin-hero relative overflow-hidden rounded-[28px] border border-stone-200/70 bg-[#fdfbf9] p-6 sm:p-8 lg:p-9 shadow-xs">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 lg:gap-8">
           {/* Left Column: Badges, Title, Subtitle, 4 KPI stats */}
           <div className="flex-1 max-w-2xl">
@@ -239,9 +242,9 @@ export default function AdminHomeSection({ onNavigateTab }) {
                 <span>{isHi ? "मास्टर एडमिन कंट्रोल सेंटर" : "Master Admin Control Center"}</span>
               </span>
 
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ecfdf5] border border-[#a7f3d0]/80 px-3 py-1 text-xs font-semibold text-[#047857]">
-                <span className="h-2 w-2 rounded-full bg-[#10b981]" />
-                <span>{isHi ? "प्लेटफ़ॉर्म स्वास्थ्य: परिचालन" : "Platform Health: Operational"}</span>
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${platformIsHealthy ? "bg-[#ecfdf5] border-[#a7f3d0]/80 text-[#047857]" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
+                <span className={`h-2 w-2 rounded-full ${platformIsHealthy ? "bg-[#10b981]" : "bg-amber-500"}`} />
+                <span>{isHi ? `प्लेटफ़ॉर्म स्वास्थ्य: ${stats.platformHealth}` : `Platform Health: ${stats.platformHealth}`}</span>
               </span>
             </div>
 
@@ -258,15 +261,15 @@ export default function AdminHomeSection({ onNavigateTab }) {
             </p>
 
             {/* 4 KPI Metric Pills */}
-            <div className="mt-6 flex flex-wrap items-center gap-3">
+            <div className="mt-admin-metrics mt-6 grid grid-cols-2 gap-3">
               {/* Stat 1: Pending Audits */}
-              <div className="flex items-center gap-3 bg-white rounded-2xl border border-stone-200/80 px-4 py-2.5 shadow-2xs min-w-[125px]">
+              <div className="mt-admin-stat flex items-center gap-3 bg-white rounded-2xl border border-stone-200/80 px-4 py-2.5 shadow-2xs min-w-[125px]">
                 <div className="h-10 w-10 rounded-xl bg-[#fef2f2] flex items-center justify-center text-[#ef4444] shrink-0">
                   <Shield size={18} />
                 </div>
                 <div className="flex flex-col">
                   <span className="text-lg font-bold text-stone-900 leading-none">
-                    {stats.pendingAudits}
+                    {stats.pendingAudits ?? "—"}
                   </span>
                   <span className="text-[11px] font-medium text-stone-400 mt-1 whitespace-nowrap">
                     {isHi ? "लंबित ऑडिट" : "Pending Audits"}
@@ -275,13 +278,13 @@ export default function AdminHomeSection({ onNavigateTab }) {
               </div>
 
               {/* Stat 2: Active Studios */}
-              <div className="flex items-center gap-3 bg-white rounded-2xl border border-stone-200/80 px-4 py-2.5 shadow-2xs min-w-[125px]">
+              <div className="mt-admin-stat flex items-center gap-3 bg-white rounded-2xl border border-stone-200/80 px-4 py-2.5 shadow-2xs min-w-[125px]">
                 <div className="h-10 w-10 rounded-xl bg-[#ecfdf5] flex items-center justify-center text-[#10b981] shrink-0">
                   <Store size={18} />
                 </div>
                 <div className="flex flex-col">
                   <span className="text-lg font-bold text-stone-900 leading-none">
-                    {stats.activeStudios}
+                    {stats.activeStudios ?? "—"}
                   </span>
                   <span className="text-[11px] font-medium text-stone-400 mt-1 whitespace-nowrap">
                     {isHi ? "सक्रिय स्टूडियो" : "Active Studios"}
@@ -290,13 +293,13 @@ export default function AdminHomeSection({ onNavigateTab }) {
               </div>
 
               {/* Stat 3: Total Users */}
-              <div className="flex items-center gap-3 bg-white rounded-2xl border border-stone-200/80 px-4 py-2.5 shadow-2xs min-w-[125px]">
+              <div className="mt-admin-stat flex items-center gap-3 bg-white rounded-2xl border border-stone-200/80 px-4 py-2.5 shadow-2xs min-w-[125px]">
                 <div className="h-10 w-10 rounded-xl bg-[#f5f3ff] flex items-center justify-center text-[#8b5cf6] shrink-0">
                   <Users size={18} />
                 </div>
                 <div className="flex flex-col">
                   <span className="text-lg font-bold text-stone-900 leading-none">
-                    {stats.totalUsers}
+                    {stats.totalUsers ?? "—"}
                   </span>
                   <span className="text-[11px] font-medium text-stone-400 mt-1 whitespace-nowrap">
                     {isHi ? "कुल उपयोगकर्ता" : "Total Users"}
@@ -305,13 +308,13 @@ export default function AdminHomeSection({ onNavigateTab }) {
               </div>
 
               {/* Stat 4: B2B Demands */}
-              <div className="flex items-center gap-3 bg-white rounded-2xl border border-stone-200/80 px-4 py-2.5 shadow-2xs min-w-[125px]">
+              <div className="mt-admin-stat flex items-center gap-3 bg-white rounded-2xl border border-stone-200/80 px-4 py-2.5 shadow-2xs min-w-[125px]">
                 <div className="h-10 w-10 rounded-xl bg-[#fffbeb] flex items-center justify-center text-[#f59e0b] shrink-0">
                   <Layers size={18} />
                 </div>
                 <div className="flex flex-col">
                   <span className="text-lg font-bold text-stone-900 leading-none">
-                    {stats.enterpriseRfqs}
+                    {stats.enterpriseRfqs ?? "—"}
                   </span>
                   <span className="text-[11px] font-medium text-stone-400 mt-1 whitespace-nowrap">
                     {isHi ? "B2B मांग" : "B2B Demands"}
@@ -349,14 +352,15 @@ export default function AdminHomeSection({ onNavigateTab }) {
       {/* =========================================================
           PRIMARY 6 OPTION CARDS (2x3 GRID)
       ========================================================== */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="mt-admin-option-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {adminOptions.map((opt) => {
           const IconComponent = opt.icon;
           return (
-            <div
+            <button
               key={opt.id}
+              type="button"
               onClick={() => handleTabClick(opt.tab)}
-              className="group relative flex flex-col justify-between rounded-3xl border border-stone-200/80 bg-white p-6 shadow-2xs hover:shadow-md hover:border-stone-300/90 transition-all duration-200 cursor-pointer"
+              className="mt-admin-option group relative flex w-full flex-col justify-between rounded-3xl border border-stone-200/80 bg-white p-6 text-left shadow-2xs hover:shadow-md hover:border-stone-300/90 transition-all duration-200 cursor-pointer"
             >
               <div>
                 {/* Header row with Icon and Right Graphic */}
@@ -405,7 +409,7 @@ export default function AdminHomeSection({ onNavigateTab }) {
                   <span className="text-sm font-bold">→</span>
                 </span>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>

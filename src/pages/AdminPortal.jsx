@@ -1209,7 +1209,7 @@ export default function AdminPortal() {
   }, [tab, isHi]);
 
   return (
-    <div className="min-h-screen bg-[#faf9f6] text-[#172033] flex font-sans antialiased">
+    <div className="mt-admin-shell min-h-screen bg-[#faf9f6] text-[#172033] flex font-sans antialiased">
       {/* 1. PERSISTENT RESPONSIVE ADMIN SIDEBAR */}
       <AdminSidebar
         currentTab={tab}
@@ -1236,7 +1236,7 @@ export default function AdminPortal() {
       />
 
       {/* 2. MAIN CONSOLE WORKSPACE COLUMN */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="mt-admin-workspace flex-1 flex flex-col min-w-0">
         {/* TOP BAR */}
         <AdminTopBar
           title={currentTabMeta.title}

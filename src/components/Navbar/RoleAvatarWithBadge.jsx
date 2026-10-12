@@ -88,8 +88,9 @@ export default function RoleAvatarWithBadge({
   afterSignOutUrl = "/",
 }) {
   const { t } = useTranslation();
-  const { isSignedIn, isProfileLoaded, user, profile } = useAuth();
-  const effectiveRole = isSignedIn && !isProfileLoaded && !role ? "loading" : (role || "customer");
+  const { isSignedIn, isProfileLoaded, profileError, user, profile } = useAuth();
+  const rolePending = isSignedIn && !role && (!isProfileLoaded || (!profile && Boolean(profileError)) || !profile);
+  const effectiveRole = rolePending ? "loading" : (role || "customer");
   const meta = getRoleMeta(effectiveRole, t);
   const IconComponent = meta.icon;
 

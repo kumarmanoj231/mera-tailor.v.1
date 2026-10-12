@@ -509,7 +509,7 @@ export default function TailorHomeSection() {
   ];
 
   return (
-    <div className="w-full pb-16 pt-2">
+    <div className="mt-role-home mt-tailor-home w-full pb-16 pt-2">
       {/* =========================================================
           TOP BREADCRUMB
       ========================================================== */}
