@@ -2,6 +2,7 @@ import { getAuth } from '@clerk/express';
 import { User } from '../models.js';
 
 export function requireAuth(req, res, next) {
+  res.setHeader('Cache-Control', 'private, no-store');
   if (!process.env.CLERK_SECRET_KEY) return res.status(503).json({ error: 'Clerk authentication is not configured on this server.' });
   const auth = getAuth(req);
   if (!auth.isAuthenticated || !auth.userId) {
@@ -54,7 +55,10 @@ export async function syncAppUser(req, res, next) {
     );
     if (req.appUser.disabled) return res.status(403).json({ error: 'This account has been disabled. Contact support.' });
     next();
-  } catch (error) { res.status(502).json({ error: 'Could not sync your Clerk profile to the app database.', detail: error.message }); }
+  } catch (error) {
+    console.error('Could not sync the authenticated profile.', error?.name || 'UnknownError');
+    res.status(502).json({ error: 'Could not sync your Clerk profile to the app database.' });
+  }
 }
 
 export function requireRole(...roles) {

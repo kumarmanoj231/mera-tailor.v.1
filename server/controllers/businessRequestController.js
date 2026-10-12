@@ -254,7 +254,7 @@ export async function listBusinessRequests(req, res) {
 
     res.json(formatted);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -288,7 +288,7 @@ export async function getBusinessRequest(req, res) {
       quotesCount: item.quotes?.length || 0,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -709,7 +709,7 @@ export async function getBusinessProfile(req, res) {
       phone: user.phone,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 

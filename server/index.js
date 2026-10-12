@@ -9,10 +9,22 @@ import apiRoutes from './routes/index.js';
 import { connectDatabase } from './config/database.js';
 import { getHealth } from './controllers/healthController.js';
 import { globalApiLimiter } from './middleware/rateLimiter.js';
+import { getAllowedOrigins, getMissingProductionConfig, isCorsOriginAllowed } from './config/security.js';
 
 const app = express();
 const projectDir = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(projectDir, '../dist');
+
+const missingProductionConfig = getMissingProductionConfig();
+if (missingProductionConfig.length) {
+  throw new Error(`Production startup blocked. Configure: ${missingProductionConfig.join(', ')}.`);
+}
+
+// Render terminates TLS at one trusted reverse proxy. Preserve visitor IPs for
+// rate limiting and secure-request handling without trusting arbitrary proxy hops.
+if (process.env.NODE_ENV === 'production' || process.env.RENDER || process.env.RENDER_SERVICE_ID) {
+  app.set('trust proxy', 1);
+}
 
 function getPublicSiteUrl(req) {
   const configuredUrl = process.env.SITE_URL || process.env.RENDER_EXTERNAL_URL;
@@ -72,7 +84,7 @@ app.use((_req, res, next) => {
   next();
 });
 
-// Direct public health check for Render & uptime monitors (always returns 200)
+// Direct public health check for Render & uptime monitors.
 app.get(['/health', '/api/health'], getHealth);
 
 // Keep public crawl discovery aligned with the active deployment domain.
@@ -121,7 +133,11 @@ if (process.env.CLERK_SECRET_KEY && clerkPublishableKey) {
   }));
 }
 
-app.use(cors());
+const allowedCorsOrigins = getAllowedOrigins();
+app.use(cors({
+  origin: (origin, callback) => callback(null, isCorsOriginAllowed(origin, allowedCorsOrigins)),
+  maxAge: 600,
+}));
 
 // Parse JSON while preserving raw body for crypto webhook signature verification
 app.use(

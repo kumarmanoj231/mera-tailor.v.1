@@ -86,7 +86,7 @@ export async function listNotifications(req, res) {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -102,7 +102,7 @@ export async function getUnreadCount(req, res) {
     });
     res.json({ unreadCount });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -129,7 +129,7 @@ export async function markAsRead(req, res) {
 
     res.json({ notification: item, unreadCount });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -150,7 +150,7 @@ export async function markAllAsRead(req, res) {
       unreadCount: 0,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -176,7 +176,7 @@ export async function deleteNotification(req, res) {
 
     res.json({ success: true, deletedId: req.params.id, unreadCount });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -196,7 +196,7 @@ export async function clearAllNotifications(req, res) {
       unreadCount: 0,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -247,7 +247,7 @@ export async function broadcastAnnouncement(req, res) {
       title: cleanTitle,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 

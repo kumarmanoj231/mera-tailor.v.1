@@ -18,6 +18,8 @@ export async function getDashboard(req, res) {
       measurements,
       savedTailors,
     });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) {
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred.' : error.message });
+  }
 }
 

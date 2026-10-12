@@ -331,7 +331,7 @@ export async function getUserDashboard(req, res) {
       savedTailors,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -520,7 +520,7 @@ export async function getTailorDashboard(req, res) {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -590,7 +590,7 @@ export async function getBusinessDashboard(req, res) {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -612,7 +612,7 @@ export async function listUserSavedTailors(req, res) {
     
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -643,7 +643,7 @@ export async function saveTailor(req, res) {
 
     res.json({ saved: shouldSave, tailorId: tailor._id });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -664,7 +664,7 @@ export async function unsaveTailor(req, res) {
 
     res.json({ saved: false, tailorId });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -698,7 +698,7 @@ export async function deleteCurrentUserAccount(req, res) {
 
     res.json({ success: true, message: 'Account and associated data deleted from database and authentication provider.' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 

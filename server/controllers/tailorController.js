@@ -152,7 +152,7 @@ export async function listTailors(req, res) {
 
     res.json(rows.map(t => sanitizeTailor(t, isAuthenticated)));
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -195,7 +195,7 @@ export async function getTailor(req, res) {
 
     res.json(sanitizeTailor(tailor, isAuthenticated));
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -242,7 +242,7 @@ export async function getMyStudio(req, res) {
     }
     res.json(studioObj);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -485,7 +485,7 @@ export async function listSavedTailors(req, res) {
 
     res.json(rows.map(publicTailor));
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -512,7 +512,7 @@ export async function toggleSavedTailor(req, res) {
     );
     res.json({ saved: shouldSave, tailorId: tailor._id });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -535,7 +535,7 @@ export async function getPlatformStats(_req, res) {
       totalUsers: userCount,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -583,7 +583,7 @@ export async function getTailorReviews(req, res) {
 
     res.json(formatted);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -665,6 +665,6 @@ export async function createTailorReview(req, res) {
       newReviewCount: count,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }

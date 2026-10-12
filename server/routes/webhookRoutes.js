@@ -132,8 +132,10 @@ router.post('/webhooks/clerk', async (req, res) => {
         return res.json({ received: true, ignored: type });
     }
   } catch (error) {
-    console.error('Clerk webhook processing error:', error);
-    return res.status(500).json({ error: error.message });
+    console.error('Clerk webhook processing failed:', error?.name || 'Error', error?.code || 'UNKNOWN');
+    return res.status(500).json({
+      error: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred.' : error.message,
+    });
   }
 });
 

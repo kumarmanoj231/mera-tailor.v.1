@@ -78,7 +78,7 @@ export async function listOrders(req, res) {
 
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -109,7 +109,7 @@ export async function getOrder(req, res) {
 
     res.json(order);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -346,7 +346,7 @@ export async function cancelCustomerOrder(req, res) {
       order,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -580,7 +580,7 @@ export async function getOrderMessages(req, res) {
 
     res.json(messages);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -675,6 +675,6 @@ export async function deleteOrder(req, res) {
     await Order.deleteOne({ _id: order._id });
     res.json({ success: true, message: 'Order request deleted successfully.' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }

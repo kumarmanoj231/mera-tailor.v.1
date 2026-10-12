@@ -8,7 +8,7 @@ export async function listMeasurements(req, res) {
       .lean();
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -18,7 +18,7 @@ export async function getMeasurement(req, res) {
     if (!item) return res.status(404).json({ error: 'Measurement profile not found.' });
     res.json(item);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 

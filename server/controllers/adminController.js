@@ -47,7 +47,7 @@ export async function listAdminUsers(_req, res) {
       })
     );
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -234,7 +234,7 @@ export async function listAdminTailors(_req, res) {
     }
     res.json(tailors);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -296,7 +296,7 @@ export async function listPendingVerifications(req, res) {
     }
     res.json(tailors);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -817,7 +817,7 @@ export async function getAdminDashboardSummary(_req, res) {
       recentActivity: activities,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -909,7 +909,7 @@ export async function listAdminNotifications(_req, res) {
     notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     res.json(notifications);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 
@@ -997,7 +997,7 @@ export async function listAdminBusinesses(_req, res) {
 
     res.json(combined);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message });
   }
 }
 

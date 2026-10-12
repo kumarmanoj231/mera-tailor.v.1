@@ -152,12 +152,12 @@ export async function getTailorDashboard(req, res) {
         openOrders: requests.filter(r => !['Completed', 'Cancelled'].includes(r.status)).length,
       },
     });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message }); }
 }
 
 export async function getBusinessDashboard(req, res) {
   try {
     const requests = await BusinessRequest.find({ clerkUserId: req.authUserId }).sort({ createdAt: -1 }).lean();
     res.json({ requests });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ error: process.env.NODE_ENV === "production" ? "An unexpected server error occurred." : error.message }); }
 }
