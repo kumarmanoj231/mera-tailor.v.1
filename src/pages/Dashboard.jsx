@@ -2608,7 +2608,7 @@ export default function Dashboard() {
                       }}
                       className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-3.5 text-left hover:border-blue-400 hover:bg-white transition"
                     >
-                      <p className="text-[10px] font-bold text-stone-400 uppercase">{t("tailorDashboard.inProduction", "In Production")}</p>
+                      <p className="text-[10px] font-bold text-stone-400 uppercase">{t("tailorDashboard.inProduction", "Active Orders")}</p>
                       <p className="mt-1 font-serif text-2xl font-bold text-blue-800">
                         {tailorInProductionCount}
                       </p>
@@ -2629,7 +2629,7 @@ export default function Dashboard() {
                     </button>
 
                     <div className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-3.5 text-left">
-                      <p className="text-[10px] font-bold text-stone-400 uppercase">{t("tailorDashboard.revenue", "Studio Revenue")}</p>
+                      <p className="text-[10px] font-bold text-stone-400 uppercase">{t("tailorDashboard.revenue", "Completed Revenue")}</p>
                       <p className="mt-1 font-serif text-xl font-bold text-[#8f2338] truncate">
                         {money(tailorRevenue)}
                       </p>
@@ -3441,7 +3441,7 @@ export default function Dashboard() {
                         { id: "all", label: t("dashboardPage.filterAll", "All"), count: tailorRequests.length },
                         { id: "needsQuote", label: t("tailorDashboard.filterNeedsQuote", "Needs Quote"), count: tailorPendingQuotesCount },
                         { id: "quoted", label: t("tailorDashboard.filterQuoted", "Quoted / Awaiting Client"), count: tailorRequests.filter((r) => r.status === "Quote Received").length },
-                        { id: "inProduction", label: t("dashboardPage.filterInProgress", "In Production"), count: tailorInProductionCount },
+                        { id: "inProduction", label: t("tailorDashboard.activeOrders", "Active Orders"), count: tailorInProductionCount },
                         { id: "readyOrDone", label: t("dashboardPage.filterCompleted", "Ready / Completed"), count: tailorCompletedCount },
                         { id: "cancelled", label: t("tailorDashboard.filterCancelled", "Cancelled"), count: tailorRequests.filter((r) => r.status === "Cancelled").length },
                       ].map((filter) => (
