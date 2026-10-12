@@ -24,7 +24,6 @@ const HeroDashboard = ({ onSignUp }) => {
   const [topTailor, setTopTailor] = useState(null);
   const [activeOrder, setActiveOrder] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -77,23 +76,13 @@ const HeroDashboard = ({ onSignUp }) => {
     };
   }, [isSignedIn, getToken]);
 
-  const tailorName = topTailor?.name || t("home.featuredTailorFallback", "Verified Master Studio");
+  const tailorName = topTailor?.name || t("home.localStudio", "Local studio");
   const tailorSpecialty =
     topTailor?.categories?.[0] ||
     topTailor?.description?.slice(0, 40) ||
     t("home.tailorSpeciality", "Custom Tailoring & Alterations");
   const tailorRating = topTailor?.rating && Number(topTailor.rating) > 0 ? Number(topTailor.rating).toFixed(1) : "New";
   const tailorLocation = [topTailor?.area, topTailor?.city].filter(Boolean).join(", ") || t("home.nearYou", "Near You");
-
-  const initials = tailorName
-    ? tailorName
-        .trim()
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((w) => w[0])
-        .join("")
-        .toUpperCase()
-    : "MT";
 
   const cleanPhone = topTailor?.phone ? String(topTailor.phone).replace(/[^\d+]/g, "") : null;
 
@@ -144,7 +133,7 @@ const HeroDashboard = ({ onSignUp }) => {
         ====================================================== */}
         {loading ? (
           <div className="h-32 animate-pulse rounded-[18px] border border-[#eee5dc] bg-stone-100/70 p-3.5" />
-        ) : (
+        ) : topTailor ? (
           <div className="rounded-[18px] border border-[#eee5dc] bg-white p-3.5 transition-all hover:border-[#8f2338]/30">
             <Link
               to={topTailor?._id ? `/tailors/${encodeURIComponent(topTailor._id)}` : "/find-tailors"}
@@ -265,6 +254,29 @@ const HeroDashboard = ({ onSignUp }) => {
                 </button>
               )}
             </div>
+          </div>
+        ) : (
+          <div className="rounded-[18px] border border-[#eee5dc] bg-white p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f8eee8] text-[#8f2338]">
+                <Scissors size={19} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h4 className="font-serif text-base font-semibold text-[#202538]">
+                  {t("home.discoverStudioTitle", "Find your local atelier")}
+                </h4>
+                <p className="mt-1 text-xs leading-relaxed text-stone-500">
+                  {t("home.discoverStudioHelp", "Browse real tailor profiles, compare their services, and choose the right fit for your next garment.")}
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/find-tailors"
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#8f2338] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#781c2e]"
+            >
+              {t("home.exploreAll", "Explore studios")}
+              <ChevronRight size={14} />
+            </Link>
           </div>
         )}
 

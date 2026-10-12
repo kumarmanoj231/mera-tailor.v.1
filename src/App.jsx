@@ -1,25 +1,26 @@
-import React, { useEffect } from "react";
+import React, { lazy, Suspense, useEffect } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from './context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import Home from "./pages/Home";
-import FindTailors from "./pages/FindTailors";
-import HowItWorks from "./pages/HowItWorks";
-import MyTailors from "./pages/MyTailors";
-import Orders from "./pages/Orders";
-import Bulk from "./pages/Bulk";
-import Contact from "./pages/Contact";
-import Dashboard from "./pages/Dashboard";
-import AdminPortal from "./pages/AdminPortal";
 import AppMeta from "./components/AppMeta";
-import Onboarding from './pages/Onboarding';
-import TailorDetail from './pages/TailorDetail';
-import Terms from './pages/Terms';
-import Privacy from './pages/Privacy';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import DashboardSkeleton from './components/common/DashboardSkeleton';
+
+const Home = lazy(() => import("./pages/Home"));
+const FindTailors = lazy(() => import("./pages/FindTailors"));
+const HowItWorks = lazy(() => import("./pages/HowItWorks"));
+const MyTailors = lazy(() => import("./pages/MyTailors"));
+const Orders = lazy(() => import("./pages/Orders"));
+const Bulk = lazy(() => import("./pages/Bulk"));
+const Contact = lazy(() => import("./pages/Contact"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const AdminPortal = lazy(() => import("./pages/AdminPortal"));
+const Onboarding = lazy(() => import('./pages/Onboarding'));
+const TailorDetail = lazy(() => import('./pages/TailorDetail'));
+const Terms = lazy(() => import('./pages/Terms'));
+const Privacy = lazy(() => import('./pages/Privacy'));
 
 function RoleAccess({ roles, children }) {
   const { isSignedIn, isLoaded, isProfileLoaded, profile, profileError, retryProfile } = useAuth();
@@ -200,26 +201,34 @@ const App = () => {
       <AppMeta />
       <AuthFlowGuard />
       <ToastContainer position="top-right" newestOnTop closeOnClick pauseOnFocusLoss theme="light" />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/find-tailors" element={<FindTailors />} />
-        <Route path="/tailors" element={<Navigate to="/find-tailors" replace />} />
-        <Route path="/tailors/:id" element={<TailorDetail />} />
-        <Route path="/how-it-works" element={<HowItWorks />} />
-        <Route path="/bulk" element={<RoleAccess roles={['business', 'tailor', 'admin']}><Bulk /></RoleAccess>} />
+      <Suspense
+        fallback={
+          <div role="status" aria-live="polite" className="grid min-h-[45vh] place-items-center px-4 text-sm text-stone-500">
+            Loading MeraTailor…
+          </div>
+        }
+      >
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/find-tailors" element={<FindTailors />} />
+          <Route path="/tailors" element={<Navigate to="/find-tailors" replace />} />
+          <Route path="/tailors/:id" element={<TailorDetail />} />
+          <Route path="/how-it-works" element={<HowItWorks />} />
+          <Route path="/bulk" element={<RoleAccess roles={['business', 'tailor', 'admin']}><Bulk /></RoleAccess>} />
 
-        <Route path="/my-tailors" element={<RoleAccess roles={['customer', 'admin']}><MyTailors /></RoleAccess>} />
-        <Route path="/orders" element={<RoleAccess roles={['customer', 'business', 'tailor', 'admin']}><Orders /></RoleAccess>} />
-        <Route path="/my-orders" element={<RoleAccess roles={['customer', 'business', 'tailor', 'admin']}><Orders /></RoleAccess>} />
-        <Route path="/profile" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="/contact" element={<Contact />} />
-        <Route path="/terms" element={<Terms />} />
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="/dashboard" element={<ErrorBoundary><DashboardRoleRouter /></ErrorBoundary>} />
-        <Route path="/admin" element={<RoleAccess roles={['admin']}><AdminPortal /></RoleAccess>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <Route path="/my-tailors" element={<RoleAccess roles={['customer', 'admin']}><MyTailors /></RoleAccess>} />
+          <Route path="/orders" element={<RoleAccess roles={['customer', 'business', 'tailor', 'admin']}><Orders /></RoleAccess>} />
+          <Route path="/my-orders" element={<RoleAccess roles={['customer', 'business', 'tailor', 'admin']}><Orders /></RoleAccess>} />
+          <Route path="/profile" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/onboarding" element={<Onboarding />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/dashboard" element={<ErrorBoundary><DashboardRoleRouter /></ErrorBoundary>} />
+          <Route path="/admin" element={<RoleAccess roles={['admin']}><AdminPortal /></RoleAccess>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </ErrorBoundary>
   );
 };

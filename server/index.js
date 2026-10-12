@@ -14,6 +14,29 @@ const app = express();
 const projectDir = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(projectDir, '../dist');
 
+function getPublicSiteUrl(req) {
+  const configuredUrl = process.env.SITE_URL || process.env.RENDER_EXTERNAL_URL;
+  if (configuredUrl) {
+    try {
+      return new URL(configuredUrl).origin;
+    } catch {
+      // Fall through to the current request origin when deployment config is invalid.
+    }
+  }
+
+  return `${req.protocol}://${req.get('host')}`;
+}
+
+function escapeXml(value) {
+  return value.replace(/[<>&"']/g, (character) => ({
+    '<': '&lt;',
+    '>': '&gt;',
+    '&': '&amp;',
+    '"': '&quot;',
+    "'": '&apos;',
+  })[character]);
+}
+
 // Defensive HTTP Security Headers
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -26,6 +49,41 @@ app.use((_req, res, next) => {
 
 // Direct public health check for Render & uptime monitors (always returns 200)
 app.get(['/health', '/api/health'], getHealth);
+
+// Keep public crawl discovery aligned with the active deployment domain.
+app.get('/robots.txt', (req, res) => {
+  const siteUrl = escapeXml(getPublicSiteUrl(req));
+  res.type('text/plain').send([
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /api/',
+    `Sitemap: ${siteUrl}/sitemap.xml`,
+    '',
+  ].join('\n'));
+});
+
+app.get('/sitemap.xml', (req, res) => {
+  const siteUrl = escapeXml(getPublicSiteUrl(req));
+  const publicPaths = ['/', '/find-tailors', '/how-it-works', '/contact', '/terms', '/privacy'];
+  const urls = publicPaths
+    .map((pathname) => `  <url><loc>${siteUrl}${pathname}</loc></url>`)
+    .join('\n');
+
+  res.type('application/xml').send([
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    urls,
+    '</urlset>',
+    '',
+  ].join('\n'));
+});
+
+app.use((req, res, next) => {
+  if (/^\/(admin|dashboard|orders|my-orders|my-tailors|bulk|onboarding)(\/|$)/.test(req.path)) {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  }
+  next();
+});
 
 const clerkPublishableKey = process.env.CLERK_PUBLISHABLE_KEY || process.env.VITE_CLERK_PUBLISHABLE_KEY;
 if (process.env.CLERK_SECRET_KEY && clerkPublishableKey) {

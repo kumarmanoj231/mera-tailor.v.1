@@ -1,4 +1,4 @@
-import React from "react";
+import React, { lazy } from "react";
 import { useAuth } from "../context/AuthContext";
 
 import Navbar from "../components/Navbar";
@@ -10,11 +10,12 @@ import HowItWorksSection from "../components/home/HowItWorksSection";
 import StitchCategoriesSection from "../components/home/StitchCategoriesSection";
 import FeaturedTailorsSection from "../components/home/FeaturedTailorsSection";
 import AudienceSection from "../components/home/AudienceSection";
-import TailorHomeSection from "../components/home/TailorHomeSection";
-import BusinessHomeSection from "../components/home/BusinessHomeSection";
-import AdminHomeSection from "../components/home/AdminHomeSection";
-import CustomerHomeSection from "../components/home/CustomerHomeSection";
 import DashboardSkeleton from "../components/common/DashboardSkeleton";
+
+const TailorHomeSection = lazy(() => import("../components/home/TailorHomeSection"));
+const BusinessHomeSection = lazy(() => import("../components/home/BusinessHomeSection"));
+const AdminHomeSection = lazy(() => import("../components/home/AdminHomeSection"));
+const CustomerHomeSection = lazy(() => import("../components/home/CustomerHomeSection"));
 
 const Home = () => {
   const { openSignUp, isSignedIn, isProfileLoaded, profile, user } = useAuth();

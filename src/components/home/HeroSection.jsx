@@ -32,19 +32,8 @@ const HeroSection = ({ onSignUp }) => {
   const [showVoiceHelp, setShowVoiceHelp] = React.useState(false);
   const voiceHelpTimeoutRef = React.useRef(null);
 
-  // Auto-show voice coachmark once for 6 seconds on initial mount
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowVoiceHelp(true);
-      voiceHelpTimeoutRef.current = setTimeout(() => {
-        setShowVoiceHelp(false);
-      }, 6000);
-    }, 1500);
-
-    return () => {
-      clearTimeout(timer);
-      if (voiceHelpTimeoutRef.current) clearTimeout(voiceHelpTimeoutRef.current);
-    };
+  React.useEffect(() => () => {
+    if (voiceHelpTimeoutRef.current) clearTimeout(voiceHelpTimeoutRef.current);
   }, []);
 
   const handleVoiceButtonMouseEnter = () => {
@@ -209,16 +198,18 @@ const HeroSection = ({ onSignUp }) => {
       {/* Background */}
       <div className="absolute inset-0 -z-20">
         <img
-          src="/assets/hero-background.png"
-          alt=""
+          src="/assets/hero-atelier.jpg"
+          alt="An artisan tailor carefully cutting fabric in a sunlit atelier"
           className="
             h-full
             w-full
             object-cover
-            object-[68%_center]
-            sm:object-[65%_center]
-            lg:object-center
+            object-[72%_center]
+            sm:object-[68%_center]
+            lg:object-[72%_center]
           "
+          fetchPriority="high"
+          decoding="async"
         />
       </div>
 
@@ -239,17 +230,17 @@ const HeroSection = ({ onSignUp }) => {
         <div
           className="
             flex
-            min-h-[760px]
+            min-h-[610px]
             flex-col
             items-center
             justify-center
             gap-8
             py-10
 
-            sm:min-h-[800px]
+            sm:min-h-[660px]
             sm:gap-10
 
-            lg:min-h-[700px]
+            lg:min-h-[650px]
             lg:flex-row
             lg:items-center
             lg:justify-center
@@ -426,6 +417,8 @@ const HeroSection = ({ onSignUp }) => {
                   onClick={() => { setVoiceOpen(true); setVoiceError(""); setShowVoiceHelp(false); }}
                   onMouseEnter={handleVoiceButtonMouseEnter}
                   onMouseLeave={handleVoiceButtonMouseLeave}
+                  onFocus={handleVoiceButtonMouseEnter}
+                  onBlur={handleVoiceButtonMouseLeave}
                   className="
                     inline-flex
                     min-h-12

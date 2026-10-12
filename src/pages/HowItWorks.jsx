@@ -52,7 +52,7 @@ export default function HowItWorks() {
   // Pure English & Pure Hindi Content with Brossard Design Layout
   const roleData = {
     customer: {
-      bgImage: "/assets/minecraft_customer.jpg",
+      bgImage: "/assets/hero-atelier.jpg",
       breadcrumb: isHi ? "होम / मार्गदर्शिका / ग्राहक यात्रा" : "Home / How It Works / Customer Journey",
       categoryTag: isHi ? "व्यक्तिगत सिलाई सेवा" : "Bespoke Custom Tailoring",
       updatedDate: isHi ? "अद्यतन: 2026" : "Updated: 2026",
@@ -187,7 +187,7 @@ export default function HowItWorks() {
     },
 
     tailor: {
-      bgImage: "/assets/minecraft_tailor.jpg",
+      bgImage: "/assets/hero-atelier.jpg",
       breadcrumb: isHi ? "होम / मार्गदर्शिका / टेलर पार्टनर" : "Home / How It Works / Tailor Partner",
       categoryTag: isHi ? "कारीगर व स्टूडियो सशक्तिकरण" : "Master Atelier & Studio Hub",
       updatedDate: isHi ? "अद्यतन: 2026" : "Updated: 2026",
@@ -322,7 +322,7 @@ export default function HowItWorks() {
     },
 
     business: {
-      bgImage: "/assets/minecraft_business.jpg",
+      bgImage: "/assets/hero-atelier.jpg",
       breadcrumb: isHi ? "होम / मार्गदर्शिका / कॉर्पोरेट सोर्सिंग" : "Home / How It Works / Corporate Sourcing",
       categoryTag: isHi ? "कॉर्पोरेट व संस्थागत परिधान" : "Corporate & Institutional Apparel",
       updatedDate: isHi ? "अद्यतन: 2026" : "Updated: 2026",
@@ -447,7 +447,7 @@ export default function HowItWorks() {
     },
 
     admin: {
-      bgImage: "/assets/minecraft_admin.jpg",
+      bgImage: "/assets/admin_home/hero_illustration.png",
       breadcrumb: isHi ? "होम / मार्गदर्शिका / प्लेटफ़ॉर्म प्रशासन" : "Home / How It Works / Platform Administration",
       categoryTag: isHi ? "सिस्टम शासन व संचालन" : "Platform Governance & Security",
       updatedDate: isHi ? "अद्यतन: 2026" : "Updated: 2026",

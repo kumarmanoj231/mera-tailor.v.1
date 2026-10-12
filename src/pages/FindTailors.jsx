@@ -442,18 +442,8 @@ export default function FindTailors() {
   const [showVoiceHelp, setShowVoiceHelp] = useState(false);
   const voiceHelpTimeoutRef = useRef(null);
 
-  useEffect(() => {
-    // Show brief helper hint on mount for 5 seconds
-    const t = setTimeout(() => {
-      setShowVoiceHelp(true);
-      voiceHelpTimeoutRef.current = setTimeout(() => {
-        setShowVoiceHelp(false);
-      }, 5000);
-    }, 1200);
-    return () => {
-      clearTimeout(t);
-      if (voiceHelpTimeoutRef.current) clearTimeout(voiceHelpTimeoutRef.current);
-    };
+  useEffect(() => () => {
+    if (voiceHelpTimeoutRef.current) clearTimeout(voiceHelpTimeoutRef.current);
   }, []);
 
   const handleVoiceHoverEnter = () => {
@@ -864,15 +854,24 @@ export default function FindTailors() {
           </div>
 
           {/* Row 2: Headline & Description */}
-          <div className="mt-4">
-            <h1 className="font-sans text-3xl sm:text-4xl lg:text-[40px] font-black tracking-tight text-[#111827]">
-              {isHi ? "दर्जी खोजें" : "Find Tailors"}
-            </h1>
-            <p className="mt-1 text-xs sm:text-sm text-stone-500 max-w-2xl leading-relaxed">
-              {isHi
-                ? "किसी भी स्थान के आस-पास कुशल सिलाई कारीगरों को खोजें। अपना क्षेत्र और खोज दायरा चुनें।"
-                : "Search skilled tailoring professionals around any location. Choose your search area and radius."}
-            </p>
+          <div className="mt-4 grid items-center gap-4 sm:grid-cols-[minmax(0,1fr)_11rem]">
+            <div className="min-w-0">
+              <h1 className="font-sans text-3xl sm:text-4xl lg:text-[40px] font-black tracking-tight text-[#111827]">
+                {isHi ? "दर्जी खोजें" : "Find Tailors"}
+              </h1>
+              <p className="mt-1 text-xs sm:text-sm text-stone-500 max-w-2xl leading-relaxed">
+                {isHi
+                  ? "किसी भी स्थान के आस-पास कुशल सिलाई कारीगरों को खोजें। अपना क्षेत्र और खोज दायरा चुनें।"
+                  : "Search skilled tailoring professionals around any location. Choose your search area and radius."}
+              </p>
+            </div>
+            <img
+              src="/assets/hero-atelier.jpg"
+              alt={isHi ? "कारीगर अपने एटेलियर में कपड़े की कटाई करते हुए" : "A tailor cutting fabric in a local atelier"}
+              className="h-32 w-full rounded-2xl border border-stone-200 object-cover object-[72%_center] shadow-sm sm:h-24 sm:w-44 lg:h-28 lg:w-48"
+              loading="lazy"
+              decoding="async"
+            />
           </div>
 
           {/* Row 3: 4 Metric Cards Grid */}
@@ -889,7 +888,7 @@ export default function FindTailors() {
                 <p className="text-xl font-black text-stone-900 leading-tight">
                   {sorted.length}
                 </p>
-                <p className="text-[11px] text-stone-500 truncate mt-0.5">
+                <p className="mt-0.5 line-clamp-2 text-[10px] leading-tight text-stone-500 sm:text-[11px]">
                   {isHi ? "दायरे के भीतर" : "Within radius"}
                 </p>
               </div>
@@ -907,7 +906,7 @@ export default function FindTailors() {
                 <p className="text-xl font-black text-emerald-700 leading-tight">
                   {verifiedStudiosCount}
                 </p>
-                <p className="text-[11px] text-stone-500 truncate mt-0.5">
+                <p className="mt-0.5 line-clamp-2 text-[10px] leading-tight text-stone-500 sm:text-[11px]">
                   {isHi ? "गुणवत्ता प्रमाणित कारीगर" : "Quality-Checked Artisans"}
                 </p>
               </div>
@@ -925,7 +924,7 @@ export default function FindTailors() {
                 <p className="text-xl font-black text-stone-900 leading-tight">
                   {showAllLocations ? (isHi ? "अखिल भारतीय" : "All India") : `${radius} km`}
                 </p>
-                <p className="text-[11px] text-stone-500 truncate mt-0.5">
+                <p className="mt-0.5 line-clamp-2 text-[10px] leading-tight text-stone-500 sm:text-[11px]">
                   {showAllLocations
                     ? (isHi ? "देशभर में खोज" : "Nationwide discovery")
                     : (isHi ? "केंद्र से दूरी" : "From center coordinate")}
@@ -945,7 +944,7 @@ export default function FindTailors() {
                 <p className="text-base font-black truncate text-stone-900 leading-tight">
                   {category ? categoryLabel(category) : (isHi ? "सभी वस्त्र" : "All Specialties")}
                 </p>
-                <p className="text-[11px] text-stone-500 truncate mt-0.5">
+                <p className="mt-0.5 line-clamp-2 text-[10px] leading-tight text-stone-500 sm:text-[11px]">
                   {category
                     ? (isHi ? "फ़िल्टर सक्रिय" : "Specialty active")
                     : (isHi ? "समस्त सिलाई विधाएं" : "All bespoke categories")}
@@ -1008,6 +1007,8 @@ export default function FindTailors() {
                   }}
                   onMouseEnter={handleVoiceHoverEnter}
                   onMouseLeave={handleVoiceHoverLeave}
+                  onFocus={handleVoiceHoverEnter}
+                  onBlur={handleVoiceHoverLeave}
                   title="Search by voice"
                   className="flex h-7 w-7 items-center justify-center rounded-lg text-[#8f2338] hover:bg-rose-50 transition active:scale-95"
                 >
