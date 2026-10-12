@@ -539,18 +539,28 @@ export async function getBusinessDashboard(req, res) {
     const requests = await BusinessRequest.find({ clerkUserId: req.authUserId }).sort({ createdAt: -1 }).lean();
     const bp = business || user?.businessProfile || {};
 
+    // Query authoritative awarded bulk orders created for this business
+    const bulkOrders = await Order.find({
+      clerkUserId: req.authUserId,
+      orderType: 'bulk',
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
     res.json({
       business: bp,
       businessProfile: bp,
       user: user ? publicUser(user) : null,
       requests,
-      bulkOrders: requests,
+      bulkOrders,
       stats: {
         totalRequirements: requests.length,
         submitted: requests.filter(r => r.status === 'submitted').length,
         quoted: requests.filter(r => r.status === 'quoted').length,
-        inProduction: requests.filter(r => r.status === 'in-production').length,
-        completed: requests.filter(r => r.status === 'completed').length,
+        awardedContracts: requests.filter(r => r.status === 'awarded').length,
+        inProduction: bulkOrders.filter(o => o.status === 'In Production' || o.productionStatus !== 'not_started').length,
+        completed: bulkOrders.filter(o => o.status === 'Completed').length,
+        activeBulkOrders: bulkOrders.filter(o => !['Completed', 'Cancelled'].includes(o.status)).length,
       },
     });
   } catch (error) {

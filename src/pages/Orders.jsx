@@ -21,6 +21,12 @@ import {
   Layers,
   ArrowRight,
   AlertCircle,
+  MessageSquare,
+  Building2,
+  Send,
+  Check,
+  ShieldCheck,
+  DollarSign,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "react-toastify";
@@ -59,19 +65,35 @@ export default function Orders() {
   const { t, i18n } = useTranslation();
   const isHi = i18n.language === "hi";
   const { isSignedIn, getToken, openSignUp, profile, user } = useAuth();
-  const isTailor = (profile?.role || user?.publicMetadata?.appRole) === "tailor";
+  const userRole = (profile?.role || user?.publicMetadata?.appRole || "customer").toLowerCase();
+  const isTailor = userRole === "tailor";
+  const isBusiness = userRole === "business";
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [orderTypeFilter, setOrderTypeFilter] = useState("all");
   const [actingId, setActingId] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
   const [cancelReason, setCancelReason] = useState("");
   const [quoteModalOrder, setQuoteModalOrder] = useState(null);
   const [quotePriceInput, setQuotePriceInput] = useState("");
+
+  // Chat conversation state
+  const [chatOrder, setChatOrder] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [newMessageText, setNewMessageText] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+
+  // Milestone transition state
+  const [milestoneOrder, setMilestoneOrder] = useState(null);
+  const [selectedMilestone, setSelectedMilestone] = useState("cutting");
+  const [milestoneNote, setMilestoneNote] = useState("");
+  const [updatingMilestone, setUpdatingMilestone] = useState(false);
 
   const load = async (showLoading = true) => {
     try {
@@ -250,9 +272,85 @@ export default function Orders() {
     }
   };
 
+  // Chat communication handlers
+  const openChat = async (order) => {
+    setChatOrder(order);
+    setLoadingMessages(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/orders/${encodeURIComponent(order.id || order._id)}/messages`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load conversation.");
+      setChatMessages(Array.isArray(data) ? data : []);
+    } catch (e) {
+      toast.error(e.message || "Could not load messages.");
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!chatOrder || !newMessageText.trim() || sendingMessage) return;
+    setSendingMessage(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/orders/${encodeURIComponent(chatOrder.id || chatOrder._id)}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: newMessageText.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send message.");
+      setChatMessages((prev) => [...prev, data]);
+      setNewMessageText("");
+    } catch (e) {
+      toast.error(e.message || "Failed to send message.");
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  // Milestone transition handler
+  const handleUpdateMilestone = async () => {
+    if (!milestoneOrder || updatingMilestone) return;
+    setUpdatingMilestone(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/orders/${encodeURIComponent(milestoneOrder.id || milestoneOrder._id)}/milestone`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ milestone: selectedMilestone, note: milestoneNote }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update milestone.");
+      toast.success(`Milestone updated to ${selectedMilestone.replace(/_/g, " ")}!`);
+      setMilestoneOrder(null);
+      setMilestoneNote("");
+      await load(false);
+      if (selectedOrder?.id === milestoneOrder.id) {
+        setSelectedOrder((prev) => (prev ? { ...prev, productionStatus: selectedMilestone } : null));
+      }
+    } catch (e) {
+      toast.error(e.message || "Failed to update milestone.");
+    } finally {
+      setUpdatingMilestone(false);
+    }
+  };
+
   // Filter calculations across pure database orders
+  const bulkCount = useMemo(
+    () => activeOrdersList.filter((o) => o.orderType === "bulk").length,
+    [activeOrdersList]
+  );
+  const individualCount = useMemo(
+    () => activeOrdersList.filter((o) => o.orderType !== "bulk").length,
+    [activeOrdersList]
+  );
   const activeCount = useMemo(
-    () => activeOrdersList.filter((o) => ["In Production", "Accepted", "Request Sent", "Pending Review"].includes(o.status)).length,
+    () => activeOrdersList.filter((o) => ["In Production", "Accepted", "Confirmed", "Request Sent", "Pending Review"].includes(o.status)).length,
     [activeOrdersList]
   );
   const quoteCount = useMemo(
@@ -260,7 +358,7 @@ export default function Orders() {
     [activeOrdersList]
   );
   const completedCount = useMemo(
-    () => activeOrdersList.filter((o) => ["Ready for Pickup", "Ready", "Completed"].includes(o.status)).length,
+    () => activeOrdersList.filter((o) => ["Ready for Pickup", "Ready", "Delivered", "Completed"].includes(o.status)).length,
     [activeOrdersList]
   );
   const cancelledCount = useMemo(
@@ -271,12 +369,18 @@ export default function Orders() {
   const filteredOrders = useMemo(() => {
     let list = activeOrdersList;
 
+    if (orderTypeFilter === "bulk") {
+      list = list.filter((o) => o.orderType === "bulk");
+    } else if (orderTypeFilter === "individual") {
+      list = list.filter((o) => o.orderType !== "bulk");
+    }
+
     if (statusFilter === "active") {
-      list = list.filter((o) => ["In Production", "Accepted", "Request Sent", "Pending Review"].includes(o.status));
+      list = list.filter((o) => ["In Production", "Accepted", "Confirmed", "Request Sent", "Pending Review"].includes(o.status));
     } else if (statusFilter === "quotes") {
       list = list.filter((o) => ["Quote Received", "Quote Ready", "Request Sent"].includes(o.status));
     } else if (statusFilter === "completed") {
-      list = list.filter((o) => ["Ready for Pickup", "Ready", "Completed"].includes(o.status));
+      list = list.filter((o) => ["Ready for Pickup", "Ready", "Delivered", "Completed"].includes(o.status));
     } else if (statusFilter === "cancelled") {
       list = list.filter((o) => o.status === "Cancelled");
     }
@@ -286,6 +390,8 @@ export default function Orders() {
       list = list.filter(
         (o) =>
           o.garment?.toLowerCase().includes(q) ||
+          o.category?.toLowerCase().includes(q) ||
+          o.organisation?.toLowerCase().includes(q) ||
           o.tailorName?.toLowerCase().includes(q) ||
           o.clientName?.toLowerCase().includes(q) ||
           o.clientPhone?.toLowerCase().includes(q) ||
@@ -296,7 +402,7 @@ export default function Orders() {
     }
 
     return list;
-  }, [activeOrdersList, statusFilter, searchQuery]);
+  }, [activeOrdersList, orderTypeFilter, statusFilter, searchQuery]);
 
   const formatOrderDate = (dateString) => {
     try {
@@ -404,14 +510,55 @@ export default function Orders() {
             )}
           </div>
 
-          {/* Filter Status Tabs Strip */}
+          {/* Filter Status & Order Type Tabs Strip */}
           {isSignedIn && (
-            <div className="relative z-10 mt-6 flex items-center gap-2 overflow-x-auto border-t border-stone-100 pt-5 pb-1 scrollbar-thin">
+            <div className="relative z-10 mt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-stone-100 pt-5 pb-1">
+              {/* Order Type Toggle (Bulk vs Individual) */}
+              <div className="flex items-center gap-1.5 bg-stone-100/80 p-1 rounded-2xl shrink-0 self-start">
+                <button
+                  type="button"
+                  onClick={() => setOrderTypeFilter("all")}
+                  className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                    orderTypeFilter === "all"
+                      ? "bg-white text-stone-900 shadow-2xs"
+                      : "text-stone-600 hover:text-stone-900"
+                  }`}
+                >
+                  All ({activeOrdersList.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOrderTypeFilter("bulk")}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                    orderTypeFilter === "bulk"
+                      ? "bg-[#8f2338] text-white shadow-2xs"
+                      : "text-stone-600 hover:text-stone-900"
+                  }`}
+                >
+                  <Building2 size={13} />
+                  <span>B2B Bulk ({bulkCount})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOrderTypeFilter("individual")}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                    orderTypeFilter === "individual"
+                      ? "bg-white text-stone-900 shadow-2xs"
+                      : "text-stone-600 hover:text-stone-900"
+                  }`}
+                >
+                  <Scissors size={13} />
+                  <span>Individual ({individualCount})</span>
+                </button>
+              </div>
+
+              {/* Status Tabs */}
+              <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin">
               {[
                 {
                   id: "all",
-                  label: isHi ? "सभी ऑर्डर" : "All Orders",
-                  count: activeOrdersList.length,
+                  label: isHi ? "सभी स्थितियां" : "All Statuses",
+                  count: filteredOrders.length,
                   icon: <ShoppingBag size={14} />,
                 },
                 ...(isTailor
@@ -480,6 +627,7 @@ export default function Orders() {
                   </button>
                 );
               })}
+              </div>
             </div>
           )}
         </section>
@@ -571,14 +719,25 @@ export default function Orders() {
                         </div>
 
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[11px] font-bold uppercase tracking-wider text-stone-400">
                               ORDER REFERENCE #{orderRef} · {orderDate}
                             </span>
+                            {order.orderType === "bulk" && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                                <Building2 size={10} />
+                                <span>B2B BULK CONTRACT</span>
+                              </span>
+                            )}
                           </div>
 
                           <h2 className="mt-0.5 font-serif text-lg sm:text-xl font-black text-stone-900">
                             {order.quantity || 1} × {order.garment || order.category || "Alteration & Hemming"}
+                            {order.organisation && (
+                              <span className="block text-xs font-sans font-medium text-stone-500 mt-0.5">
+                                Enterprise Client: <strong>{order.organisation}</strong>
+                              </span>
+                            )}
                           </h2>
                         </div>
                       </div>
@@ -882,6 +1041,32 @@ export default function Orders() {
                             </>
                           )}
 
+                          {/* Order-Linked Chat Button */}
+                          <button
+                            type="button"
+                            onClick={() => openChat(order)}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 px-3 py-2 text-xs font-bold text-stone-800 shadow-2xs transition active:scale-95"
+                            title="Chat with atelier / business"
+                          >
+                            <MessageSquare size={13} className="text-[#8f2338]" />
+                            <span>Messages</span>
+                          </button>
+
+                          {/* Tailor Milestone Button if in production */}
+                          {isTailor && ["In Production", "Confirmed", "Accepted"].includes(order.status) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMilestoneOrder(order);
+                                setSelectedMilestone(order.productionStatus || "cutting");
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50/80 hover:bg-blue-100 px-3 py-2 text-xs font-bold text-blue-900 shadow-2xs transition active:scale-95"
+                            >
+                              <Scissors size={13} className="text-blue-700" />
+                              <span>Milestones</span>
+                            </button>
+                          )}
+
                           {/* View Details Button */}
                           <button
                             type="button"
@@ -1168,6 +1353,54 @@ export default function Orders() {
                   </div>
                 </div>
 
+                {/* B2B Bulk Specific Details: Size breakdown & Platform Fees */}
+                {selectedOrder.orderType === "bulk" && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-3.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold text-amber-900 flex items-center gap-1">
+                        <Building2 size={12} /> B2B Commercial Contract Breakdown
+                      </span>
+                      <span className="text-[10px] font-bold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full">
+                        {selectedOrder.quantity || 1} Total Units
+                      </span>
+                    </div>
+
+                    {selectedOrder.organisation && (
+                      <p className="text-xs text-stone-700">
+                        Institutional Client: <strong>{selectedOrder.organisation}</strong>
+                      </p>
+                    )}
+
+                    {selectedOrder.sizeBreakdown && typeof selectedOrder.sizeBreakdown === 'object' && (
+                      <div className="text-xs text-stone-600 bg-white/80 p-2 rounded-xl border border-amber-100">
+                        <span className="font-bold block text-[10px] text-stone-500 uppercase mb-1">Size Distribution</span>
+                        <div className="flex flex-wrap gap-2">
+                          {Object.entries(selectedOrder.sizeBreakdown).map(([sz, qty]) => (
+                            <span key={sz} className="rounded-md bg-stone-100 px-2 py-0.5 font-mono text-[11px] font-bold text-stone-800">
+                              {sz}: {qty}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-amber-200/60 text-center">
+                      <div>
+                        <span className="text-[9px] uppercase font-bold text-stone-400 block">Agreed Amount</span>
+                        <span className="font-bold text-stone-900 text-xs">₹{selectedOrder.agreedAmount || selectedOrder.price}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] uppercase font-bold text-stone-400 block">Platform Fee (5%)</span>
+                        <span className="font-bold text-stone-600 text-xs">₹{selectedOrder.platformFeeAmount || Math.round((selectedOrder.price || 0) * 0.05)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] uppercase font-bold text-emerald-700 block">Net Atelier Payout</span>
+                        <span className="font-bold text-emerald-800 text-xs">₹{selectedOrder.netTailorAmount || Math.round((selectedOrder.price || 0) * 0.95)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {!isTailor && (
                   <div>
                     <span className="text-[10px] uppercase font-bold text-stone-400">Tailoring Studio</span>
@@ -1298,6 +1531,209 @@ export default function Orders() {
                     )
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================
+            ORDER-LINKED CHAT DRAWER / MODAL
+        ========================================================== */}
+        {chatOrder && (
+          <div
+            className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-950/60 p-4 backdrop-blur-xs transition-opacity"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setChatOrder(null);
+            }}
+          >
+            <div className="relative w-full max-w-lg rounded-3xl bg-white p-5 sm:p-6 shadow-2xl transition-all flex flex-col h-[600px] max-h-[90vh]">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-[#8f2338]">
+                    <MessageSquare size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-sans text-base font-bold text-stone-900 leading-tight">
+                      Order Conversation #{chatOrder.id}
+                    </h3>
+                    <p className="text-[11px] text-stone-400">
+                      {chatOrder.garment || chatOrder.category} · {isTailor ? (chatOrder.clientName || "Client") : (chatOrder.tailorName || "Artisan Workshop")}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setChatOrder(null)}
+                  className="rounded-full p-1.5 text-stone-400 hover:bg-stone-100 transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Message List */}
+              <div className="flex-1 overflow-y-auto p-2 my-3 space-y-3">
+                {loadingMessages ? (
+                  <div className="flex items-center justify-center h-full text-xs text-stone-400">
+                    Loading messages...
+                  </div>
+                ) : chatMessages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center p-6 text-stone-400 space-y-1">
+                    <MessageSquare size={32} className="text-stone-300 mb-1" />
+                    <p className="text-xs font-bold text-stone-700">No messages yet</p>
+                    <p className="text-[11px]">Send a message to coordinate design specifications, fabric samples, or fittings.</p>
+                  </div>
+                ) : (
+                  chatMessages.map((msg, idx) => {
+                    const isMe = msg.senderClerkUserId === user?.id || msg.senderClerkUserId === profile?.clerkUserId;
+                    const isSystem = msg.messageType === 'system' || msg.senderRole === 'system';
+                    const isMilestone = msg.messageType === 'milestone_update' || msg.messageType === 'status_update';
+
+                    if (isSystem || isMilestone) {
+                      return (
+                        <div key={msg._id || idx} className="rounded-xl bg-amber-50/80 border border-amber-200/60 p-2.5 text-center text-xs text-amber-900">
+                          <span className="font-bold block text-[10px] text-amber-700 uppercase tracking-wider">Platform Event</span>
+                          <p className="mt-0.5 leading-snug">{msg.content}</p>
+                          <span className="text-[10px] text-stone-400 font-mono block mt-1">
+                            {new Date(msg.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={msg._id || idx}
+                        className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                      >
+                        <div className="flex items-center gap-1.5 mb-1 px-1">
+                          <span className="text-[10px] font-bold text-stone-600">
+                            {isMe ? 'You' : msg.senderName || msg.senderRole}
+                          </span>
+                          <span className="text-[9px] text-stone-400">
+                            {new Date(msg.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+
+                        <div
+                          className={`rounded-2xl px-4 py-2.5 text-xs max-w-[85%] leading-relaxed ${
+                            isMe
+                              ? 'bg-[#8f2338] text-white rounded-tr-none'
+                              : 'bg-stone-100 text-stone-800 rounded-tl-none border border-stone-200/60'
+                          }`}
+                        >
+                          {msg.content}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Message Input Box */}
+              <form onSubmit={handleSendMessage} className="border-t border-stone-100 pt-3 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newMessageText}
+                  onChange={(e) => setNewMessageText(e.target.value)}
+                  placeholder="Type a message or milestone question..."
+                  className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-2.5 text-xs outline-none focus:border-[#8f2338] focus:bg-white transition"
+                  disabled={sendingMessage}
+                />
+                <button
+                  type="submit"
+                  disabled={sendingMessage || !newMessageText.trim()}
+                  className="inline-flex items-center gap-1 rounded-xl bg-[#8f2338] hover:bg-[#761c30] text-white px-4 py-2.5 text-xs font-bold shadow-xs transition disabled:opacity-40 cursor-pointer"
+                >
+                  <Send size={13} />
+                  <span>Send</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================
+            TAILOR PRODUCTION MILESTONE MODAL
+        ========================================================== */}
+        {milestoneOrder && (
+          <div
+            className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-950/60 p-4 backdrop-blur-xs transition-opacity"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setMilestoneOrder(null);
+            }}
+          >
+            <div className="relative w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl transition-all">
+              <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+                    <Scissors size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-sans text-base font-bold text-stone-900 leading-tight">
+                      Production Milestone Stage
+                    </h3>
+                    <p className="text-xs text-stone-400">Order #{milestoneOrder.id}</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setMilestoneOrder(null)}
+                  className="rounded-full p-1.5 text-stone-400 hover:bg-stone-100 transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <label className="block text-xs font-bold text-stone-700">Select Production Milestone:</label>
+                <select
+                  value={selectedMilestone}
+                  onChange={(e) => setSelectedMilestone(e.target.value)}
+                  className="w-full rounded-xl border border-stone-200 bg-stone-50 p-2.5 text-xs font-semibold text-stone-800 outline-none focus:border-[#8f2338] focus:bg-white"
+                >
+                  <option value="not_started">Not Started</option>
+                  <option value="measurements_pending">Measurements Pending</option>
+                  <option value="design_approval_pending">Design Approval Pending</option>
+                  <option value="materials_pending">Materials / Fabric Procurement</option>
+                  <option value="cutting">Fabric Cutting</option>
+                  <option value="stitching">Artisan Stitching</option>
+                  <option value="quality_check">Quality Check & Finishing</option>
+                  <option value="ready_for_delivery">Ready for Delivery / Pickup</option>
+                  <option value="delivered">Delivered to Client</option>
+                </select>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Production Notes (Optional):</label>
+                  <textarea
+                    rows={3}
+                    value={milestoneNote}
+                    onChange={(e) => setMilestoneNote(e.target.value)}
+                    placeholder="e.g. Fabric washed and pressed. Cutting commences tomorrow morning."
+                    className="w-full rounded-xl border border-stone-200 bg-stone-50 p-2.5 text-xs outline-none focus:border-[#8f2338] focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-5 flex items-center justify-end gap-2 border-t border-stone-100 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setMilestoneOrder(null)}
+                  className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={updatingMilestone}
+                  onClick={handleUpdateMilestone}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 text-xs font-bold shadow-xs transition"
+                >
+                  <Check size={14} />
+                  <span>{updatingMilestone ? "Updating..." : "Update Milestone"}</span>
+                </button>
               </div>
             </div>
           </div>

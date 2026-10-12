@@ -29,6 +29,7 @@ import {
   ChevronRight,
   RefreshCw,
   SlidersHorizontal,
+  Package,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "react-toastify";
@@ -380,7 +381,7 @@ export default function Bulk() {
 
       if (status === "accepted") {
         confetti({ particleCount: 100, spread: 80, origin: { y: 0.5 } });
-        toast.success("Tender successfully awarded to artisan workshop!");
+        toast.success(data.message || "Tender successfully awarded! Confirmed bulk order created.");
       } else {
         toast.info(`Quotation marked as ${status}.`);
       }
@@ -392,6 +393,7 @@ export default function Bulk() {
           ...prev,
           quotes: prev.quotes.map((q) => (q._id === quoteId ? { ...q, status } : q)),
           status: status === "accepted" ? "awarded" : prev.status,
+          awardedOrderId: data.order?._id || data.orderId || prev.awardedOrderId,
         }));
       }
     } catch (err) {
@@ -908,10 +910,13 @@ export default function Bulk() {
                       {/* Tailor Action: Quote or Edit Quote */}
                       {isTailor && (
                         item.isAwardedToMe ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 text-xs font-bold">
+                          <Link
+                            to="/orders?type=bulk"
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 px-3 py-1.5 text-xs font-bold transition shadow-2xs"
+                          >
                             <CheckCircle2 size={13} className="text-emerald-600" />
-                            <span>Contract Won</span>
-                          </span>
+                            <span>Contract Won · View Order</span>
+                          </Link>
                         ) : item.status === "awarded" ? (
                           <span className="inline-flex items-center gap-1.5 rounded-xl bg-stone-100 text-stone-500 px-3 py-1.5 text-xs font-medium">
                             <span>Tender Closed</span>
@@ -931,6 +936,17 @@ export default function Bulk() {
                       {/* Business Owner / Admin Actions */}
                       {(isOwner || isAdmin) && (
                         <>
+                          {item.status === "awarded" && (
+                            <Link
+                              to="/orders?type=bulk"
+                              title="Track Manufacturing Order & Milestones"
+                              className="h-8 px-2.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold flex items-center gap-1 transition shadow-2xs"
+                            >
+                              <Package size={13} className="text-emerald-600" />
+                              <span>View Order</span>
+                            </Link>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => setViewingRequestQuotes(item)}
@@ -1342,6 +1358,22 @@ export default function Bulk() {
                             >
                               Accept & Award Tender
                             </button>
+                          </div>
+                        )}
+
+                        {quote.status === "accepted" && (
+                          <div className="mt-3 pt-2.5 border-t border-emerald-100 flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-xs font-semibold text-emerald-800 flex items-center gap-1.5">
+                              <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                              <span>Tender Awarded · Production Order Created</span>
+                            </span>
+                            <Link
+                              to="/orders?type=bulk"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition shadow-xs"
+                            >
+                              <Package size={13} />
+                              <span>Track Order & Milestones</span>
+                            </Link>
                           </div>
                         )}
                       </div>

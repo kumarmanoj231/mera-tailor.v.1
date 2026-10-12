@@ -20,6 +20,8 @@ import {
   Utensils,
   Stethoscope,
   HardHat,
+  Package,
+  MessageSquare,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../../context/AuthContext";
@@ -29,6 +31,7 @@ export default function BusinessHomeSection() {
   const isHi = i18n.language === "hi";
   const { profile, user, getToken } = useAuth();
   const [myBulkOrders, setMyBulkOrders] = useState([]);
+  const [myRequests, setMyRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,8 +50,17 @@ export default function BusinessHomeSection() {
 
         if (res.ok) {
           const data = await res.json();
-          const list = Array.isArray(data) ? data : data.bulkOrders || data.requests || [];
-          if (isMounted) setMyBulkOrders(list);
+          if (Array.isArray(data)) {
+            if (isMounted) {
+              setMyRequests(data);
+              setMyBulkOrders([]);
+            }
+          } else {
+            if (isMounted) {
+              setMyRequests(data.requests || []);
+              setMyBulkOrders(data.bulkOrders || []);
+            }
+          }
         }
       } catch (err) {
         console.warn("Error loading business home data:", err);
@@ -163,7 +175,7 @@ export default function BusinessHomeSection() {
               </Link>
 
               <Link
-                to="/bulk"
+                to="/orders?type=bulk"
                 className="inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-xs sm:text-sm font-bold text-stone-800 shadow-2xs transition hover:bg-stone-50 active:scale-95"
               >
                 <Layers size={16} className="text-blue-700" />
@@ -203,23 +215,31 @@ export default function BusinessHomeSection() {
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-stone-500">{isHi ? "सैंपल अनुमोदन:" : "Sample Review:"}</span>
-                <span className="font-bold text-[#8f2338]">{isHi ? "उत्पादन से पहले" : "Pre-Production"}</span>
+                <span className="text-stone-500">{isHi ? "सक्रिय RFQ मांगें:" : "Active RFQs:"}</span>
+                <span className="font-extrabold text-stone-900">{myRequests.length} RFQs</span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-stone-500">{isHi ? "सक्रिय पोस्टिंग:" : "Active RFQs:"}</span>
-                <span className="font-extrabold text-stone-900">{myBulkOrders.length} RFQs</span>
+                <span className="text-stone-500">{isHi ? "सक्रिय बैच निर्माण:" : "Production Batches:"}</span>
+                <span className="font-extrabold text-emerald-700">{myBulkOrders.length} Orders</span>
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-stone-200/80">
+            <div className="mt-4 pt-3 border-t border-stone-200/80 flex flex-col gap-2">
               <Link
-                to="/bulk"
+                to="/orders?type=bulk"
                 className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#8f2338] py-2 text-xs font-bold text-white hover:bg-[#761c30] transition shadow-xs"
               >
-                <FileSpreadsheet size={14} />
-                <span>{isHi ? "कॉर्पोरेट ऑर्डर प्रबंधित करें" : "Manage Bulk Orders"}</span>
+                <Package size={14} />
+                <span>{isHi ? "बैच ऑर्डर व माइलस्टोन ट्रैक करें" : "Track Production Orders"}</span>
+              </Link>
+
+              <Link
+                to="/bulk"
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white py-2 text-xs font-bold text-stone-700 hover:bg-stone-50 transition shadow-2xs"
+              >
+                <FileSpreadsheet size={14} className="text-[#8f2338]" />
+                <span>{isHi ? "RFQ मांगें प्रबंधित करें" : "Manage Bulk RFQs"}</span>
               </Link>
             </div>
           </div>
@@ -234,7 +254,7 @@ export default function BusinessHomeSection() {
                 {isHi ? "सक्रिय RFQ" : "Active RFQs"}
               </span>
             </div>
-            <p className="mt-2 text-2xl font-extrabold text-stone-900">{myBulkOrders.length}</p>
+            <p className="mt-2 text-2xl font-extrabold text-stone-900">{myRequests.length}</p>
             <p className="mt-0.5 text-[11px] text-stone-500">
               {isHi ? "लाइव कॉर्पोरेट मांगें" : "Live batch postings"}
             </p>
@@ -244,12 +264,12 @@ export default function BusinessHomeSection() {
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">02</span>
               <span className="text-[11px] font-bold uppercase tracking-wider text-stone-400">
-                {isHi ? "नेटवर्क कवरेज" : "Verified Hub"}
+                {isHi ? "सक्रिय बैच ऑर्डर" : "Batch Orders"}
               </span>
             </div>
-            <p className="mt-2 text-2xl font-extrabold text-emerald-700">100%</p>
+            <p className="mt-2 text-2xl font-extrabold text-emerald-700">{myBulkOrders.length}</p>
             <p className="mt-0.5 text-[11px] text-stone-500">
-              {isHi ? "सत्यापित उत्पादक दर्जी" : "Vetted manufacturing tailors"}
+              {isHi ? "विनिर्माण पाइपलाइन" : "Active production runs"}
             </p>
           </div>
 
@@ -284,6 +304,93 @@ export default function BusinessHomeSection() {
           </div>
         </div>
       </section>
+
+      {/* =====================================================
+          ACTIVE BULK MANUFACTURING ORDERS SUMMARY
+      ====================================================== */}
+      {myBulkOrders.length > 0 && (
+        <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-xs sm:p-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-stone-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-0.5 text-xs font-bold text-emerald-800">
+                  <PackageCheck size={13} className="text-emerald-600" />
+                  <span>{isHi ? "सक्रिय बैच निर्माण" : "Active Production Pipeline"}</span>
+                </span>
+                <span className="font-mono text-xs text-stone-400">({myBulkOrders.length} {myBulkOrders.length === 1 ? "Order" : "Orders"})</span>
+              </div>
+              <h2 className="mt-1.5 font-sans text-xl font-bold text-stone-900">
+                {isHi ? "निर्माणाधीन बैच ऑर्डर्स" : "Live Batch Manufacturing Orders"}
+              </h2>
+            </div>
+
+            <Link
+              to="/orders?type=bulk"
+              className="inline-flex items-center gap-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white px-4 py-2 text-xs font-bold transition shadow-xs"
+            >
+              <span>{isHi ? "सभी बैच ऑर्डर देखें" : "View All Batch Orders"}</span>
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {myBulkOrders.slice(0, 3).map((order) => {
+              const orderNum = order.orderNumber || (order._id ? `MT-${order._id.slice(-6).toUpperCase()}` : "MT-B2B");
+              const status = order.status || "In Production";
+              const milestone = (order.productionStatus || "not_started").replace(/_/g, " ");
+              const amount = order.agreedAmount || order.pricing?.totalPrice || 0;
+              const tailorName = order.tailorStudioName || order.tailorName || "Assigned Atelier";
+
+              return (
+                <div
+                  key={order._id}
+                  className="rounded-2xl border border-stone-200 bg-[#fdfbf9] p-4 flex flex-col justify-between hover:border-[#8f2338]/40 transition shadow-2xs"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs font-bold text-stone-700 bg-white border border-stone-200 px-2 py-0.5 rounded-md">
+                        {orderNum}
+                      </span>
+                      <span className="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-bold">
+                        {status}
+                      </span>
+                    </div>
+
+                    <h3 className="mt-2.5 font-bold text-stone-900 text-sm line-clamp-1">
+                      {order.garmentType || order.items?.[0]?.name || "Bulk Garment Order"}
+                    </h3>
+
+                    <div className="mt-1 flex items-center justify-between text-xs text-stone-500">
+                      <span>Atelier: {tailorName}</span>
+                      <span className="font-mono font-bold text-stone-900">₹{amount.toLocaleString()}</span>
+                    </div>
+
+                    <div className="mt-3 rounded-xl bg-white border border-stone-200/80 p-2 text-xs">
+                      <span className="text-[10px] text-stone-400 uppercase font-semibold block">Production Stage:</span>
+                      <span className="font-semibold text-emerald-700 capitalize flex items-center gap-1.5 mt-0.5">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        {milestone}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-stone-200/80 flex items-center justify-between gap-2">
+                    <Link
+                      to="/orders?type=bulk"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-[#8f2338] hover:text-[#761c30]"
+                    >
+                      <span>{isHi ? "ट्रैकिंग व संदेश →" : "Track & Message →"}</span>
+                    </Link>
+                    <span className="text-[10px] text-stone-400 font-mono">
+                      {order.totalUnits ? `${order.totalUnits} pcs` : "Bulk Run"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* =====================================================
           2. HOW BULK PROCUREMENT WORKS (4-STEP B2B WORKFLOW)

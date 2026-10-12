@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
-import { Measurement, Order, Tailor, User } from '../models.js';
+import { BusinessRequest, Measurement, Message, Order, Tailor, User } from '../models.js';
 import { createNotification } from './notificationController.js';
 
 function buildOrderQuery(paramId, extra = {}) {
@@ -25,6 +25,10 @@ export async function listOrders(req, res) {
       filter.tailorId = tailor._id;
     } else {
       filter.clerkUserId = req.authUserId;
+    }
+
+    if (req.query.orderType && ['individual', 'bulk'].includes(req.query.orderType)) {
+      filter.orderType = req.query.orderType;
     }
 
     let rows = await Order.find(filter).sort({ createdAt: -1 }).lean();
@@ -342,21 +346,62 @@ export async function updateOrderStatus(req, res) {
     if (!order || !(await orderBelongsToTailor(req, order))) return res.status(404).json({ error: 'Order request not found.' });
     const nextStatus = String(req.body?.status || '');
     const transitions = {
+      'Request Sent': ['Quote Received', 'Cancelled'],
+      'Quote Received': ['Accepted', 'Cancelled'],
       Accepted: ['In Production', 'Cancelled'],
-      'In Production': ['Ready for Pickup'],
-      'Ready for Pickup': ['Completed'],
+      Confirmed: ['In Production', 'Cancelled'],
+      'In Production': ['Ready for Pickup', 'Disputed', 'Cancelled'],
+      'Ready for Pickup': ['Delivered', 'Completed'],
+      Delivered: ['Completed', 'Disputed'],
     };
     if (req.appUser?.role !== 'admin' && !transitions[order.status]?.includes(nextStatus)) {
-      return res.status(409).json({ error: 'That order status change is not allowed.' });
+      return res.status(409).json({ error: `That order status change from '${order.status}' to '${nextStatus}' is not allowed.` });
     }
-    if (!['In Production', 'Ready for Pickup', 'Completed', 'Cancelled'].includes(nextStatus)) {
+    if (!['Accepted', 'Confirmed', 'In Production', 'Ready for Pickup', 'Delivered', 'Completed', 'Cancelled', 'Disputed'].includes(nextStatus)) {
       return res.status(400).json({ error: 'Choose a valid next status.' });
     }
     order.status = nextStatus;
-    order.history.push([nextStatus, new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })]);
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    order.history.push([nextStatus, dateStr]);
+
+    order.statusHistory = order.statusHistory || [];
+    order.statusHistory.push({
+      status: nextStatus,
+      productionStatus: order.productionStatus,
+      updatedBy: req.appUser?.firstName ? `${req.appUser.firstName} ${req.appUser.lastName || ''}`.trim() : 'Tailor Studio',
+      role: req.appUser?.role || 'tailor',
+      note: req.body?.note || `Status updated to ${nextStatus}`,
+      timestamp: now,
+    });
+
+    if (order.sourceRequirement) {
+      const brStatusMap = {
+        'In Production': 'in-production',
+        Completed: 'completed',
+        Cancelled: 'cancelled',
+      };
+      if (brStatusMap[nextStatus]) {
+        await BusinessRequest.updateOne({ _id: order.sourceRequirement }, { $set: { status: brStatusMap[nextStatus] } });
+      }
+    }
+
     await order.save();
 
-    // Notify customer about order progress/status change
+    // Create system message in order-linked conversation
+    await Message.create({
+      orderId: order.id,
+      orderObjectId: order._id,
+      sourceRequirementId: order.sourceRequirement,
+      senderClerkUserId: req.authUserId,
+      senderName: req.appUser?.firstName ? `${req.appUser.firstName} ${req.appUser.lastName || ''}`.trim() : 'Tailor Studio',
+      senderRole: req.appUser?.role || 'tailor',
+      senderAvatar: req.appUser?.avatar || req.appUser?.imageUrl || '',
+      content: `Order status changed to: ${nextStatus}. ${req.body?.note ? `Note: ${req.body.note}` : ''}`,
+      messageType: 'status_update',
+    }).catch(() => {});
+
+    // Notify customer/business
     createNotification({
       recipientClerkUserId: order.clerkUserId,
       title: `Order Status: ${nextStatus}`,
@@ -367,6 +412,186 @@ export async function updateOrderStatus(req, res) {
     }).catch(() => {});
 
     res.json(order);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
+/**
+ * PATCH /api/orders/:id/milestone
+ * Production milestone transition (Tailor or Admin)
+ */
+export async function updateProductionMilestone(req, res) {
+  try {
+    const order = await Order.findOne(buildOrderQuery(req.params.id));
+    if (!order || !(await orderBelongsToTailor(req, order))) return res.status(404).json({ error: 'Order not found.' });
+
+    const milestone = String(req.body?.milestone || '').trim();
+    const validMilestones = [
+      'not_started',
+      'measurements_pending',
+      'design_approval_pending',
+      'materials_pending',
+      'cutting',
+      'stitching',
+      'quality_check',
+      'ready_for_delivery',
+      'delivered',
+    ];
+
+    if (!validMilestones.includes(milestone)) {
+      return res.status(400).json({ error: `Invalid milestone: ${milestone}.` });
+    }
+
+    order.productionStatus = milestone;
+    const now = new Date();
+    order.statusHistory = order.statusHistory || [];
+    order.statusHistory.push({
+      status: order.status,
+      productionStatus: milestone,
+      updatedBy: req.appUser?.firstName ? `${req.appUser.firstName} ${req.appUser.lastName || ''}`.trim() : 'Tailor Workshop',
+      role: req.appUser?.role || 'tailor',
+      note: req.body?.note || `Production milestone updated to ${milestone}`,
+      timestamp: now,
+    });
+
+    if (req.body?.photoUrl) {
+      order.progressPhotos = order.progressPhotos || [];
+      order.progressPhotos.push({
+        url: req.body.photoUrl,
+        caption: req.body.photoCaption || '',
+        milestone,
+        uploadedAt: now,
+      });
+    }
+
+    await order.save();
+
+    // Create system message in order-linked conversation
+    await Message.create({
+      orderId: order.id,
+      orderObjectId: order._id,
+      sourceRequirementId: order.sourceRequirement,
+      senderClerkUserId: req.authUserId,
+      senderName: req.appUser?.firstName ? `${req.appUser.firstName} ${req.appUser.lastName || ''}`.trim() : 'Tailor Studio',
+      senderRole: req.appUser?.role || 'tailor',
+      senderAvatar: req.appUser?.avatar || req.appUser?.imageUrl || '',
+      content: `Production milestone updated: ${milestone.replace(/_/g, ' ').toUpperCase()}.${req.body?.note ? ` ${req.body.note}` : ''}`,
+      messageType: 'milestone_update',
+    }).catch(() => {});
+
+    // Notify client
+    createNotification({
+      recipientClerkUserId: order.clerkUserId,
+      title: 'Production Milestone Update',
+      message: `Order #${order.id} has reached milestone: ${milestone.replace(/_/g, ' ')}.`,
+      type: 'status',
+      link: '/orders',
+      metadata: { orderId: order.id, milestone },
+    }).catch(() => {});
+
+    res.json(order);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
+/**
+ * GET /api/orders/:id/messages
+ * Retrieve conversation history for an order
+ */
+export async function getOrderMessages(req, res) {
+  try {
+    const order = await Order.findOne(buildOrderQuery(req.params.id)).lean();
+    if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+    const isOwner = String(order.clerkUserId) === String(req.authUserId);
+    const isTailor = await orderBelongsToTailor(req, order);
+    const isAdmin = req.appUser?.role === 'admin';
+
+    if (!isOwner && !isTailor && !isAdmin) {
+      return res.status(403).json({ error: 'You are not authorized to view this order conversation.' });
+    }
+
+    const messages = await Message.find({
+      $or: [
+        { orderId: order.id },
+        { orderObjectId: order._id },
+        ...(order.sourceRequirement ? [{ sourceRequirementId: order.sourceRequirement }] : []),
+      ],
+    })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    res.json(messages);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * POST /api/orders/:id/messages
+ * Send message in order-linked conversation
+ */
+export async function sendOrderMessage(req, res) {
+  try {
+    const order = await Order.findOne(buildOrderQuery(req.params.id));
+    if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+    const isOwner = String(order.clerkUserId) === String(req.authUserId);
+    const isTailor = await orderBelongsToTailor(req, order);
+    const isAdmin = req.appUser?.role === 'admin';
+
+    if (!isOwner && !isTailor && !isAdmin) {
+      return res.status(403).json({ error: 'You are not authorized to participate in this order conversation.' });
+    }
+
+    const content = String(req.body?.content || '').trim().slice(0, 4000);
+    if (!content && (!req.body?.attachments || !req.body.attachments.length)) {
+      return res.status(400).json({ error: 'Message content or attachment is required.' });
+    }
+
+    const senderRole = req.appUser?.role || (isTailor ? 'tailor' : 'business');
+    const senderName = req.appUser?.firstName
+      ? `${req.appUser.firstName} ${req.appUser.lastName || ''}`.trim()
+      : senderRole === 'tailor'
+      ? order.tailorName
+      : 'Business Client';
+
+    const message = await Message.create({
+      orderId: order.id,
+      orderObjectId: order._id,
+      sourceRequirementId: order.sourceRequirement,
+      senderClerkUserId: req.authUserId,
+      senderName,
+      senderRole,
+      senderAvatar: req.appUser?.avatar || req.appUser?.imageUrl || '',
+      content: content || 'Attachment sent',
+      messageType: req.body?.messageType || 'text',
+      attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
+    });
+
+    // Notify other party
+    let recipientClerkId = null;
+    if (isOwner) {
+      const tailorDoc = await Tailor.findById(order.tailorId).select('ownerClerkUserId').lean();
+      recipientClerkId = tailorDoc?.ownerClerkUserId;
+    } else {
+      recipientClerkId = order.clerkUserId;
+    }
+
+    if (recipientClerkId && recipientClerkId !== req.authUserId) {
+      createNotification({
+        recipientClerkUserId: recipientClerkId,
+        title: `New Message on #${order.id}`,
+        message: `${senderName}: ${content.slice(0, 80)}${content.length > 80 ? '...' : ''}`,
+        type: 'general',
+        link: '/orders',
+        metadata: { orderId: order.id, messageId: message._id },
+      }).catch(() => {});
+    }
+
+    res.status(201).json(message);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

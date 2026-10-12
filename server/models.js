@@ -128,27 +128,93 @@ const userSchema = new mongoose.Schema(
 const orderSchema = new mongoose.Schema(
   {
     id: { type: String, unique: true },
+    orderType: { type: String, enum: ['individual', 'bulk'], default: 'individual', index: true },
     clerkUserId: { type: String, required: true, index: true },
-    tailorId: { type: mongoose.Schema.Types.ObjectId, ref: "Tailor" },
+    businessId: { type: mongoose.Schema.Types.ObjectId, ref: 'Business', index: true },
+    organisation: { type: String, trim: true },
+    sourceRequirement: { type: mongoose.Schema.Types.ObjectId, ref: 'BusinessRequest', index: true },
+    acceptedQuote: { type: mongoose.Schema.Types.ObjectId },
+    tailorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tailor', index: true },
     tailorName: String,
     garment: String,
     category: String,
     quantity: Number,
+    sizeBreakdown: { type: mongoose.Schema.Types.Mixed },
     color: String,
     fabric: String,
     deadline: String,
     notes: String,
+    designAttachments: [String],
+    progressPhotos: [
+      {
+        url: String,
+        caption: String,
+        milestone: String,
+        uploadedAt: { type: Date, default: Date.now },
+      },
+    ],
     measurementMode: String,
     measurementProfileId: String,
     unitPrice: Number,
     price: Number,
     quotePrice: { type: Number, min: 0 },
-    status: { type: String, default: "Request Sent" },
+    agreedAmount: { type: Number, min: 0 },
+    deliveryDeadline: String,
+    status: {
+      type: String,
+      default: 'Request Sent',
+      index: true,
+    },
+    productionStatus: {
+      type: String,
+      enum: [
+        'not_started',
+        'measurements_pending',
+        'design_approval_pending',
+        'materials_pending',
+        'cutting',
+        'stitching',
+        'quality_check',
+        'ready_for_delivery',
+        'delivered',
+      ],
+      default: 'not_started',
+      index: true,
+    },
+    paymentStatus: {
+      type: String,
+      enum: ['pending', 'authorized', 'advance_paid', 'paid', 'refunded', 'disputed'],
+      default: 'pending',
+      index: true,
+    },
+    platformFeeStatus: {
+      type: String,
+      enum: ['pending', 'calculated', 'collected', 'waived', 'settled'],
+      default: 'pending',
+    },
+    platformFeeRate: { type: Number, default: 0.05 },
+    platformFeeAmount: { type: Number, default: 0 },
+    netTailorAmount: { type: Number, default: 0 },
+    terms: String,
+    statusHistory: [
+      {
+        status: String,
+        productionStatus: String,
+        updatedBy: String,
+        role: String,
+        note: String,
+        timestamp: { type: Date, default: Date.now },
+      },
+    ],
     history: [mongoose.Schema.Types.Mixed],
     createdAt: { type: Date, default: Date.now },
   },
   { timestamps: true },
 );
+
+orderSchema.index({ tailorId: 1, createdAt: -1 });
+orderSchema.index({ clerkUserId: 1, createdAt: -1 });
+orderSchema.index({ sourceRequirement: 1, acceptedQuote: 1 });
 
 const measurementSchema = new mongoose.Schema({
   clerkUserId: { type: String, required: true, index: true },
@@ -196,6 +262,8 @@ const businessRequestSchema = new mongoose.Schema(
     },
     requirement: { type: String, required: true, trim: true },
     quantity: { type: Number, required: true, min: 1 },
+    sizeBreakdown: { type: mongoose.Schema.Types.Mixed },
+    designAttachments: [String],
     unitBudget: Number,
     estBudget: Number,
     timeline: String,
@@ -223,9 +291,42 @@ const businessRequestSchema = new mongoose.Schema(
     },
     awardedQuoteId: { type: mongoose.Schema.Types.ObjectId },
     awardedTailorId: { type: mongoose.Schema.Types.ObjectId, ref: "Tailor" },
+    awardedOrderId: { type: mongoose.Schema.Types.ObjectId, ref: "Order" },
   },
   { timestamps: true },
 );
+
+const messageSchema = new mongoose.Schema(
+  {
+    orderId: { type: String, index: true },
+    orderObjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', index: true },
+    sourceRequirementId: { type: mongoose.Schema.Types.ObjectId, ref: 'BusinessRequest', index: true },
+    senderClerkUserId: { type: String, required: true, index: true },
+    senderName: { type: String, trim: true },
+    senderRole: { type: String, enum: ['customer', 'business', 'tailor', 'admin', 'system'], default: 'customer' },
+    senderAvatar: { type: String, trim: true },
+    content: { type: String, required: true, trim: true, maxlength: 4000 },
+    messageType: {
+      type: String,
+      enum: ['text', 'system', 'milestone_update', 'quote_update', 'attachment', 'payment_update'],
+      default: 'text',
+    },
+    attachments: [
+      {
+        url: String,
+        name: String,
+        fileType: String,
+        sizeBytes: Number,
+      },
+    ],
+    metadata: { type: mongoose.Schema.Types.Mixed },
+    readBy: [{ clerkUserId: String, readAt: { type: Date, default: Date.now } }],
+  },
+  { timestamps: true }
+);
+
+messageSchema.index({ orderId: 1, createdAt: 1 });
+messageSchema.index({ sourceRequirementId: 1, createdAt: 1 });
 
 const notificationSchema = new mongoose.Schema(
   {
@@ -327,4 +428,7 @@ export const Review =
   mongoose.models.Review || mongoose.model("Review", reviewSchema, "reviews");
 export const AuditLog =
   mongoose.models.AuditLog || mongoose.model("AuditLog", auditLogSchema, "audit_logs");
+export const Message =
+  mongoose.models.Message || mongoose.model("Message", messageSchema, "messages");
+
 

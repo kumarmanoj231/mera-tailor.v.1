@@ -1,4 +1,5 @@
-import { Business, BusinessRequest, Tailor, User } from '../models.js';
+import { randomUUID } from 'node:crypto';
+import { Business, BusinessRequest, Message, Order, Tailor, User } from '../models.js';
 import { createNotification, notifyAdmins } from './notificationController.js';
 import { getOrSyncBusinessProfile } from '../utils/businessProfileMigration.js';
 
@@ -477,6 +478,8 @@ export async function updateQuoteStatus(req, res) {
 
     quote.status = status;
 
+    let createdOrder = null;
+
     if (status === 'accepted') {
       if (item.status === 'awarded' && item.awardedQuoteId && String(item.awardedQuoteId) !== String(quote._id)) {
         return res.status(409).json({
@@ -495,6 +498,87 @@ export async function updateQuoteStatus(req, res) {
           q.status = 'rejected';
         }
       });
+
+      // 4. Idempotently create or retrieve the linked bulk Order
+      const existingOrder = await Order.findOne({
+        sourceRequirement: item._id,
+        acceptedQuote: quote._id,
+      });
+
+      if (existingOrder) {
+        createdOrder = existingOrder;
+        item.awardedOrderId = existingOrder._id;
+      } else {
+        const agreedAmount = Number(quote.totalAmount || quote.pricePerUnit * item.quantity);
+        const platformFeeRate = 0.05; // 5% standard enterprise platform fee
+        const platformFeeAmount = Math.round(agreedAmount * platformFeeRate);
+        const netTailorAmount = agreedAmount - platformFeeAmount;
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+        // Lookup business entity
+        const businessEntity = await Business.findOne({ ownerClerkUserId: item.clerkUserId }).lean();
+
+        createdOrder = await Order.create({
+          id: `MT-B2B-${randomUUID().slice(0, 8).toUpperCase()}`,
+          orderType: 'bulk',
+          clerkUserId: item.clerkUserId,
+          businessId: businessEntity?._id || undefined,
+          organisation: item.organisation,
+          sourceRequirement: item._id,
+          acceptedQuote: quote._id,
+          tailorId: quote.tailorId,
+          tailorName: quote.tailorName || 'Artisan Workshop',
+          garment: item.title || item.requirement,
+          category: item.category || 'Corporate Uniforms',
+          quantity: item.quantity,
+          sizeBreakdown: item.sizeBreakdown || undefined,
+          designAttachments: item.designAttachments || [],
+          deadline: item.timeline || `${quote.leadTimeDays || 15} Days`,
+          notes: item.notes || quote.notes || '',
+          unitPrice: quote.pricePerUnit,
+          price: agreedAmount,
+          quotePrice: agreedAmount,
+          agreedAmount,
+          deliveryDeadline: item.timeline || `${quote.leadTimeDays || 15} Days`,
+          status: 'Confirmed',
+          productionStatus: 'not_started',
+          paymentStatus: 'pending',
+          platformFeeStatus: 'calculated',
+          platformFeeRate,
+          platformFeeAmount,
+          netTailorAmount,
+          terms: quote.notes || 'Standard B2B apparel production agreement.',
+          statusHistory: [
+            {
+              status: 'Confirmed',
+              productionStatus: 'not_started',
+              updatedBy: req.appUser?.firstName ? `${req.appUser.firstName} ${req.appUser.lastName || ''}`.trim() : 'Business Client',
+              role: req.appUser?.role || 'business',
+              note: `Bulk contract awarded for ₹${agreedAmount}.`,
+              timestamp: now,
+            },
+          ],
+          history: [
+            ['Confirmed', dateStr, `Awarded from Tender ${item.organisation}`],
+          ],
+        });
+
+        item.awardedOrderId = createdOrder._id;
+
+        // Create initial order-linked conversation message
+        await Message.create({
+          orderId: createdOrder.id,
+          orderObjectId: createdOrder._id,
+          sourceRequirementId: item._id,
+          senderClerkUserId: req.authUserId,
+          senderName: req.appUser?.firstName ? `${req.appUser.firstName} ${req.appUser.lastName || ''}`.trim() : item.organisation,
+          senderRole: req.appUser?.role || 'business',
+          senderAvatar: req.appUser?.avatar || req.appUser?.imageUrl || '',
+          content: `Contract awarded! Welcome to our project '${item.title || item.requirement}'. Total volume: ${item.quantity} units, Contract value: ₹${agreedAmount}. Please verify measurement requirements and schedule material prep.`,
+          messageType: 'system',
+        });
+      }
     }
 
     await item.save();
@@ -552,9 +636,11 @@ export async function updateQuoteStatus(req, res) {
     }
 
     res.json({
-      message: `Quotation status updated to ${status}.`,
+      message: status === 'accepted' ? 'Tender awarded and bulk order created successfully!' : `Quotation status updated to ${status}.`,
       quote,
       requestStatus: item.status,
+      order: createdOrder,
+      orderId: createdOrder?.id,
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
