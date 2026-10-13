@@ -69,6 +69,7 @@ const DesktopActions = ({
             to={dashboardRoute}
             label={dashboardLabel}
             type="dashboard"
+            showLabel
           />
 
           {/* User profile badge matching reference image (no text badge) */}

@@ -10,7 +10,7 @@ const pointSchema = new mongoose.Schema(
 
 const tailorSchema = new mongoose.Schema(
   {
-    ownerClerkUserId: { type: String, index: true },
+    ownerClerkUserId: { type: String, unique: true, sparse: true, index: true },
     name: { type: String, required: true },
     owner: String,
     area: String,

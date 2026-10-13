@@ -2,7 +2,7 @@ import React from "react";
 import { Heart, ShoppingBag, LayoutDashboard } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
-const NavIconButton = ({ to, label, type, icon, mobile = false }) => {
+const NavIconButton = ({ to, label, type, icon, mobile = false, showLabel = false }) => {
   return (
     <NavLink
       to={to}
@@ -12,7 +12,7 @@ const NavIconButton = ({ to, label, type, icon, mobile = false }) => {
         `
           group relative flex items-center justify-center
           rounded-xl transition-all duration-200
-          ${mobile ? "h-9 w-9" : "h-10 w-10"}
+          ${mobile ? "h-9 w-9" : showLabel ? "h-10 w-10 xl:h-auto xl:w-auto xl:gap-2 xl:px-3 xl:py-2" : "h-10 w-10"}
           ${
             isActive
               ? "bg-[#8f2338]/10 text-[#8f2338]"
@@ -42,6 +42,7 @@ const NavIconButton = ({ to, label, type, icon, mobile = false }) => {
           className="transition group-hover:scale-110 group-hover:text-stone-950"
         />
       )}
+      {showLabel && <span className="hidden text-xs font-semibold xl:inline">{label}</span>}
     </NavLink>
   );
 };

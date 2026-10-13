@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
-import { User, Measurement, BusinessRequest, Order } from '../models.js';
+import { User } from '../models.js';
+import { deleteCustomerData } from '../utils/deleteCustomerData.js';
 
 const router = Router();
 
@@ -118,13 +119,8 @@ router.post('/webhooks/clerk', async (req, res) => {
       }
 
       case 'user.deleted': {
-        // Cascade delete or clean up user artifacts
-        await Promise.all([
-          User.deleteOne({ clerkUserId }),
-          Measurement.deleteMany({ clerkUserId }),
-          BusinessRequest.deleteMany({ clerkUserId }),
-          Order.updateMany({ clerkUserId }, { $set: { status: 'Cancelled' } }),
-        ]);
+        await deleteCustomerData(clerkUserId);
+        await User.deleteOne({ clerkUserId });
         return res.json({ success: true, event: type, deleted: clerkUserId });
       }
 

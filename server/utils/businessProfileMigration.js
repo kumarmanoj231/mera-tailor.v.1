@@ -16,7 +16,7 @@ export async function getOrSyncBusinessProfile(clerkUserId, existingUser = null)
   const bp = user.businessProfile || {};
 
   // 2. If Business document doesn't exist yet, but user has business role or profile data, create it
-  if (!business && (user.role === 'business' || bp.companyName || bp.verificationStatus)) {
+  if (!business && user.role === 'business') {
     const companyName =
       bp.companyName ||
       `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
@@ -76,11 +76,6 @@ export async function getOrSyncBusinessProfile(clerkUserId, existingUser = null)
         rejectionReason: business.rejectionReason,
         documentUrl: business.documentUrl,
       };
-      needsUpdate = true;
-    }
-
-    if (user.role === 'customer' && (business.verified || business.companyName)) {
-      userUpdate.role = 'business';
       needsUpdate = true;
     }
 

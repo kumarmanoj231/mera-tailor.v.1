@@ -61,6 +61,16 @@ const getStatusStepIndex = (status) => {
   }
 };
 
+const getStudioName = (order, t, isHi) => {
+  const name = String(order?.tailorName || "").trim();
+  if (name && !["undefined", "null"].includes(name.toLowerCase())) return name;
+  if (order?.status === "Completed") return t("orders.deletedStudio", isHi ? "हटाया गया स्टूडियो" : "Deleted Studio");
+  return t("dashboardPage.masterStudio", "Master Studio");
+};
+
+const isDeletedStudio = (order) =>
+  ["deleted studio", "undefined", "null"].includes(String(order?.tailorName || "").trim().toLowerCase());
+
 export default function Orders() {
   const { t, i18n } = useTranslation();
   const isHi = i18n.language === "hi";
@@ -888,11 +898,11 @@ export default function Orders() {
                             </div>
                           ) : (
                             <Link
-                              to={order.tailorId ? `/tailors/${encodeURIComponent(order.tailorId)}` : "/find-tailors"}
+                              to={order.tailorId && !isDeletedStudio(order) ? `/tailors/${encodeURIComponent(order.tailorId)}` : "/find-tailors"}
                               className="inline-flex items-center gap-1 font-sans text-xs font-bold text-stone-900 hover:text-[#8f2338] transition"
                             >
                               <MapPin size={13} className="text-[#8f2338]" />
-                              <span>{order.tailorName || (order.status === "Completed" ? "undefined" : t("dashboardPage.masterStudio", "Master Studio"))}</span>
+                              <span>{getStudioName(order, t, isHi)}</span>
                               <ChevronRight size={13} />
                             </Link>
                           )}
@@ -1416,7 +1426,7 @@ export default function Orders() {
                   <div>
                     <span className="text-[10px] uppercase font-bold text-stone-400">Tailoring Studio</span>
                     <p className="font-bold text-stone-900 mt-0.5">
-                      {selectedOrder.tailorName || (selectedOrder.status === "Completed" ? "undefined" : t("dashboardPage.masterStudio", "Master Studio"))}
+                      {getStudioName(selectedOrder, t, isHi)}
                     </p>
                   </div>
                 )}

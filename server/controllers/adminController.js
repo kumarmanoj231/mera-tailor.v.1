@@ -3,6 +3,8 @@ import { randomBytes } from 'node:crypto';
 import { Business, BusinessRequest, Order, Tailor, User, AuditLog } from '../models.js';
 import { createNotification } from './notificationController.js';
 import { getOrSyncBusinessProfile } from '../utils/businessProfileMigration.js';
+import { deleteCustomerData } from '../utils/deleteCustomerData.js';
+import { deleteRoleData } from '../utils/deleteRoleData.js';
 
 const roles = ['customer', 'tailor', 'business', 'admin'];
 const publicUser = user => ({
@@ -114,8 +116,11 @@ export async function updateAdminUser(req, res) {
     const nextRole = role || user.role;
 
     if (role && role !== previousRole) {
+      await deleteRoleData(user.clerkUserId, previousRole);
       await clerkClient.users.updateUserMetadata(user.clerkUserId, { publicMetadata: { appRole: nextRole } });
       user.role = nextRole;
+      user.roleConfirmed = true;
+      user.onboardingCompleted = true;
 
       // Automatically create role-specific profile records if moving to tailor or business
       if (nextRole === 'tailor') {
@@ -192,6 +197,7 @@ export async function deleteAdminUser(req, res) {
     } catch {
       // User may already be removed in Clerk
     }
+    if (user.role === 'customer') await deleteCustomerData(user.clerkUserId);
     await User.deleteOne({ _id: user._id });
 
     // Record in Audit Log
@@ -646,10 +652,10 @@ export async function deleteAdminTailor(req, res) {
     );
 
     // 2. Cascade update for orders:
-    // If order was already Completed, set tailorName to 'undefined' or '(Deleted Atelier)'
+    // Keep completed order history readable after removing a studio.
     await Order.updateMany(
       { tailorId: tailor._id, status: 'Completed' },
-      { $set: { tailorName: 'undefined' } }
+      { $set: { tailorName: 'Deleted Studio' } }
     );
 
     // If order was active/in-progress and tailor gets deleted, cancel it so customer is informed
@@ -658,7 +664,7 @@ export async function deleteAdminTailor(req, res) {
       {
         $set: {
           status: 'Cancelled',
-          tailorName: 'undefined',
+          tailorName: 'Deleted Studio',
         },
         $push: {
           history: ['Cancelled', new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }), 'Tailor atelier account removed'],
@@ -1056,7 +1062,6 @@ export async function verifyBusiness(req, res) {
       user.businessProfile.verifiedAt = verifiedAt;
       user.businessProfile.verifiedBy = req.authUserId;
       user.businessProfile.rejectionReason = undefined;
-      user.role = 'business';
       await user.save();
     }
 

@@ -3,14 +3,6 @@ import { BusinessRequest, Order, Tailor } from '../models.js';
 export async function getTailorDashboard(req, res) {
   try {
     let tailor = await Tailor.findOne({ ownerClerkUserId: req.authUserId });
-    if (!tailor && req.appUser?.phone) {
-      tailor = await Tailor.findOne({ phone: req.appUser.phone });
-      if (tailor) {
-        tailor.ownerClerkUserId = req.authUserId;
-        await tailor.save();
-      }
-    }
-
     const user = req.appUser || {};
     const userAvatar = user.avatar || user.imageUrl || '';
 

@@ -2,6 +2,7 @@ import { Business, BusinessRequest, Measurement, Order, Tailor, User } from '../
 import { clerkClient } from '@clerk/express';
 import { createNotification } from './notificationController.js';
 import { getOrSyncBusinessProfile } from '../utils/businessProfileMigration.js';
+import { deleteCustomerData } from '../utils/deleteCustomerData.js';
 
 export const publicUser = user => ({
   id: user._id?.toString?.() || user.clerkUserId,
@@ -61,7 +62,7 @@ export async function completeOnboarding(req, res) {
     const existingUser = req.appUser;
 
     // 1. Role Immutability: If onboarding is already completed, the role is permanent and cannot be changed
-    if (existingUser?.onboardingCompleted) {
+    if (existingUser?.onboardingCompleted || existingUser?.roleConfirmed) {
       if (existingUser.role && existingUser.role !== role) {
         return res.status(409).json({
           error: `Account role is permanent and cannot be changed. Your registered role is ${existingUser.role}.`,
@@ -108,7 +109,7 @@ export async function completeOnboarding(req, res) {
         const defaultStudioName = user.firstName ? `${user.firstName}'s Bespoke Atelier` : 'MeraTailor Atelier';
         const city = user.locationLabel?.split(',')?.[0]?.trim() || 'Jaipur';
 
-        await Tailor.create({
+        await Tailor.findOneAndUpdate({ ownerClerkUserId: req.authUserId }, { $setOnInsert: {
           ownerClerkUserId: req.authUserId,
           name: defaultStudioName,
           owner: tailorName,
@@ -131,7 +132,7 @@ export async function completeOnboarding(req, res) {
           location: user.primaryLocation || { type: 'Point', coordinates: [75.7873, 26.9124] },
           verified: false,
           verificationStatus: 'unverified',
-        });
+        } }, { new: true, upsert: true, runValidators: true });
       }
     } else if (role === 'business') {
       await getOrSyncBusinessProfile(req.authUserId, user);
@@ -295,7 +296,7 @@ export async function getUserDashboard(req, res) {
     }
 
     // Process orders: verify if tailor exists in DB
-    // If tailor was deleted and order is Completed, show 'undefined' in tailorName as requested
+    // Keep order history readable when a studio has been deleted.
     const orderTailorIds = [...new Set(orders.map(o => o.tailorId).filter(Boolean))];
     const existingOrderTailors = orderTailorIds.length
       ? await Tailor.find({ _id: { $in: orderTailorIds } }).select('_id name').lean()
@@ -304,8 +305,8 @@ export async function getUserDashboard(req, res) {
 
     orders = orders.map(order => {
       const tailorExists = order.tailorId && existingTailorMap.has(String(order.tailorId));
-      if (!tailorExists && order.status === 'Completed') {
-        return { ...order, tailorName: 'undefined' };
+      if (!tailorExists) {
+        return { ...order, tailorName: 'Deleted Studio' };
       }
       return order;
     });
@@ -341,14 +342,6 @@ export async function getUserDashboard(req, res) {
 export async function getTailorDashboard(req, res) {
   try {
     let tailor = await Tailor.findOne({ ownerClerkUserId: req.authUserId });
-    if (!tailor && req.appUser?.phone) {
-      tailor = await Tailor.findOne({ phone: req.appUser.phone });
-      if (tailor) {
-        tailor.ownerClerkUserId = req.authUserId;
-        await tailor.save();
-      }
-    }
-
     // If no details available in tailor field, CREATE BY UPDATING MODEL in database
     if (!tailor) {
       const user = req.appUser || {};
@@ -356,7 +349,7 @@ export async function getTailorDashboard(req, res) {
       const defaultStudioName = user.firstName ? `${user.firstName}'s Bespoke Atelier` : 'MeraTailor Atelier';
       const city = user.locationLabel?.split(',')?.[0]?.trim() || 'Jaipur';
 
-      tailor = await Tailor.create({
+      tailor = await Tailor.findOneAndUpdate({ ownerClerkUserId: req.authUserId }, { $setOnInsert: {
         ownerClerkUserId: req.authUserId,
         name: defaultStudioName,
         owner: tailorName,
@@ -379,7 +372,7 @@ export async function getTailorDashboard(req, res) {
         location: user.primaryLocation || { type: 'Point', coordinates: [75.7873, 26.9124] },
         verified: false,
         verificationStatus: 'unverified',
-      });
+      } }, { new: true, upsert: true, runValidators: true });
     }
 
     // Fetch authentic client orders for this tailor
@@ -530,6 +523,9 @@ export async function getTailorDashboard(req, res) {
 export async function getBusinessDashboard(req, res) {
   try {
     const user = req.appUser || (await User.findOne({ clerkUserId: req.authUserId }).lean());
+    if (!['business', 'admin'].includes(user?.role)) {
+      return res.status(403).json({ error: 'Only business accounts can access this area.' });
+    }
     let business = await Business.findOne({ ownerClerkUserId: req.authUserId }).lean();
     if (!business && user) {
       business = await getOrSyncBusinessProfile(req.authUserId, user);
@@ -679,12 +675,8 @@ export async function deleteCurrentUserAccount(req, res) {
       return res.status(401).json({ error: 'User identifier missing.' });
     }
 
-    // 1. Delete associated customer data in MongoDB
-    await Promise.all([
-      Measurement.deleteMany({ clerkUserId: clerkId }),
-      BusinessRequest.deleteMany({ clerkUserId: clerkId }),
-      Order.updateMany({ clerkUserId: clerkId }, { $set: { status: 'Cancelled' } }),
-    ]);
+    // Remove customer-owned work on both dashboards and anonymize retained reviews.
+    await deleteCustomerData(clerkId);
 
     // 2. Delete user document in MongoDB
     await User.deleteOne({ clerkUserId: clerkId });

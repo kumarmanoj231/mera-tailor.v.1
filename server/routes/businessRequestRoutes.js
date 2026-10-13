@@ -18,11 +18,11 @@ import { getBusinessDashboard } from '../controllers/userController.js';
 const router = Router();
 
 // 1. Business Profile & GSTIN Verification Application
-router.get('/business/profile', requireAuth, syncAppUser, getBusinessProfile);
+router.get('/business/profile', requireAuth, syncAppUser, requireRole('business', 'admin'), getBusinessProfile);
 router.put('/business/profile', requireAuth, syncAppUser, requireRole('business', 'admin'), updateBusinessProfile);
 
 // Bulk orders dashboard alias
-router.get('/bulk-orders', requireAuth, syncAppUser, getBusinessDashboard);
+router.get('/bulk-orders', requireAuth, syncAppUser, requireRole('business', 'admin'), getBusinessDashboard);
 
 // 2. B2B Commercial Tenders & Bulk RFQs (Tailor, Business, Admin)
 router.use('/business-requests', requireAuth, syncAppUser, requireRole('business', 'tailor', 'admin'));
